@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import type { EditorStore } from '@/game/editor/EditorStore';
-import type { UiState } from '@/game/editor/EditorDomUi';
+import type { EditorScene } from '@/game/scenes/EditorScene';
 import { bootGame, type BootedGame } from '@/test-support/game';
 import type { TestPage } from '@/test-support/nodeHost';
 
@@ -10,19 +9,10 @@ import type { TestPage } from '@/test-support/nodeHost';
 // ponteiro, a borracha apaga, as janelas abrem e fecham no ESC, salvar grava o world.json (pela API do editor),
 // e o "testar" (P) põe o mundo em memória para jogar e o ESC volta ao editor.
 
-interface EditorInternals {
-  store?: EditorStore;
-  uiState: UiState;
-  ui?: { isModalOpen(): boolean; openHelpModal(): void; openWorldModal(): void; openDialogModal(kind: string): void };
-  screenToCell(x: number, y: number): { x: number; y: number };
-  handleSave(): Promise<void>;
-  fitView(): void;
-  centerOnTile(x: number, y: number): void;
-}
-
 let booted: BootedGame;
 let page: TestPage;
-const editor = (): EditorInternals => booted.scene('editor') as unknown as EditorInternals;
+// O tipo de verdade (e não um retrato à mão): um membro que mudar de lugar quebra a compilação, não só o teste.
+const editor = (): EditorScene => booted.scene<EditorScene>('editor');
 const press = (code: number, fields: Record<string, unknown> = {}): void => {
   page.key('keydown', code, fields);
   booted.tick(1);
@@ -84,11 +74,11 @@ describe('pintar com o ponteiro', () => {
     const store = e.store!;
     e.uiState.tool = 'brush';
     e.uiState.layer = 'ground';
-    e.fitView();
+    e.cam.fitView();
     booted.tick(2);
     const sx = booted.game.scale.width / 2;
     const sy = booted.game.scale.height / 2;
-    const cell = e.screenToCell(sx, sy);
+    const cell = e.pointer.screenToCell(sx, sy);
     const before = store.readCell('ground', cell.x, cell.y) as number;
     // Um tile DIFERENTE do que já está no chão, senão pintar não muda nada.
     e.uiState.tile = before === 1 ? 2 : 1;
@@ -107,13 +97,13 @@ describe('pintar com o ponteiro', () => {
     const e = editor();
     const store = e.store!;
     const prop = store.world.props.find((p) => p.type === 'rock')!;
-    e.centerOnTile(prop.worldX, prop.worldY);
+    e.cam.centerOnTile(prop.worldX, prop.worldY);
     booted.tick(2);
     e.uiState.tool = 'eraser';
     let hit: { x: number; y: number } | null = null;
     for (let y = 0; y < booted.game.scale.height && !hit; y += 2) {
       for (let x = 0; x < booted.game.scale.width && !hit; x += 2) {
-        const c = e.screenToCell(x, y);
+        const c = e.pointer.screenToCell(x, y);
         if (c.x === prop.worldX && c.y === prop.worldY) hit = { x, y };
       }
     }
@@ -122,14 +112,14 @@ describe('pintar com o ponteiro', () => {
     booted.tick(1);
     page.mouse('mouseup', hit!.x, hit!.y);
     booted.tick(1);
-    expect(store.entitiesAt(prop.worldX, prop.worldY).some((p) => p.type === 'rock')).toBe(false);
+    expect(store.entities.entitiesAt(prop.worldX, prop.worldY).some((p) => p.type === 'rock')).toBe(false);
   });
 });
 
 describe('janelas e salvar', () => {
   it('ajuda, mundo e fala abrem como janela, e o ESC fecha', () => {
     const ui = editor().ui!;
-    for (const open of [() => ui.openHelpModal(), () => ui.openWorldModal(), () => ui.openDialogModal('wizard')]) {
+    for (const open of [() => ui.modals.openHelpModal(), () => ui.modals.openWorldModal(), () => ui.modals.openDialogModal('wizard')]) {
       open();
       booted.tick(1);
       expect(ui.isModalOpen()).toBe(true);
@@ -139,7 +129,7 @@ describe('janelas e salvar', () => {
   });
 
   it('salvar grava o mundo pela API do editor', async () => {
-    await editor().handleSave();
+    await editor().session.handleSave();
     const saved = booted.platform.saved.get('world');
     expect(saved).toBeDefined();
     expect(JSON.parse(saved!).meta.worldChunksX).toBe(5);

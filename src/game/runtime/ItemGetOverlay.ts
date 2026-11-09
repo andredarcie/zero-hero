@@ -108,7 +108,7 @@ export class ItemGetOverlay {
     const itemSprite = reg(scene.add.image(cx, heroY, this.item.texture, this.item.frame)
       .setOrigin(0.5).setDepth(D + 3).setDisplaySize(itemSize * 0.5, itemSize * 0.5).setAlpha(0));
     this.after(380, () => {
-      getSoundManager().playCozyChime();
+      getSoundManager().ui.playCozyChime();
       itemSprite.setAlpha(1);
       scene.tweens.add({
         targets: itemSprite,

@@ -2,8 +2,11 @@ import * as Engine from '@/game/engine';
 
 import { HERO_FRAMES, TIMINGS } from '@/game/constants';
 import { TouchStick } from './ActionButtons';
-import { setHeroWalking, WALK_CYCLE_FRAMES, WALK_CYCLE_FRAMES_UP, type HeroView } from './HeroView';
+import { setHeroWalking, type HeroView } from './HeroView';
 import type { WorldCamera } from './WorldCamera';
+import { MoveKeys, type Dir } from './MoveKeys';
+import { TouchSteer } from './TouchSteer';
+import { HeroFacing } from './HeroFacing';
 
 /**
  * The hero walks locked to the grid — one tile at a time, always aligned — but the walk itself
@@ -28,17 +31,6 @@ import type { WorldCamera } from './WorldCamera';
 
 /** Milliseconds per tile. Constant: tapping covers ground at the same rate as holding. */
 const DEFAULT_STEP_MS = TIMINGS.moveDurationMs;
-/**
- * Slack on top of a step: a press made ANYWHERE inside a step must still be alive when that step
- * reaches its tile boundary and can spend it. Tie it to the step or the two drift apart — a fixed
- * 120ms buffer silently ate a tap made early in a 150ms step. Braid holds a button 230ms; this
- * lands in the same country.
- */
-const INPUT_BUFFER_SLACK_MS = 30;
-/** Drag needed before the gesture commits to a direction. */
-const SWIPE_THRESHOLD_PX = 11;
-/** The drag anchor trails the finger on a leash this long, so turning around stays cheap. */
-const SWIPE_ANCHOR_LEASH_PX = 18;
 /** Throttle repeated bumps (holding into a wall) so they don't fire every frame. */
 const HELD_BUMP_COOLDOWN_MS = 220;
 /**
@@ -48,14 +40,9 @@ const HELD_BUMP_COOLDOWN_MS = 220;
  */
 const MAX_FRAME_MS = 50;
 
-interface Dir {
-  dx: number;
-  dy: number;
-}
-
 export class PlayerMovementController {
-  private readonly cursors: Engine.Types.Input.Keyboard.CursorKeys | undefined;
-  private readonly wasd: {
+  public readonly cursors: Engine.Types.Input.Keyboard.CursorKeys | undefined;
+  public readonly wasd: {
     up?: Engine.Input.Keyboard.Key;
     down?: Engine.Input.Keyboard.Key;
     left?: Engine.Input.Keyboard.Key;
@@ -64,11 +51,11 @@ export class PlayerMovementController {
 
   private lastBumpTime = 0;
   private tileSize = 0;
-  private stepMs: number = DEFAULT_STEP_MS;
+  public stepMs: number = DEFAULT_STEP_MS;
   /** > 0 = os pés estão presos pelo golpe em curso (ver `root`). */
-  private rootedMs = 0;
+  public rootedMs = 0;
   /** Presos SEM prazo: a bolsa aberta com o jogo rodando (ver `hold`). */
-  private heldStill = false;
+  public heldStill = false;
 
   /**
    * The step in flight. `stepFrom` is the tile it left; the world position the GameScene owns is
@@ -76,37 +63,39 @@ export class PlayerMovementController {
    * did. The skeleton's wind-up locks onto that tile and a dodge is decided against it, so the
    * logical position must keep leading the visible one by a step.
    */
-  private stepFrom: { x: number; y: number } | null = null;
-  private stepDir: Dir | null = null;
+  public stepFrom: { x: number; y: number } | null = null;
+  public stepDir: Dir | null = null;
   /** 0..1 along the step in flight. Overflow past 1 is carried into the next tile, never dropped. */
-  private stepProgress = 0;
+  public stepProgress = 0;
 
   /** The direction the drag is holding — read every frame, exactly like a key. */
-  private touchDir: Dir | null = null;
-  private touchAnchor: { pointerId: number; x: number; y: number } | null = null;
+  public touchDir: Dir | null = null;
   /**
    * O anel que mostra o arrasto (ver TouchStick) — nasce no primeiro toque, só existe no toque.
    * Ele some enquanto os pés estão presos (bolsa, diálogo, golpe): um joystick na tela promete um
    * andar que naquele instante não acontece.
    */
-  private stick?: TouchStick;
-  private stickShown = false;
-  private lastFinger = { x: 0, y: 0 };
+  public stick?: TouchStick;
 
-  private bufferedDir: Dir | null = null;
-  private bufferedAtMs = 0;
+  public bufferedDir: Dir | null = null;
 
   // The way the hero is currently facing, mirroring the sprite frame set by setFacing. Starts
   // facing down (the idle frame). A bump does NOT turn the hero, so it never changes this.
-  private lastFacing: Dir = { dx: 0, dy: 1 };
+  public lastFacing: Dir = { dx: 0, dy: 1 };
 
   private readonly boundTouchStart: (e: TouchEvent) => void;
   private readonly boundTouchMove: (e: TouchEvent) => void;
   private readonly boundTouchEnd: (e: TouchEvent) => void;
+  /** As setas e o WASD. (ver MoveKeys) */
+  private readonly keys = new MoveKeys(this);
+  /** O dedo na tela. (ver TouchSteer) */
+  private readonly touch = new TouchSteer(this);
+  /** Para onde ele olha e onde o corpo está. (ver HeroFacing) */
+  private readonly look = new HeroFacing(this);
 
   public constructor(
-    private readonly scene: Engine.Scene,
-    private readonly hero: HeroView,
+    public readonly scene: Engine.Scene,
+    public readonly hero: HeroView,
     private readonly camera: WorldCamera,
     /**
      * O tile de destino barra o passo? `fromX`/`fromY` e o tile de onde ele sai: a serra decide
@@ -132,15 +121,16 @@ export class PlayerMovementController {
     };
 
     // Mouse fallback (non-touch devices)
-    this.scene.input.on(Engine.Input.Events.POINTER_DOWN, this.handlePointerDown, this);
-    this.scene.input.on(Engine.Input.Events.POINTER_MOVE, this.handlePointerMove, this);
-    this.scene.input.on(Engine.Input.Events.POINTER_UP, this.handlePointerUpOrCancel, this);
-    this.scene.input.on(Engine.Input.Events.POINTER_UP_OUTSIDE, this.handlePointerUpOrCancel, this);
+    // (O contexto é o `touch`: os handlers são dele — ver TouchSteer.)
+    this.scene.input.on(Engine.Input.Events.POINTER_DOWN, this.touch.handlePointerDown, this.touch);
+    this.scene.input.on(Engine.Input.Events.POINTER_MOVE, this.touch.handlePointerMove, this.touch);
+    this.scene.input.on(Engine.Input.Events.POINTER_UP, this.touch.handlePointerUpOrCancel, this.touch);
+    this.scene.input.on(Engine.Input.Events.POINTER_UP_OUTSIDE, this.touch.handlePointerUpOrCancel, this.touch);
 
     // Window-level touch listeners so the drag works anywhere on screen, not just inside the canvas
-    this.boundTouchStart = this.handleTouchStart.bind(this);
-    this.boundTouchMove = this.handleTouchMove.bind(this);
-    this.boundTouchEnd = this.handleTouchEnd.bind(this);
+    this.boundTouchStart = this.touch.handleTouchStart.bind(this.touch);
+    this.boundTouchMove = this.touch.handleTouchMove.bind(this.touch);
+    this.boundTouchEnd = this.touch.handleTouchEnd.bind(this.touch);
     window.addEventListener('touchstart', this.boundTouchStart, { passive: true });
     window.addEventListener('touchmove', this.boundTouchMove, { passive: true });
     window.addEventListener('touchend', this.boundTouchEnd, { passive: true });
@@ -178,25 +168,14 @@ export class PlayerMovementController {
     }
   }
 
-  /**
-   * Os pés estão presos agora? (o escudo do herói lê isto: quem ataca abaixa a guarda)
-   *
-   * A bolsa aberta conta, e conta de propósito: quem está com as duas mãos dentro da mochila não
-   * está aparando tiro nenhum. É a mesma frase do golpe, e é o que faz folhear custar alguma coisa
-   * num jogo que não pausa para você folhear.
-   */
-  public get isRooted(): boolean {
-    return this.rootedMs > 0 || this.heldStill;
-  }
-
   public update(worldX: number, worldY: number, deltaMs: number): { worldX: number; worldY: number } {
     // JustDown is a destructive read: drain it every frame or a press sits on the key and fires
     // minutes later. Draining it INTO the buffer is what stops a quick tap mid-step from vanishing.
-    this.pollFreshPress();
+    this.keys.pollFreshPress();
 
     const dt = Math.min(deltaMs, MAX_FRAME_MS);
     if (this.rootedMs > 0) this.rootedMs = Math.max(0, this.rootedMs - dt);
-    if (this.stick) this.syncStick(); // os pés podem ter se soltado (ou preso) sem o dedo mexer
+    if (this.stick) this.touch.syncStick(); // os pés podem ter se soltado (ou preso) sem o dedo mexer
     let wx = worldX;
     let wy = worldY;
 
@@ -220,7 +199,7 @@ export class PlayerMovementController {
         break;
       }
 
-      const next = this.takeDirection();
+      const next = this.keys.takeDirection();
       if (!next) {
         if (this.stepDir) this.endWalk(wx, wy);
         break;
@@ -241,7 +220,7 @@ export class PlayerMovementController {
         // O passo em si continua nao acontecendo: ele encara, nao entra.
         this.lastFacing = { dx: next.dx, dy: next.dy };
         if (this.stepDir) this.endWalk(wx, wy);
-        else this.setFacing(next.dx, next.dy, false);
+        else this.look.setFacing(next.dx, next.dy, false);
         break;
       }
 
@@ -251,7 +230,7 @@ export class PlayerMovementController {
       wx = nx;
       wy = ny;
       this.onStep(nx, ny, next.dx, next.dy);
-      this.setFacing(next.dx, next.dy, true);
+      this.look.setFacing(next.dx, next.dy, true);
     }
 
     if (this.stepDir && this.stepFrom) {
@@ -275,70 +254,7 @@ export class PlayerMovementController {
     this.stepProgress = 0;
     this.camera.centerOn(worldX, worldY);
     this.pinToCentre();
-    this.setFacing(this.lastFacing.dx, this.lastFacing.dy, false);
-  }
-
-  /** Keep the newest fresh key press alive for INPUT_BUFFER_MS so a tile boundary can spend it. */
-  private pollFreshPress(): void {
-    // `readJustPressed` roda MESMO com os pés presos: `JustDown` é leitura destrutiva, e uma seta
-    // gasta na bolsa que ficasse com a flag armada sairia como um passo minutos depois. Drena-se
-    // sempre; o que a trava faz é jogar fora em vez de guardar.
-    const dir = this.readJustPressed();
-    if (!dir || this.heldStill) return;
-    this.bufferedDir = dir;
-    this.bufferedAtMs = this.scene.time.now;
-  }
-
-  /**
-   * The direction to spend on this tile boundary. A recent tap outranks a held key — that is what
-   * makes a quick turn register instead of being eaten by the step already in flight.
-   */
-  private takeDirection(): (Dir & { fresh: boolean }) | null {
-    const buffered = this.bufferedDir;
-    this.bufferedDir = null;
-    if (buffered && this.scene.time.now - this.bufferedAtMs <= this.stepMs + INPUT_BUFFER_SLACK_MS) {
-      return { ...buffered, fresh: true };
-    }
-
-    const held = this.readHeld();
-    return held ? { ...held, fresh: false } : null;
-  }
-
-  private readJustPressed(): Dir | null {
-    const c = this.cursors;
-    const w = this.wasd;
-    const just = (a?: Engine.Input.Keyboard.Key, b?: Engine.Input.Keyboard.Key): boolean => {
-      const ja = a ? Engine.Input.Keyboard.JustDown(a) : false;
-      const jb = b ? Engine.Input.Keyboard.JustDown(b) : false;
-      return ja || jb;
-    };
-
-    // Every key must be polled, not just the winner: JustDown clears the flag it reads, so an
-    // early return would strand the others' flags set and fire them on some later frame.
-    const left = just(c?.left, w.left);
-    const right = just(c?.right, w.right);
-    const up = just(c?.up, w.up);
-    const down = just(c?.down, w.down);
-
-    if (left) return { dx: -1, dy: 0 };
-    if (right) return { dx: 1, dy: 0 };
-    if (up) return { dx: 0, dy: -1 };
-    if (down) return { dx: 0, dy: 1 };
-    return null;
-  }
-
-  /** A held key, or the drag — which is a key like any other as far as the walk is concerned. */
-  private readHeld(): Dir | null {
-    const c = this.cursors;
-    const w = this.wasd;
-    const held = (a?: Engine.Input.Keyboard.Key, b?: Engine.Input.Keyboard.Key): boolean =>
-      Boolean(a?.isDown) || Boolean(b?.isDown);
-
-    if (held(c?.left, w.left)) return { dx: -1, dy: 0 };
-    if (held(c?.right, w.right)) return { dx: 1, dy: 0 };
-    if (held(c?.up, w.up)) return { dx: 0, dy: -1 };
-    if (held(c?.down, w.down)) return { dx: 0, dy: 1 };
-    return this.touchDir;
+    this.look.setFacing(this.lastFacing.dx, this.lastFacing.dy, false);
   }
 
   public setMoveDuration(ms: number): void {
@@ -385,166 +301,22 @@ export class PlayerMovementController {
     this.stick = undefined;
   }
 
-  /** O anel acompanha o dedo; aparece só enquanto há dedo E os pés estão livres. */
-  private syncStick(): void {
-    const anchor = this.touchAnchor;
-    const want = anchor !== null && !this.isRooted && this.stick !== undefined;
-    if (want && anchor && this.stick) {
-      if (!this.stickShown) this.stick.show(anchor.x, anchor.y);
-      this.stick.update(anchor.x, anchor.y, this.lastFinger.x, this.lastFinger.y);
-    } else if (this.stickShown) {
-      this.stick?.hide();
-    }
-    this.stickShown = want;
-  }
-
-  private handleTouchStart(e: TouchEvent): void {
-    if (this.touchAnchor !== null) return;
-    // O arrasto escuta a JANELA inteira (andar tem de funcionar em qualquer ponto do vidro),
-    // entao ele tem de recusar explicitamente o que e UI: sem isto, tocar no botao A tambem
-    // plantaria a ancora do arrasto e o heroi sairia andando junto com o golpe.
-    if ((e.target as HTMLElement | null)?.closest?.('[data-zh-ui]')) return;
-    const t = e.changedTouches[0];
-    this.touchAnchor = { pointerId: t.identifier, x: t.clientX, y: t.clientY };
-    this.lastFinger = { x: t.clientX, y: t.clientY };
-    this.stick ??= new TouchStick(SWIPE_ANCHOR_LEASH_PX);
-    this.syncStick();
-  }
-
-  private handleTouchMove(e: TouchEvent): void {
-    const anchor = this.touchAnchor;
-    if (!anchor) return;
-    const t = Array.from(e.changedTouches).find((c) => c.identifier === anchor.pointerId);
-    if (!t) return;
-    this.trackDrag(anchor, t.clientX, t.clientY);
-    this.lastFinger = { x: t.clientX, y: t.clientY };
-    this.syncStick();
-  }
-
-  private handleTouchEnd(e: TouchEvent): void {
-    const anchor = this.touchAnchor;
-    if (!anchor) return;
-    if (!Array.from(e.changedTouches).some((c) => c.identifier === anchor.pointerId)) return;
-    this.touchDir = null;
-    this.touchAnchor = null;
-    this.syncStick();
-  }
-
   // (Houve aqui um `setMouseWalkEnabled`: o mouse deixava de andar e virava MIRA enquanto o
   // revólver estava na mão. O revólver foi arrancado inteiro — nada neste jogo se aponta —, e a
   // chave foi junto: o mouse voltou a ter um trabalho só, ser o dedo de quem não tem tela de toque.)
-
-  private handlePointerDown(pointer: Engine.Input.Pointer): void {
-    if (pointer.wasTouch) return;
-    this.touchAnchor = { pointerId: pointer.id, x: pointer.x, y: pointer.y };
-  }
-
-  private handlePointerMove(pointer: Engine.Input.Pointer): void {
-    if (pointer.wasTouch) return;
-    const anchor = this.touchAnchor;
-    if (!pointer.isDown || !anchor || anchor.pointerId !== pointer.id) return;
-    this.trackDrag(anchor, pointer.x, pointer.y);
-  }
-
-  private handlePointerUpOrCancel(pointer: Engine.Input.Pointer): void {
-    if (pointer.wasTouch) return;
-    if (!this.touchAnchor || this.touchAnchor.pointerId !== pointer.id) return;
-    this.touchDir = null;
-    this.touchAnchor = null;
-  }
-
-  /**
-   * Turn the drag into a held direction — and let the ANCHOR chase the finger on a short leash.
-   *
-   * The anchor used to be re-planted under the finger on every change of direction, so reversing
-   * meant dragging the whole threshold again from a standing start, and the hero kept walking the
-   * old way until you had. Leashed, the finger is never more than SWIPE_ANCHOR_LEASH_PX from the
-   * anchor, so the vector always describes where the thumb is heading *now*.
-   *
-   * There is no "let go by returning to centre": you walk while the finger is out, and you stop by
-   * lifting it. That is the gesture as it stands — a drag, nothing to learn.
-   */
-  private trackDrag(anchor: { x: number; y: number }, px: number, py: number): void {
-    let dx = px - anchor.x;
-    let dy = py - anchor.y;
-    const len = Math.hypot(dx, dy);
-
-    if (len > SWIPE_ANCHOR_LEASH_PX) {
-      const pull = (len - SWIPE_ANCHOR_LEASH_PX) / len;
-      anchor.x += dx * pull;
-      anchor.y += dy * pull;
-      dx = px - anchor.x;
-      dy = py - anchor.y;
-    }
-
-    const absX = Math.abs(dx);
-    const absY = Math.abs(dy);
-    // Inside the dead zone the last direction stands: a thumb wobbling on the glass must not
-    // stutter the hero between two tiles.
-    if (absX < SWIPE_THRESHOLD_PX && absY < SWIPE_THRESHOLD_PX) return;
-
-    this.touchDir = absX >= absY
-      ? { dx: dx >= 0 ? 1 : -1, dy: 0 }
-      : { dx: 0, dy: dy >= 0 ? 1 : -1 };
-  }
-
-  /**
-   * VIRAR por roteiro (uma cutscene): encara a direcao e, com `walking`, liga as pernas — a cena
-   * e quem anda, e o desenho do passo tem de ser o mesmo de um passo de verdade.
-   */
-  public faceTo(dx: number, dy: number, walking = false): void {
-    this.setFacing(dx, dy, walking);
-  }
 
   /** The direction the hero's sprite currently faces (set the instant a move begins). */
   public get facing(): Dir {
     return this.lastFacing;
   }
 
-  /**
-   * Onde o heroi esta NA TELA, em tiles fracionarios — que durante um passo NAO e a posicao
-   * logica que o GameScene guarda.
-   *
-   * A posicao logica pula para o tile de destino no instante em que o passo comeca (ver
-   * `stepFrom`), de proposito: e contra ele que a colisao e tudo o que pergunta pelo tile do heroi
-   * decidem. Mas o corpo desenhado ainda esta atras, deslizando — o heroi fica preso no
-   * centro da tela e e o mundo que escorrega. Entao qualquer overlay 2D que se ancore no tile
-   * logico enquanto ele anda nasce ATE UM TILE A FRENTE do proprio heroi: foi assim que o arco
-   * da espada apareceu flutuando na frente de quem corria e batia ao mesmo tempo.
-   *
-   * Parado, os dois sao o mesmo ponto — e por isso o bug so aparecia em movimento.
-   */
-  public visualWorld(worldX: number, worldY: number): { x: number; y: number } {
-    if (!this.stepDir || !this.stepFrom) return { x: worldX, y: worldY };
-    const t = Math.min(1, this.stepProgress);
-    return {
-      x: this.stepFrom.x + this.stepDir.dx * t,
-      y: this.stepFrom.y + this.stepDir.dy * t,
-    };
+  /** (ver HeroFacing.faceTo) */
+  public faceTo(...args: Parameters<HeroFacing['faceTo']>): ReturnType<HeroFacing['faceTo']> {
+    return this.look.faceTo(...args);
   }
 
-  private setFacing(dx: number, dy: number, moving: boolean): void {
-    this.lastFacing = { dx, dy };
-    const hero = this.hero;
-
-    // Frames 0..3 are the front-facing walk cycle (its last frame doubles as the idle pose), and
-    // frame 4 is the hero's back. So down gets its own proper cycle, the sides borrow it flipped,
-    // and up — which has a single frame — carries its motion in the bob alone. Walking up or down
-    // used to animate NOTHING: a still sprite, dead centre of the screen, world sliding under it.
-    if (dy !== 0) {
-      hero.flipX = false;
-      hero.walkFrames = dy < 0 ? WALK_CYCLE_FRAMES_UP : WALK_CYCLE_FRAMES;
-    } else {
-      hero.flipX = dx < 0;
-      hero.walkFrames = WALK_CYCLE_FRAMES;
-    }
-
-    if (moving) {
-      setHeroWalking(hero, true);
-      return;
-    }
-
-    setHeroWalking(hero, false);
-    hero.frame = dy < 0 ? HERO_FRAMES.idleUp : HERO_FRAMES.idleDown;
+  /** (ver HeroFacing.visualWorld) */
+  public visualWorld(...args: Parameters<HeroFacing['visualWorld']>): ReturnType<HeroFacing['visualWorld']> {
+    return this.look.visualWorld(...args);
   }
 }

@@ -23,14 +23,14 @@ export default {
       const out = [];
       for (let y = 0; y < 60; y += 1) {
         for (let x = 0; x < 60; x += 1) {
-          if (!s.isSolidForEntities(x, y)) continue;
+          if (!s.query.isSolidForEntities(x, y)) continue;
           const t = s.chunkManager.getTile(x, y);
           if (t.upper !== null && solidUpper.includes(t.upper)) continue;
           if (t.ground === 33) continue;
-          if (s.plantedSwordTile?.x === x && s.plantedSwordTile?.y === y) continue;
+          if (s.swordPlanting.plantedSwordTile?.x === x && s.swordPlanting.plantedSwordTile?.y === y) continue;
           if (s.npcManager.hasNpcAt(x, y)) continue;
-          if (s.isQuestMarkAt(x, y)) continue; // a marca de um pedido (o cavalete, o marco...)
-          if (lists.some((n) => s[n].some((o) => o.worldX === x && o.worldY === y && o.blocking))) continue;
+          if (s.marks.isQuestMarkAt(x, y)) continue; // a marca de um pedido (o cavalete, o marco...)
+          if (lists.some((n) => s.props[n].some((o) => o.worldX === x && o.worldY === y && o.blocking))) continue;
           out.push(`${x},${y}${t.collision ? ' (colisao pintada)' : ''}`);
         }
       }

@@ -21,7 +21,7 @@ export class DryShrubObject implements WorldProp {
     this.worldX = worldX;
     this.worldY = worldY;
     this.sprite = world3d()
-      .addBillboard('dry-shrub', 0, { groundShadow: { alpha: 0.3 } })
+      .objects.addBillboard('dry-shrub', 0, { groundShadow: { alpha: 0.3 } })
       .setPosition(worldX, worldY)
       .setDisplaySize(0.72, 0.72);
   }

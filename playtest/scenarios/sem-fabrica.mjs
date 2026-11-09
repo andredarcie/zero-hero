@@ -85,7 +85,7 @@ export default {
           const y = startY + dy;
           for (let dx = -4; dx <= 4; dx += 1) {
             const x = s.playerWorld.worldX + dx;
-            if ([x - 2, x - 1, x, x + 1].every((tx) => !s.isTileOccupied(tx, y))) return { x, y };
+            if ([x - 2, x - 1, x, x + 1].every((tx) => !s.query.isTileOccupied(tx, y))) return { x, y };
           }
         }
         return null;
@@ -97,8 +97,8 @@ export default {
       const benchAt = freeRow(searchY);
       if (!benchAt) return { error: 'sem fileira livre para a bancada da fixture' };
       s.spawnStreamedProps([{ type: 'toolbox', worldX: benchAt.x, worldY: benchAt.y, dir: 1 }]);
-      const furnace = s.furnaces.find((f) => f.worldX === furnaceAt.x && f.worldY === furnaceAt.y);
-      const bench = s.toolboxes.find((b) => b.worldX === benchAt.x && b.worldY === benchAt.y);
+      const furnace = s.props.furnaces.find((f) => f.worldX === furnaceAt.x && f.worldY === furnaceAt.y);
+      const bench = s.props.toolboxes.find((b) => b.worldX === benchAt.x && b.worldY === benchAt.y);
       if (!furnace || !bench) return { error: 'estacoes da fixture nao nasceram' };
 
       // Os quatro itens ocupam as antigas posicoes de entrada. Cinco segundos nao podem iniciar
@@ -121,7 +121,7 @@ export default {
       s.inventory.add('stone', 1);
       s.seenItems.add('axe');
       const axesBefore = s.itemManager.snapshot().filter((item) => item.kind === 'axe').length;
-      const benchStarted = s.craftAtStation(bench, 'bench', 'axe');
+      const benchStarted = s.craft.craftAtStation(bench, 'bench', 'axe');
       const axesAfter = s.itemManager.snapshot().filter((item) => item.kind === 'axe').length;
       const benchManual = benchStarted && s.inventory.count('wood') === 0
         && s.inventory.count('stone') === 0 && axesAfter === axesBefore + 1;
@@ -130,7 +130,7 @@ export default {
       s.inventory.add('wood', 2);
       s.seenItems.add('charcoal');
       const charcoalBefore = s.itemManager.snapshot().filter((item) => item.kind === 'charcoal').length;
-      const furnaceStarted = s.craftAtStation(furnace, 'furnace', 'charcoal');
+      const furnaceStarted = s.craft.craftAtStation(furnace, 'furnace', 'charcoal');
       const busyAfterConfirm = furnace.isBusy;
       window.advanceTime(2500);
       const charcoalAfter = s.itemManager.snapshot().filter((item) => item.kind === 'charcoal').length;

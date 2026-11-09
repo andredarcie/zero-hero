@@ -1,84 +1,34 @@
 import { CHUNK_COLUMNS, CHUNK_ROWS } from '@/game/constants';
-import { DIALOG_VOICES, NPC_DIALOGS } from '@/game/dialogs/NpcDialogs';
-import type { NpcKind, PickupKind } from '@/game/world/ScreenContent';
-import type {
-  PropDir, PropKind, WorldChunk, WorldData, WorldDialog,
-} from '@/game/world/worldSchema';
 
-// Ground frame used for cells that never received paint — the same frame the runtime uses
-// for the void outside the world, so "empty" reads consistently in game and editor.
-export const DEFAULT_GROUND_TILE = 5;
-
-const UNDO_LIMIT = 200;
-const MAX_WORLD_CHUNKS = 32;
+import type { WorldChunk, WorldData } from '@/game/world/worldSchema';
+import { EditorHistory, type CellLayerId, type CellValue, type PlacedEntity, type StoreChange, clone } from './EditorHistory';
+import { EditorEntities } from './EditorEntities';
+import { EditorChecks } from './EditorChecks';
+import { EditorWorldMeta, DEFAULT_GROUND_TILE, chunkKey } from './EditorWorldMeta';
+export { DEFAULT_GROUND_TILE } from './EditorWorldMeta';
+export type { CellLayerId, CellValue, CellChange, PlacedEntity, StoreChange } from './EditorHistory';
 
 export type TileLayerId = 'ground' | 'upper';
-// `relief` é a SERRA (ver world/relief.ts): 0 chão, 1 planalto, 2..5 escada subindo N/L/S/O.
-export type CellLayerId = 'ground' | 'upper' | 'collision' | 'relief';
-export type CellValue = number | boolean | null;
-
-export type CellChange = { wx: number; wy: number; layer: CellLayerId; prev: CellValue; next: CellValue };
-
-export type PlacedEntity =
-  | { list: 'npcs'; type: NpcKind; worldX: number; worldY: number }
-  | { list: 'pickups'; type: PickupKind; worldX: number; worldY: number }
-  | { list: 'props'; type: PropKind; worldX: number; worldY: number; dir?: PropDir };
 
 export type EntityListId = PlacedEntity['list'];
 
-type Op =
-  | { kind: 'cells'; changes: CellChange[] }
-  | { kind: 'entities'; added: PlacedEntity[]; removed: PlacedEntity[] }
-  | { kind: 'spawn'; prev: { worldX: number; worldY: number }; next: { worldX: number; worldY: number } }
-  | { kind: 'dialog'; npc: NpcKind; prev: WorldDialog | undefined; next: WorldDialog | undefined };
-
-// What changed in one notification — consumers refresh only the affected visuals. `cells`
-// carries coordinates; readers should re-read current values from the store (works for
-// undo/redo without duplicating value bookkeeping).
-export type StoreChange = {
-  cells?: Array<{ wx: number; wy: number }>;
-  entities?: boolean;
-  spawn?: boolean;
-  dialogs?: boolean;
-  structure?: boolean;
-  meta?: boolean;
-};
-
 type Listener = (change: StoreChange) => void;
-
-const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
-
-const chunkKey = (cx: number, cy: number): string => `${cx},${cy}`;
-
-// A direcao PRECISA entrar nesta comparacao. placeEntity trata "ja tem isso aqui" como um
-// no-op, e sem o `dir` girar um braco no proprio tile seria exatamente isso: o editor
-// concluiria que nada mudou e o giro nao aconteceria.
-const sameEntity = (a: PlacedEntity, b: PlacedEntity): boolean =>
-  a.list === b.list && a.type === b.type && a.worldX === b.worldX && a.worldY === b.worldY
-  && (a.list !== 'props' || b.list !== 'props' || a.dir === b.dir);
-
-const buildEmptyChunk = (cx: number, cy: number): WorldChunk => ({
-  cx,
-  cy,
-  ground: Array.from({ length: CHUNK_ROWS }, () => Array.from({ length: CHUNK_COLUMNS }, () => DEFAULT_GROUND_TILE)),
-  upper: Array.from({ length: CHUNK_ROWS }, () => Array.from({ length: CHUNK_COLUMNS }, () => null as number | null)),
-  collisions: Array.from({ length: CHUNK_ROWS }, () => Array.from({ length: CHUNK_COLUMNS }, () => false)),
-  pickups: [],
-  npcs: [],
-});
 
 export class EditorStore {
   public readonly world: WorldData;
   public dirty = false;
 
-  private chunkIndex = new Map<string, WorldChunk>();
+  public chunkIndex = new Map<string, WorldChunk>();
   private readonly listeners = new Set<Listener>();
-  private undoStack: Op[][] = [];
-  private redoStack: Op[][] = [];
-  // While a stroke is open, cell changes coalesce per-cell and entity ops accumulate, so
-  // one drag (or one fill) undoes as a single gesture.
-  private strokeOps: Op[] | null = null;
-  private strokeCells: Map<string, CellChange> | null = null;
+  /** Desfazer e refazer (ver EditorHistory). */
+  // (Os tipos vão escritos: cada parte pede ao armazém as outras, e a inferência daria voltas.)
+  public readonly history: EditorHistory = new EditorHistory(this);
+  /** As peças do mapa (ver EditorEntities). */
+  public readonly entities: EditorEntities = new EditorEntities(this);
+  /** A validação e os números (ver EditorChecks). */
+  public readonly checks: EditorChecks = new EditorChecks(this);
+  /** O nome, o tamanho, o começo e as falas (ver EditorWorldMeta). */
+  public readonly meta: EditorWorldMeta = new EditorWorldMeta(this);
 
   public constructor(world: WorldData) {
     this.world = world;
@@ -110,11 +60,11 @@ export class EditorStore {
     return () => this.listeners.delete(listener);
   }
 
-  private emit(change: StoreChange): void {
+  public emit(change: StoreChange): void {
     this.listeners.forEach((listener) => listener(change));
   }
 
-  private markDirty(): void {
+  public markDirty(): void {
     if (!this.dirty) {
       this.dirty = true;
       this.emit({ meta: true });
@@ -140,11 +90,11 @@ export class EditorStore {
     return wx >= 0 && wy >= 0 && wx < this.tilesX && wy < this.tilesY;
   }
 
-  private chunkAt(wx: number, wy: number): WorldChunk | undefined {
+  public chunkAt(wx: number, wy: number): WorldChunk | undefined {
     return this.chunkIndex.get(chunkKey(Math.floor(wx / CHUNK_COLUMNS), Math.floor(wy / CHUNK_ROWS)));
   }
 
-  private rebuildIndex(): void {
+  public rebuildIndex(): void {
     this.chunkIndex = new Map(this.world.chunks.map((chunk) => [chunkKey(chunk.cx, chunk.cy), chunk]));
   }
 
@@ -164,7 +114,7 @@ export class EditorStore {
     return chunk.collisions[ly][lx];
   }
 
-  private writeCell(layer: CellLayerId, wx: number, wy: number, value: CellValue): void {
+  public writeCell(layer: CellLayerId, wx: number, wy: number, value: CellValue): void {
     const chunk = this.chunkAt(wx, wy);
     if (!chunk) return;
     const lx = wx - chunk.cx * CHUNK_COLUMNS;
@@ -201,18 +151,18 @@ export class EditorStore {
    */
   public setCell(layer: CellLayerId, wx: number, wy: number, next: CellValue): boolean {
     if (!this.isInside(wx, wy)) return false;
-    if (layer === 'upper' && next !== null && this.entitiesAt(wx, wy).length > 0) return false;
+    if (layer === 'upper' && next !== null && this.entities.entitiesAt(wx, wy).length > 0) return false;
     const prev = this.readCell(layer, wx, wy);
     if (prev === next) return false;
     this.writeCell(layer, wx, wy, next);
 
-    if (this.strokeCells) {
+    if (this.history.strokeCells) {
       const key = `${wx},${wy},${layer}`;
-      const existing = this.strokeCells.get(key);
+      const existing = this.history.strokeCells.get(key);
       if (existing) existing.next = next;
-      else this.strokeCells.set(key, { wx, wy, layer, prev, next });
+      else this.history.strokeCells.set(key, { wx, wy, layer, prev, next });
     } else {
-      this.pushUndo([{ kind: 'cells', changes: [{ wx, wy, layer, prev, next }] }]);
+      this.history.pushUndo([{ kind: 'cells', changes: [{ wx, wy, layer, prev, next }] }]);
     }
 
     this.markDirty();
@@ -267,146 +217,7 @@ export class EditorStore {
 
   // ── Strokes (one user gesture = one undo entry) ─────────────────────────
 
-  public beginStroke(): void {
-    if (this.strokeOps) this.commitStroke();
-    this.strokeOps = [];
-    this.strokeCells = new Map();
-  }
-
-  public commitStroke(): void {
-    const ops = this.strokeOps ?? [];
-    if (this.strokeCells && this.strokeCells.size > 0) {
-      ops.push({ kind: 'cells', changes: [...this.strokeCells.values()] });
-    }
-    this.strokeOps = null;
-    this.strokeCells = null;
-    if (ops.length > 0) this.pushUndo(ops);
-  }
-
-  private recordOp(op: Op): void {
-    if (this.strokeOps) this.strokeOps.push(op);
-    else this.pushUndo([op]);
-  }
-
-  private pushUndo(ops: Op[]): void {
-    this.undoStack.push(ops);
-    if (this.undoStack.length > UNDO_LIMIT) this.undoStack.shift();
-    this.redoStack = [];
-    this.emit({ meta: true });
-  }
-
   // ── Entities ────────────────────────────────────────────────────────────
-
-  public entitiesAt(wx: number, wy: number): PlacedEntity[] {
-    const found: PlacedEntity[] = [];
-    const chunk = this.chunkAt(wx, wy);
-    if (chunk) {
-      chunk.npcs.forEach((n) => { if (n.worldX === wx && n.worldY === wy) found.push({ list: 'npcs', ...n }); });
-      chunk.pickups.forEach((p) => { if (p.worldX === wx && p.worldY === wy) found.push({ list: 'pickups', ...p }); });
-    }
-    this.world.props.forEach((p) => {
-      if (p.worldX === wx && p.worldY === wy) found.push({ list: 'props', type: p.type, worldX: p.worldX, worldY: p.worldY, dir: p.dir });
-    });
-    return found;
-  }
-
-  public allEntities(): PlacedEntity[] {
-    const all: PlacedEntity[] = [];
-    this.world.chunks.forEach((chunk) => {
-      chunk.npcs.forEach((n) => all.push({ list: 'npcs', ...n }));
-      chunk.pickups.forEach((p) => all.push({ list: 'pickups', ...p }));
-    });
-    this.world.props.forEach((p) => all.push({ list: 'props', type: p.type, worldX: p.worldX, worldY: p.worldY, dir: p.dir }));
-    return all;
-  }
-
-  /**
-   * Põe UMA coisa no tile — e o tile fica com uma coisa só.
-   *
-   * **CHÃO + UMA COISA** é a lei do tabuleiro, e é aqui que ela se cumpre na hora de colocar: sai
-   * tudo o que estava naquele tile (prop, item, NPC, cova — não só a lista da peça nova) e sai
-   * também o tile de CIMA, se houver. Antes daqui a limpeza era só da MESMA lista, então largar um
-   * prop em cima de um item guardava os dois e o mundo ganhava uma pilha por clique — foi assim
-   * que 45 delas apareceram no world.json (ver scripts/fix-tile-stacks.mjs).
-   *
-   * Trocar em vez de recusar pelo mesmo motivo do NPC logo abaixo: um clique que não faz nada não
-   * ensina nada. E tudo entra no MESMO op, então um Ctrl+Z devolve o tile inteiro — a peça velha,
-   * o item que estava lá e a folhagem por cima.
-   */
-  public placeEntity(entity: PlacedEntity): void {
-    if (!this.isInside(entity.worldX, entity.worldY)) return;
-    const removed = this.entitiesAt(entity.worldX, entity.worldY);
-    // Nada a fazer só quando o tile JÁ está do jeito que o clique quer — a peça certa e nada em
-    // cima dela. Com folhagem por cima (um arquivo antigo, um script), o clique ainda tem trabalho.
-    const stacked = this.readCell('upper', entity.worldX, entity.worldY) !== null;
-    if (removed.length === 1 && sameEntity(removed[0], entity) && !stacked) return;
-
-    // Um gesto, um desfazer: se o chamador já abriu um traço (arrastar o pincel de entidades),
-    // isto entra nele; se não, abre o seu e fecha no fim.
-    const ownStroke = !this.strokeOps;
-    if (ownStroke) this.beginStroke();
-    this.setCell('upper', entity.worldX, entity.worldY, null);
-
-    // UM NPC APARECE UMA VEZ SO NO MAPA. Por um personagem que ja existe em outro tile e MOVE-LO,
-    // nao clona-lo: o mesmo gato em dez telas deixa de ser um personagem e vira cenario, e a fala
-    // dele deixa de ser de alguem. Mover em vez de recusar porque um clique que nao faz nada nao
-    // ensina nada — e a mudanca inteira entra no MESMO op, entao Ctrl+Z devolve o personagem ao
-    // lugar de onde ele veio. Vale so pra NPC: cova, pickup e prop se repetem por desenho.
-    if (entity.list === 'npcs') {
-      for (const other of this.allEntities()) {
-        if (other.list !== 'npcs' || other.type !== entity.type) continue;
-        if (other.worldX === entity.worldX && other.worldY === entity.worldY) continue;
-        this.removeEntityFromWorld(other);
-        removed.push(other);
-      }
-    }
-
-    removed.forEach((e) => this.removeEntityFromWorld(e));
-    this.addEntityToWorld(entity);
-    this.recordOp({ kind: 'entities', added: [entity], removed });
-    if (ownStroke) this.commitStroke();
-    this.markDirty();
-    this.emit({ entities: true });
-  }
-
-  public eraseEntitiesAt(wx: number, wy: number): boolean {
-    const removed = this.entitiesAt(wx, wy);
-    if (removed.length === 0) return false;
-    removed.forEach((e) => this.removeEntityFromWorld(e));
-    this.recordOp({ kind: 'entities', added: [], removed });
-    this.markDirty();
-    this.emit({ entities: true });
-    return true;
-  }
-
-  private addEntityToWorld(entity: PlacedEntity): void {
-    if (entity.list === 'props') {
-      this.world.props.push({
-        type: entity.type,
-        worldX: entity.worldX,
-        worldY: entity.worldY,
-        ...(entity.dir === undefined ? {} : { dir: entity.dir }),
-      });
-      return;
-    }
-    const chunk = this.chunkAt(entity.worldX, entity.worldY);
-    if (!chunk) return;
-    if (entity.list === 'npcs') chunk.npcs.push({ type: entity.type, worldX: entity.worldX, worldY: entity.worldY });
-    else chunk.pickups.push({ type: entity.type, worldX: entity.worldX, worldY: entity.worldY });
-  }
-
-  private removeEntityFromWorld(entity: PlacedEntity): void {
-    if (entity.list === 'props') {
-      const index = this.world.props.findIndex((p) => p.type === entity.type && p.worldX === entity.worldX && p.worldY === entity.worldY);
-      if (index >= 0) this.world.props.splice(index, 1);
-      return;
-    }
-    const chunk = this.chunkAt(entity.worldX, entity.worldY);
-    if (!chunk) return;
-    const list = chunk[entity.list] as Array<{ type: string; worldX: number; worldY: number }>;
-    const index = list.findIndex((e) => e.type === entity.type && e.worldX === entity.worldX && e.worldY === entity.worldY);
-    if (index >= 0) list.splice(index, 1);
-  }
 
   // ── Spawn ───────────────────────────────────────────────────────────────
 
@@ -414,208 +225,21 @@ export class EditorStore {
     return this.world.meta.playerStart;
   }
 
-  public setSpawn(wx: number, wy: number): void {
-    if (!this.isInside(wx, wy)) return;
-    const prev = { ...this.world.meta.playerStart };
-    if (prev.worldX === wx && prev.worldY === wy) return;
-    this.world.meta.playerStart = { worldX: wx, worldY: wy };
-    this.recordOp({ kind: 'spawn', prev, next: { worldX: wx, worldY: wy } });
-    this.markDirty();
-    this.emit({ spawn: true });
-  }
-
-  /** Hard requirements shared by save and playtest: a start must exist on a walkable tile. */
-  public startPointErrors(): string[] {
-    const start = this.world.meta.playerStart as { worldX?: unknown; worldY?: unknown } | undefined;
-    if (!start || !Number.isInteger(start.worldX) || !Number.isInteger(start.worldY)) {
-      return ['Todo level precisa de um Ponto Inicial'];
-    }
-    const worldX = Number(start.worldX);
-    const worldY = Number(start.worldY);
-    if (!this.isInside(worldX, worldY)) return ['O Ponto Inicial esta fora do level'];
-    if (this.readCell('collision', worldX, worldY) === true) {
-      return ['O Ponto Inicial precisa estar em um tile sem colisao'];
-    }
-    return [];
-  }
-
   // ── Dialogs ─────────────────────────────────────────────────────────────
 
-  /** Current dialog for the NPC, or a fresh editable template built from the code defaults. */
-  public getDialog(kind: NpcKind): WorldDialog {
-    const existing = this.world.dialogs[kind];
-    if (existing) return clone(existing);
-    const script = NPC_DIALOGS[kind];
-    return {
-      npcName: script.npcName,
-      npcColorHex: script.npcColorHex,
-      npcAssetKey: script.npcAssetKey,
-      npcFrame: script.npcFrame,
-      voice: { ...DIALOG_VOICES[kind] },
-      lines: clone(script.lines),
-    };
-  }
-
-  public setDialog(kind: NpcKind, next: WorldDialog): void {
-    const prev = this.world.dialogs[kind] ? clone(this.world.dialogs[kind]) : undefined;
-    this.world.dialogs[kind] = clone(next);
-    this.recordOp({ kind: 'dialog', npc: kind, prev, next: clone(next) });
-    this.markDirty();
-    this.emit({ dialogs: true });
-  }
-
   // ── World meta ──────────────────────────────────────────────────────────
-
-  public renameWorld(name: string): void {
-    const trimmed = name.trim();
-    if (!trimmed || trimmed === this.world.meta.name) return;
-    this.world.meta.name = trimmed;
-    this.markDirty();
-    this.emit({ meta: true });
-  }
-
-  /** Grows/shrinks the chunk grid. Destructive at the edges, so it clears the undo history. */
-  public resizeWorld(chunksX: number, chunksY: number): void {
-    const nx = Math.max(1, Math.min(MAX_WORLD_CHUNKS, Math.floor(chunksX)));
-    const ny = Math.max(1, Math.min(MAX_WORLD_CHUNKS, Math.floor(chunksY)));
-    if (nx === this.world.meta.worldChunksX && ny === this.world.meta.worldChunksY) return;
-
-    const chunks: WorldChunk[] = [];
-    for (let cy = 0; cy < ny; cy += 1) {
-      for (let cx = 0; cx < nx; cx += 1) {
-        chunks.push(this.chunkIndex.get(chunkKey(cx, cy)) ?? buildEmptyChunk(cx, cy));
-      }
-    }
-    this.world.chunks = chunks;
-    this.world.meta.worldChunksX = nx;
-    this.world.meta.worldChunksY = ny;
-    this.rebuildIndex();
-
-    this.world.props = this.world.props.filter((p) => this.isInside(p.worldX, p.worldY));
-    const start = this.world.meta.playerStart;
-    this.world.meta.playerStart = {
-      worldX: Math.max(0, Math.min(this.tilesX - 1, start.worldX)),
-      worldY: Math.max(0, Math.min(this.tilesY - 1, start.worldY)),
-    };
-
-    this.undoStack = [];
-    this.redoStack = [];
-    this.markDirty();
-    this.emit({ structure: true, entities: true, spawn: true, meta: true });
-  }
 
   // ── Undo / redo ─────────────────────────────────────────────────────────
 
   public get canUndo(): boolean {
-    return this.undoStack.length > 0;
+    return this.history.undoStack.length > 0;
   }
 
   public get canRedo(): boolean {
-    return this.redoStack.length > 0;
-  }
-
-  public undo(): boolean {
-    const ops = this.undoStack.pop();
-    if (!ops) return false;
-    for (let i = ops.length - 1; i >= 0; i -= 1) this.applyOp(ops[i], false);
-    this.redoStack.push(ops);
-    this.dirty = true;
-    this.emit(this.describeOps(ops));
-    return true;
-  }
-
-  public redo(): boolean {
-    const ops = this.redoStack.pop();
-    if (!ops) return false;
-    ops.forEach((op) => this.applyOp(op, true));
-    this.undoStack.push(ops);
-    this.dirty = true;
-    this.emit(this.describeOps(ops));
-    return true;
-  }
-
-  private applyOp(op: Op, forward: boolean): void {
-    if (op.kind === 'cells') {
-      op.changes.forEach((c) => this.writeCell(c.layer, c.wx, c.wy, forward ? c.next : c.prev));
-    } else if (op.kind === 'entities') {
-      const toRemove = forward ? op.removed : op.added;
-      const toAdd = forward ? op.added : op.removed;
-      toRemove.forEach((e) => this.removeEntityFromWorld(e));
-      toAdd.forEach((e) => this.addEntityToWorld(e));
-    } else if (op.kind === 'spawn') {
-      this.world.meta.playerStart = { ...(forward ? op.next : op.prev) };
-    } else {
-      const dialog = forward ? op.next : op.prev;
-      if (dialog) this.world.dialogs[op.npc] = clone(dialog);
-      else delete this.world.dialogs[op.npc];
-    }
-  }
-
-  private describeOps(ops: Op[]): StoreChange {
-    const change: StoreChange = { meta: true };
-    ops.forEach((op) => {
-      if (op.kind === 'cells') {
-        change.cells = (change.cells ?? []).concat(op.changes.map((c) => ({ wx: c.wx, wy: c.wy })));
-      } else if (op.kind === 'entities') change.entities = true;
-      else if (op.kind === 'spawn') change.spawn = true;
-      else change.dialogs = true;
-    });
-    return change;
+    return this.history.redoStack.length > 0;
   }
 
   // ── Validation / stats ──────────────────────────────────────────────────
-
-  public validate(): string[] {
-    const warnings: string[] = [...this.startPointErrors()];
-
-    let onCollision = 0;
-    this.allEntities().forEach((entity) => {
-      if (this.readCell('collision', entity.worldX, entity.worldY) === true) onCollision += 1;
-    });
-    if (onCollision > 0) warnings.push(`${onCollision} entidade(s) em cima de colisao`);
-
-    // CHAO + UMA COISA. O editor ja impede isto ao colocar (placeEntity) e ao pintar (setCell);
-    // este aviso e para o JSON escrito a mao ou por script, que e por onde as 45 pilhas do
-    // world.json entraram. O conserto em massa e `node scripts/fix-tile-stacks.mjs`.
-    const occupied = new Map<string, number>();
-    this.allEntities().forEach((entity) => {
-      const key = `${entity.worldX},${entity.worldY}`;
-      occupied.set(key, (occupied.get(key) ?? 0) + 1);
-    });
-    let stacked = 0;
-    occupied.forEach((count, key) => {
-      const [wx, wy] = key.split(',').map(Number);
-      if (count > 1 || this.readCell('upper', wx, wy) !== null) stacked += 1;
-    });
-    if (stacked > 0) {
-      warnings.push(`${stacked} tile(s) com mais de uma coisa em cima do chao — rode scripts/fix-tile-stacks.mjs`);
-    }
-
-    // UM NPC, UM LUGAR. O editor ja impede isto ao colocar (ver placeEntity); este aviso e para o
-    // JSON escrito a mao ou por script, que e por onde a regra entrou quebrada da primeira vez.
-    const npcSeen = new Map<string, number>();
-    this.allEntities().forEach((entity) => {
-      if (entity.list !== 'npcs') return;
-      npcSeen.set(entity.type, (npcSeen.get(entity.type) ?? 0) + 1);
-    });
-    const repeated = [...npcSeen.entries()].filter(([, count]) => count > 1);
-    if (repeated.length > 0) {
-      warnings.push(
-        `NPC repetido (so pode haver um de cada no mapa): ${repeated.map(([kind, count]) => `${kind} x${count}`).join(', ')}`,
-      );
-    }
-
-    return warnings;
-  }
-
-  public stats(): { npcs: number; pickups: number; props: number } {
-    const all = this.allEntities();
-    return {
-      npcs: all.filter((e) => e.list === 'npcs').length,
-      pickups: all.filter((e) => e.list === 'pickups').length,
-      props: all.filter((e) => e.list === 'props').length,
-    };
-  }
 
   /** Deep clone of the world, e.g. to hand to the game runtime for a live playtest. */
   public snapshotWorld(): WorldData {

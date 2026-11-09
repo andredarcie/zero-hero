@@ -74,7 +74,7 @@ export class Dragonflies implements NatureSystem {
       const spot = this.overWater(f, f.hero.x, f.hero.y, 6.5);
       if (spot) {
         const species = this.flies.length % 2;
-        const bb = world3d().addBillboard(SPECIES[species][0], 0, { centered: true, depthWrite: false }).setDisplaySize(10 / 16, 5 / 16).setTint(PROP_TINT);
+        const bb = world3d().objects.addBillboard(SPECIES[species][0], 0, { centered: true, depthWrite: false }).setDisplaySize(10 / 16, 5 / 16).setTint(PROP_TINT);
         const z = 0.45 + this.rand() * 0.3;
         this.flies.push({ bb, species, x: spot.x, y: spot.y, z, fromX: spot.x, fromY: spot.y, toX: spot.x, toY: spot.y, dart: 1, hover: 0.6, facing: 1 });
       }

@@ -151,7 +151,7 @@ export default {
         .some((u) => u.worldX === 6 && u.worldY === 6 && u.spawning === false),
       null, { timeout: 20000 },
     );
-    await page.evaluate(() => window.__scene.igniteFlammableAt(6, 6));
+    await page.evaluate(() => window.__scene.fire.igniteFlammableAt(6, 6));
     // O fogo come o corpo em ~2,6s, correndo em panico — ele morre alguns tiles adiante.
     await page.waitForFunction(
       () => (window.gameDebug?.getState()?.undead ?? []).length === 0,
@@ -195,12 +195,12 @@ export default {
       const items = s.itemManager.snapshot().filter(inChunk).map((i) => i.kind);
       return {
         items,
-        dryTrees: s.dryTrees.filter(inChunk).length,
-        water: s.waterTiles.filter(inChunk).length,
-        bench: s.toolboxes.filter(inChunk).length,
-        bushes: s.dryBushes.filter(inChunk).length,
-        veins: s.rocks.filter((r) => inChunk(r) && r.ore).length,
-        rocks: s.rocks.filter((r) => inChunk(r) && !r.ore).length,
+        dryTrees: s.props.dryTrees.filter(inChunk).length,
+        water: s.props.waterTiles.filter(inChunk).length,
+        bench: s.props.toolboxes.filter(inChunk).length,
+        bushes: s.props.dryBushes.filter(inChunk).length,
+        veins: s.props.rocks.filter((r) => inChunk(r) && r.ore).length,
+        rocks: s.props.rocks.filter((r) => inChunk(r) && !r.ore).length,
         npcs: window.gameDebug.listNpcKinds(),
       };
     });
@@ -265,7 +265,7 @@ export default {
       // acende a maquina; o carvao so pula pela boca ~2s depois. Esperar o item — e nao um relogio
       // — deixa o teste imune ao tempo exato do ciclo.
       const charcoals = () => s.itemManager.snapshot().filter((i) => i.kind === 'charcoal').length;
-      const trabalhando = s.furnaces.some((f) => f.isBusy);
+      const trabalhando = s.props.furnaces.some((f) => f.isBusy);
       for (let i = 0; i < 60 && charcoals() === 0; i += 1) {
         await new Promise((r) => setTimeout(r, 100));
       }
@@ -322,7 +322,7 @@ export default {
       let spot = null;
       for (let y = cy * 12; y < cy * 12 + 12 && !spot; y += 1) {
         for (let x = cx * 12; x < cx * 12 + 12 && !spot; x += 1) {
-          if (s.isOpenWaterAt(x, y)) spot = { x, y };
+          if (s.query.isOpenWaterAt(x, y)) spot = { x, y };
         }
       }
       if (!spot) return { erro: 'sem agua na carta' };
@@ -335,7 +335,7 @@ export default {
         valor: s.coinsForKind('zora'),
         caiu: moedas.length - antes,
         // "Em terra" e a mesma pergunta que os pes do heroi fazem: um tile que ele PODE pisar.
-        naAgua: moedas.filter((c) => s.isOpenWaterAt(c.x, c.y)).length,
+        naAgua: moedas.filter((c) => s.query.isOpenWaterAt(c.x, c.y)).length,
       };
     }, { cx: lakeGate.cx, cy: lakeGate.cy });
     assert('O bicho de agua vale TRES moedas', pago?.valor === 3, JSON.stringify(pago));

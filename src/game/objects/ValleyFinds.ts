@@ -83,7 +83,7 @@ export class ValleyFinds {
     for (const { kind, x, y, view } of FINDS) {
       if (kind === 'door') continue;
       this.bodies.push(world3d()
-        .addBillboard(findTexture(kind), 0, { groundShadow: FIND_SHADOW })
+        .objects.addBillboard(findTexture(kind), 0, { groundShadow: FIND_SHADOW })
         .setDisplaySize(1, 1)
         .setTint(FIND_TINT)
         .setPosition(x, view ? y - SEAT_BEHIND : y));

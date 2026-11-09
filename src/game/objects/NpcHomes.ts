@@ -72,16 +72,16 @@ export class NpcHomes {
       if (!home) continue;
       const { x, y } = home;
       this.bodies.push(world3d()
-        .addBillboard(homeYardTexture(kind), 0, { flat: true, flatY: YARD_Y })
+        .objects.addBillboard(homeYardTexture(kind), 0, { flat: true, flatY: YARD_Y })
         .setDisplaySize(YARD_WIDTH, YARD_DEPTH)
         .setPosition(x, y + YARD_FORWARD));
       this.bodies.push(world3d()
-        .addBillboard(homeTexture(kind), 0, { groundShadow: { rx: 1.25, rz: 0.6, alpha: 0.3 } })
+        .objects.addBillboard(homeTexture(kind), 0, { groundShadow: { rx: 1.25, rz: 0.6, alpha: 0.3 } })
         .setDisplaySize(HOME_SIZE, HOME_SIZE)
         .setTint(kind === 'astronaut' ? WHITE_SAFE_TINT : HOME_TINT)
         .setPosition(x, y + 0.3));
       this.glows.set(kind, world3d()
-        .addBillboard(homeGlowTexture(kind), 0, { emissive: true, fog: false })
+        .objects.addBillboard(homeGlowTexture(kind), 0, { emissive: true, fog: false })
         .setDisplaySize(HOME_SIZE, HOME_SIZE)
         .setPosition(x, y + 0.32)
         .setVisible(false));

@@ -96,7 +96,7 @@ export class RainMushrooms implements NatureSystem {
         const key = `${t.x},${t.y},${i}`;
         keep.add(key);
         if (this.shrooms.has(key)) continue;
-        const bb = world3d().addBillboard(KINDS[kind], 0, { depthLayer: 'ground' }).setTint(PROP_TINT).setPosition(x, y).setVisible(false);
+        const bb = world3d().objects.addBillboard(KINDS[kind], 0, { depthLayer: 'ground' }).setTint(PROP_TINT).setPosition(x, y).setVisible(false);
         this.shrooms.set(key, { bb, x, y, kind, delay: hash(i, t.x + t.y, 4) * 0.25 });
       }
     }

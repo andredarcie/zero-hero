@@ -25,9 +25,9 @@ export default {
     // Os passarinhos: um bandinho desce perto do herói, de dia. Eles moram na MATA (world/biomeLife), não no bosque
     // de outono: o teste vai até lá.
     await put(52, 20, 0, 1);
-    await page.evaluate(() => { window.__scene.birdLife.nextLanding = 0; });
-    await page.waitForFunction(() => window.__scene.birdLife.list.filter((b) => b.mode === 'ground').length >= 3, null, { timeout: 15000 }).catch(() => {});
-    const birds = await page.evaluate(() => window.__scene.birdLife.list);
+    await page.evaluate(() => { window.__scene.valley.birdLife.nextLanding = 0; });
+    await page.waitForFunction(() => window.__scene.valley.birdLife.list.filter((b) => b.mode === 'ground').length >= 3, null, { timeout: 15000 }).catch(() => {});
+    const birds = await page.evaluate(() => window.__scene.valley.birdLife.list);
     const ground = birds.filter((b) => b.mode === 'ground');
     log(`  no chão: ${ground.map((b) => `${b.x.toFixed(1)},${b.y.toFixed(1)}`).join('  ')}`);
     assert('De dia um bandinho desce para ciscar', ground.length >= 3, JSON.stringify(birds));
@@ -36,17 +36,17 @@ export default {
 
     // O herói chega perto: o bando inteiro levanta voo.
     const target = ground[0];
-    const flushesBefore = await page.evaluate(() => window.__scene.birdLife.flushes);
+    const flushesBefore = await page.evaluate(() => window.__scene.valley.birdLife.flushes);
     await put(Math.round(target.x), Math.round(target.y) + 1, 0, -1);
     await sleep(700);
-    const after = await page.evaluate(() => ({ list: window.__scene.birdLife.list, flushes: window.__scene.birdLife.flushes }));
+    const after = await page.evaluate(() => ({ list: window.__scene.valley.birdLife.list, flushes: window.__scene.valley.birdLife.flushes }));
     assert('Com o herói perto, o bando levanta voo', after.flushes > flushesBefore && !after.list.some((b) => b.mode === 'ground'), JSON.stringify(after));
     await shot('03-revoada', { note: 'O bando levantando voo' });
 
     const trees = await page.evaluate(() => {
       const s = window.__scene;
-      const list = s.bigTrees.list;
-      return { count: list.length, kinds: [...new Set(list.map((t) => t.kind))], solid: list.every((t) => s.isSolidForEntities(t.x, t.y)) };
+      const list = s.valley.bigTrees.list;
+      return { count: list.length, kinds: [...new Set(list.map((t) => t.kind))], solid: list.every((t) => s.query.isSolidForEntities(t.x, t.y)) };
     });
     assert('O bosque tem as 4 espécies, e o pé de cada árvore é sólido', trees.count >= 8 && trees.kinds.length === 4 && trees.solid, JSON.stringify(trees));
 
@@ -64,7 +64,7 @@ export default {
     await put(50, 49, 0, -1);
     await sleep(1200);
     const oak = await page.evaluate(() => {
-      const t = window.__scene.bigTrees.trees.find((q) => q.x === 50 && q.y === 46);
+      const t = window.__scene.valley.bigTrees.trees.find((q) => q.x === 50 && q.y === 46);
       const m = t.bb.mesh;
       return { visible: m.visible, pos: [m.position.x, m.position.y, m.position.z], scale: [m.scale.x, m.scale.y], opacity: m.material.opacity, parent: !!m.parent };
     });
@@ -74,14 +74,14 @@ export default {
     // O herói atrás do carvalho de (50,46): a copa fica translúcida.
     await put(50, 45, 0, 1);
     await sleep(900);
-    const alpha = await page.evaluate(() => window.__scene.bigTrees.list.find((t) => t.x === 50 && t.y === 46).alpha);
+    const alpha = await page.evaluate(() => window.__scene.valley.bigTrees.list.find((t) => t.x === 50 && t.y === 46).alpha);
     assert('Com o herói atrás, a copa do carvalho fica translúcida', alpha < 0.6, String(alpha));
     await shot('01-atras-da-copa', { note: 'O herói atrás da copa' });
 
     // De noite, nenhum passarinho.
     await page.evaluate(() => window.gameTime.set(0.9));
     await sleep(6000);
-    const night = await page.evaluate(() => window.__scene.birdLife.list.filter((b) => b.mode === 'ground' || b.mode === 'arriving').length);
+    const night = await page.evaluate(() => window.__scene.valley.birdLife.list.filter((b) => b.mode === 'ground' || b.mode === 'arriving').length);
     assert('De noite não há passarinho no chão', night === 0, String(night));
   },
 };

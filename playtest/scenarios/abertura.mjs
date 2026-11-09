@@ -21,21 +21,21 @@ export default {
     assert('A abertura toca numa jornada nova', st0.cutsceneActive && !st0.introDone, JSON.stringify(st0.ending));
 
     // O instante do golpe: a espada esta nas maos, a caminho do chao.
-    await page.waitForFunction(() => window.__scene.swordInHands === true, null, { timeout: 20000 });
+    await page.waitForFunction(() => window.__scene.swordPlanting.swordInHands === true, null, { timeout: 20000 });
     await sleep(2600);
     await shot('erguida', { note: 'A espada no alto, em camera lenta' });
-    await page.waitForFunction(() => Boolean(window.__scene.plantedSword) && window.__scene.swordInHands === false, null, { timeout: 15000 });
+    await page.waitForFunction(() => Boolean(window.__scene.swordPlanting.plantedSword) && window.__scene.swordPlanting.swordInHands === false, null, { timeout: 15000 });
     await shot('fincada', { note: 'A espada fincada, a fenda no chao' });
 
     const planted = await page.evaluate(() => {
       const s = window.__scene;
-      const sw = s.plantedSword;
+      const sw = s.swordPlanting.plantedSword;
       return {
-        tile: s.plantedSwordTile,
+        tile: s.swordPlanting.plantedSwordTile,
         angle: Math.round(sw.angle),
-        solid: s.isSolidForEntities(s.plantedSwordTile.x, s.plantedSwordTile.y),
-        crack: Boolean(s.groundCrack),
-        backGone: s.backItemBb === undefined,
+        solid: s.query.isSolidForEntities(s.swordPlanting.plantedSwordTile.x, s.swordPlanting.plantedSwordTile.y),
+        crack: Boolean(s.cinema.groundCrack),
+        backGone: s.carry.backItemBb === undefined,
       };
     });
     assert('A espada fica fincada de ponta para baixo', Math.abs(Math.abs(planted.angle) - 180) <= 1, `angle=${planted.angle}`);
@@ -59,9 +59,9 @@ export default {
       return {
         hero: { ...s.playerWorld },
         facing: { ...s.movementController.facing },
-        sword: s.plantedSwordTile,
+        sword: s.swordPlanting.plantedSwordTile,
         wizard: s.npcManager.getKindAt(s.playerWorld.worldX + 1, s.playerWorld.worldY),
-        dolly: s.world3d.params.camHeight / (s.dollyBase?.h ?? s.world3d.params.camHeight),
+        dolly: s.world3d.params.camHeight / (s.cinema.dollyBase?.h ?? s.world3d.params.camHeight),
         bars: document.querySelectorAll('div[style*="11vh"]').length,
         heroTexture: s.heroBillboard?.texKey,
       };

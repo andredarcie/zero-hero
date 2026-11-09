@@ -36,7 +36,7 @@ export default {
       const out = {};
 
       // A lit fire to measure against (the home campfire is born lit).
-      const fire = w3.fires.find((f) => f.lit && f.scale > 0.5);
+      const fire = w3.lights.fires.find((f) => f.lit && f.scale > 0.5);
       out.hasFire = Boolean(fire);
       if (!fire) return out;
 
@@ -48,7 +48,7 @@ export default {
       let maxAngleJump = 0;
       let lastAlpha = 0;
       for (let d = 0.9; d <= radius + 2.5; d += 0.2) {
-        const c = w3.groundCastAt(fire.worldX + d, fire.worldY);
+        const c = w3.probe.groundCastAt(fire.worldX + d, fire.worldY);
         if (!c) { lastAlpha = 0; continue; }
         if (prevA !== null) {
           maxAlphaJump = Math.max(maxAlphaJump, Math.abs(c.alpha - prevA));
@@ -65,7 +65,7 @@ export default {
       out.endAlpha = lastAlpha; // past the pool: must have settled on the moon's darkness
 
       // ── 2) ON a lit flame there is no stable heading — the cast falls to the moon ──
-      const onFire = w3.groundCastAt(fire.worldX, fire.worldY);
+      const onFire = w3.probe.groundCastAt(fire.worldX, fire.worldY);
       const moonDir = { x: -Math.sin(w3.moonCastRotY), z: -Math.cos(w3.moonCastRotY) };
       out.onFireIsMoon = Boolean(onFire)
         && Math.abs(onFire.dirX - moonDir.x) < 1e-6
@@ -73,7 +73,7 @@ export default {
         && Math.abs(onFire.alpha - w3.params.moonShadowAlpha) < 1e-6;
 
       // ── 3) hysteresis: a second fire, and a caster with memory on the midline ──
-      const second = w3.fires.find((f) => f !== fire);
+      const second = w3.lights.fires.find((f) => f !== fire);
       out.hasSecond = Boolean(second);
       if (second) {
         const wasLit = second.lit;
@@ -92,9 +92,9 @@ export default {
         const dx = (second.worldX - fire.worldX) * 0.02;
         const dy = (second.worldY - fire.worldY) * 0.02;
         const mem = { lastFire: null };
-        const before = w3.groundCastAt(mx - dx, my - dy, mem); // firmly fire-side
-        const across = w3.groundCastAt(mx + dx, my + dy, mem); // hair past the midpoint
-        const fresh = w3.groundCastAt(mx + dx, my + dy);       // no memory: flips
+        const before = w3.probe.groundCastAt(mx - dx, my - dy, mem); // firmly fire-side
+        const across = w3.probe.groundCastAt(mx + dx, my + dy, mem); // hair past the midpoint
+        const fresh = w3.probe.groundCastAt(mx + dx, my + dy);       // no memory: flips
         out.hysteresis = Boolean(before && across && fresh)
           && Math.abs(across.dirX - before.dirX) < 0.15   // memory held the incumbent
           && Math.abs(across.dirX - fresh.dirX) > 0.001;  // a memory-less probe flipped
@@ -105,14 +105,14 @@ export default {
       }
 
       // ── 4) water clamp: a cast aimed square at a sunken channel stops at the bank ──
-      out.sunkenCount = w3.sunkenTiles.size;
-      if (w3.sunkenTiles.size > 0) {
-        const key = w3.sunkenTiles.values().next().value;
+      out.sunkenCount = w3.tiles.sunkenTiles.size;
+      if (w3.tiles.sunkenTiles.size > 0) {
+        const key = w3.tiles.sunkenTiles.values().next().value;
         const sx = Math.floor(key / 16384) - 4096;
         const sz = (key % 16384) - 4096;
         // Stand one tile north of the sunken tile, cast pointing south (rotY = PI:
         // heading -Z rotated half a turn = +z). 3 tiles long would cross the channel.
-        const clamped = w3.clampCastAtSunken(sx, sz - 1, Math.PI, 3);
+        const clamped = w3.emit.clampCastAtSunken(sx, sz - 1, Math.PI, 3);
         out.waterClamp = clamped < 2;
         out.waterClampLen = clamped;
       }
@@ -121,7 +121,7 @@ export default {
       // NOT the hero: his elevation is re-synced from bobLift every frame (updateHeroSync
       // would overwrite the probe before the render saw it). Any other caster keeps what
       // it is given.
-      const caster = w3.castCasters.find((c) => c.bb !== s.heroBillboard && c.bb.visible && c.mesh.visible);
+      const caster = w3.casts.castCasters.find((c) => c.bb !== s.heroBillboard && c.bb.visible && c.mesh.visible);
       out.hasElevCaster = Boolean(caster);
       if (caster) {
         await frame();
@@ -144,12 +144,12 @@ export default {
       // NO shadow (user report). So: total presence >= moonAlpha, for every tile, and no
       // stub-length casts.
       await frame();
-      const moonAttr = w3.moonCastField.mesh.geometry.getAttribute('aCastAlpha');
-      const fireAttr = w3.solidCastField.mesh.geometry.getAttribute('aCastAlpha');
-      const im = w3.solidCastField.mesh.instanceMatrix.array;
+      const moonAttr = w3.tiles.moonCastField.mesh.geometry.getAttribute('aCastAlpha');
+      const fireAttr = w3.tiles.solidCastField.mesh.geometry.getAttribute('aCastAlpha');
+      const im = w3.tiles.solidCastField.mesh.instanceMatrix.array;
       const fireByTile = new Map();
       let shortest = Infinity;
-      for (let i = 0; i < w3.solidCastField.mesh.count; i++) {
+      for (let i = 0; i < w3.tiles.solidCastField.mesh.count; i++) {
         const o = i * 16;
         const len = Math.hypot(im[o + 8], im[o + 9], im[o + 10]);
         if (len < shortest) shortest = len;
@@ -158,7 +158,7 @@ export default {
       out.shortestCast = shortest === Infinity ? null : shortest;
       let starved = 0;
       let worst = null;
-      for (const t of w3.castableSolids) {
+      for (const t of w3.tiles.castableSolids) {
         if (t.moonSlot === undefined) continue;
         const moon = moonAttr.getX(t.moonSlot);
         const fire = fireByTile.get(`${t.x},${t.z}`) ?? 0;
@@ -178,18 +178,18 @@ export default {
       // Saturation is the failure that matters: at the cap the pass stops emitting, and
       // whatever it had not reached yet — often the trees at the hero's feet, since
       // candidates arrive in fire order — silently loses its shadow.
-      out.castPool = w3.solidCastField.mesh.count;
-      out.poolCap = w3.solidCastField.mesh.instanceMatrix.count;
+      out.castPool = w3.tiles.solidCastField.mesh.count;
+      out.poolCap = w3.tiles.solidCastField.mesh.instanceMatrix.count;
 
       // ── 8) EVERY standing tile can cast, not just the exposed ones ──────────
       // The exposed-only rule (<= 4 solid neighbours) belongs to the contact blobs and the
       // baked moon field; it must NOT gate the fire cast, or a mobile torch walks up to the
       // forest wall, lights it brightly, and none of those trees have a shadow (reported).
       let indexed = 0;
-      for (const bucket of w3.solidBuckets.values()) indexed += bucket.length;
+      for (const bucket of w3.tiles.solidBuckets.values()) indexed += bucket.length;
       out.tilesIndexed = indexed;
-      out.solidTiles = w3.solidTiles.length;
-      out.castableExposed = w3.castableSolids.length;
+      out.solidTiles = w3.tiles.solidTiles.length;
+      out.castableExposed = w3.tiles.castableSolids.length;
 
       return out;
     });

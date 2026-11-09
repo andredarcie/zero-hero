@@ -49,14 +49,14 @@ export class SunDapples implements NatureSystem {
       const rx = big ? 1.6 : 0.8;
       const ry = big ? 1.15 : 0.55;
       const cy = t.y + (big ? 0.55 : 0.25);
-      const shade = w3.addBillboard(SHADE, 0, { flat: true, flatY: 0.016, depthWrite: false, alphaTest: 0.01, depthLayer: 'ground' })
+      const shade = w3.objects.addBillboard(SHADE, 0, { flat: true, flatY: 0.016, depthWrite: false, alphaTest: 0.01, depthLayer: 'ground' })
         .setDisplaySize(rx * 2, ry * 2).setPosition(t.x, cy).setAlpha(0);
       const spots: Spot[] = [];
       const n = big ? 16 : 5;
       for (let i = 0; i < n; i += 1) {
         const a = hash(i, t.x, 52) * Math.PI * 2;
         const r = Math.sqrt(hash(t.y, i, 53)) * 0.8;
-        const bb = w3.addBillboard(SPOT, 0, { flat: true, flatY: 0.018, depthWrite: false, alphaTest: 0.01, additive: true, depthLayer: 'ground' })
+        const bb = w3.objects.addBillboard(SPOT, 0, { flat: true, flatY: 0.018, depthWrite: false, alphaTest: 0.01, additive: true, depthLayer: 'ground' })
           .setDisplaySize(5 / 16, 5 / 16).setAlpha(0);
         spots.push({ bb, ox: Math.cos(a) * r * rx * 0.85, oy: Math.sin(a) * r * ry * 0.85, phase: hash(i, t.y, 54) * 10 });
       }

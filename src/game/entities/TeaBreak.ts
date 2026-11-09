@@ -96,7 +96,7 @@ export class TeaBreak {
   }
 
   private newMug(x: number, y: number): Billboard3D {
-    return world3d().addBillboard(MUG_TEXTURE, 0).setTint(WHITE_SAFE_TINT).setDisplaySize(MUG_SIZE, MUG_SIZE).setPosition(x, y).setElevation(MUG_REST_ELEVATION);
+    return world3d().objects.addBillboard(MUG_TEXTURE, 0).setTint(WHITE_SAFE_TINT).setDisplaySize(MUG_SIZE, MUG_SIZE).setPosition(x, y).setElevation(MUG_REST_ELEVATION);
   }
 
   private after(ms: number, run: () => void): void {
@@ -118,7 +118,7 @@ export class TeaBreak {
     const fromX = mug.x;
     const fromY = mug.y;
     const pass = { t: 0 };
-    getSoundManager().playItemStash();
+    getSoundManager().ui.playItemStash();
     this.tween({
       targets: pass,
       t: 1,
@@ -156,7 +156,7 @@ export class TeaBreak {
   private puff(x: number, y: number, elevation: number): void {
     const size = 0.09 + Math.random() * 0.05;
     const puff = world3d()
-      .addBillboard(STEAM_TEXTURE, 0, { fog: false, emissive: true, alphaTest: 0.01 })
+      .objects.addBillboard(STEAM_TEXTURE, 0, { fog: false, emissive: true, alphaTest: 0.01 })
       .setDisplaySize(size, size)
       .setPosition(x + (Math.random() - 0.5) * 0.1, y)
       .setElevation(elevation)
@@ -200,7 +200,7 @@ export class TeaBreak {
     go(this.hero, 1);
     go(this.thea, -1);
     this.after(CLINK_MS, () => {
-      getSoundManager().playMugClink();
+      getSoundManager().story.playMugClink();
       this.host.sparkle((this.hero.x + this.thea.x) / 2, (this.hero.y + this.thea.y) / 2);
     });
     this.after(CLINK_MS * 2 + 90 + 260, () => {
@@ -218,7 +218,7 @@ export class TeaBreak {
     this.tween({ targets: body, scaleX: restX * 0.95, scaleY: restY * 1.09, duration: SIP_RAISE_MS, ease: 'Sine.easeOut' });
     // Dois goles: a caneca bate no compasso, e o som vem junto.
     this.after(SIP_RAISE_MS, () => {
-      for (let gulp = 0; gulp < 2; gulp += 1) this.after(gulp * SIP_GULP_MS * 2, () => getSoundManager().playMugSip());
+      for (let gulp = 0; gulp < 2; gulp += 1) this.after(gulp * SIP_GULP_MS * 2, () => getSoundManager().story.playMugSip());
       this.tween({ targets: mug, elevation: MUG_MOUTH_ELEVATION + 0.05, duration: SIP_GULP_MS, yoyo: true, repeat: 1, ease: 'Sine.easeInOut' });
     });
     this.after(SIP_RAISE_MS + SIP_GULP_MS * 4, () => {
@@ -235,7 +235,7 @@ export class TeaBreak {
       // Acabou: a caneca fica vazia, para de fumegar, e sobem os coraçõezinhos.
       mug.setTexture(EMPTY_MUG_TEXTURE, 0);
       this.host.hearts(headX, who.y);
-      getSoundManager().playCozyChime();
+      getSoundManager().ui.playCozyChime();
       if (who === this.thea) this.steam?.remove();
     });
   }

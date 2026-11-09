@@ -58,7 +58,7 @@ export default {
     assert('The lullaby is a real loop', Boolean(lullaby?.ok) && lullaby.duration > 60, `duration=${lullaby?.duration.toFixed(1)}s`);
 
     // A first piece starts a few seconds into the adventure (download + decode included).
-    const firstPiece = await page.waitForFunction(() => window.__sound?.valleyPiece, null, { timeout: 30000 })
+    const firstPiece = await page.waitForFunction(() => window.__sound?.music.valleyMusic.valleyPiece, null, { timeout: 30000 })
       .then((h) => h.jsonValue()).catch(() => null);
     assert('A valley piece starts playing', Boolean(firstPiece && firstPiece in PIECES), String(firstPiece));
 
@@ -68,10 +68,10 @@ export default {
       const s = window.__scene;
       s.playerWorld.worldX = xy[0]; s.playerWorld.worldY = xy[1];
       s.movementController.interruptMovement(xy[0], xy[1]);
-      s.ambienceClockMs = 0;
+      s.life.ambienceClockMs = 0;
       await new Promise((r) => setTimeout(r, 700));
       const sm = window.__sound;
-      return { beds: sm.ambienceBeds.size, mix: { ...sm.ambienceMix }, track: sm.requestedTrack };
+      return { beds: sm.ambienceBeds.size, mix: { ...sm.ambienceMix }, track: sm.music.requestedTrack };
     }, [phase, at]);
     await page.waitForFunction(() => window.__sound?.ambienceBeds.size === 4, null, { timeout: 15000 });
     const dayDry = await mix(0.5, [30, 46]); // meio-dia, longe da agua
@@ -87,10 +87,10 @@ export default {
     // The hour picks the piece: at midnight only night pieces, at noon only day pieces.
     const picks = async (phase) => page.evaluate(async (p) => {
       window.gameTime.set(p);
-      window.__scene.ambienceClockMs = 0;
+      window.__scene.life.ambienceClockMs = 0;
       await new Promise((r) => setTimeout(r, 700));
       const sm = window.__sound;
-      return Array.from({ length: 24 }, () => sm.pickValleyPiece([]));
+      return Array.from({ length: 24 }, () => sm.music.valleyMusic.pickValleyPiece([]));
     }, phase);
     const atNight = await picks(0.0);
     const atNoon = await picks(0.5);
@@ -101,16 +101,16 @@ export default {
     // When a piece ends the valley goes quiet (ambience only) and the next one is already on the clock.
     const gap = await page.evaluate(async () => {
       const sm = window.__sound;
-      const before = sm.valleyPiece;
-      sm.valley.piece.source.stop();
+      const before = sm.music.valleyMusic.valleyPiece;
+      sm.music.valley.piece.source.stop();
       await new Promise((r) => setTimeout(r, 400));
-      return { before, after: sm.valleyPiece, nextScheduled: sm.valley.timer !== null, beds: sm.ambienceBeds.size };
+      return { before, after: sm.music.valleyMusic.valleyPiece, nextScheduled: sm.music.valley.timer !== null, beds: sm.ambienceBeds.size };
     });
     assert('After a piece: silence with the ambience, next one scheduled', Boolean(gap.before) && gap.after === null && gap.nextScheduled && gap.beds === 4, JSON.stringify(gap));
 
     // THE PLAYER (pause → Music): every song listed, a click plays one (the valley goes quiet under it),
     // the transport moves on, and resuming the game stops the player and brings the valley back.
-    await page.evaluate(() => window.__scene.openPauseMenu());
+    await page.evaluate(() => window.__scene.pause.openPauseMenu());
     await page.locator('#zh-pause-root .zh-main .zh-pause-btn').nth(2).click();
     const listed = await page.locator('#zh-pause-root .zh-music-track').count();
     assert('Pause → Music lists every song', listed === 7, `rows=${listed}`);

@@ -51,7 +51,7 @@ export default {
       if (!store) throw new Error('sem store no editor');
       for (let x = 2; x <= 11; x += 1) {
         for (let y = 2; y <= 10; y += 1) {
-          store.eraseEntitiesAt(x, y);
+          store.entities.eraseEntitiesAt(x, y);
           store.setCell('upper', x, y, null);
           store.setCell('collision', x, y, false);
           store.setCell('ground', x, y, 5); // Terra — o frame que a pá morde
@@ -62,7 +62,7 @@ export default {
       // A grama baixa POR CIMA da terra alvo: decor não bloqueia nem impede a cavada — mas
       // tem de SUMIR com ela (o buraco fica sozinho no tile).
       store.setCell('upper', dig.x, dig.y, 0); // Folhagem
-      store.setSpawn(hero.x, hero.y);
+      store.meta.setSpawn(hero.x, hero.y);
     }, { hero: HERO, stone: STONE, dig: DIG, sea: SEA });
 
     log('LAB: P joga o mundo editado');
@@ -155,7 +155,7 @@ export default {
     await driver.settle(700); // o golpe desenha, o impacto (150ms) cava, o fade (300ms) assenta
     const dug = await page.evaluate((at) => {
       const s = window.__scene;
-      const spot = s.plantSpots.find((p) => p.worldX === at.x && p.worldY === at.y);
+      const spot = s.props.plantSpots.find((p) => p.worldX === at.x && p.worldY === at.y);
       return {
         exists: spot !== undefined,
         isHole: spot?.isHole ?? false,
@@ -194,7 +194,7 @@ export default {
     await driver.settle(500);
     const sown = await page.evaluate((at) => {
       const s = window.__scene;
-      const spot = s.plantSpots.find((p) => p.worldX === at.x && p.worldY === at.y);
+      const spot = s.props.plantSpots.find((p) => p.worldX === at.x && p.worldY === at.y);
       return {
         // O herói plantou de FORA do tile, então o monte pode já ter subido no frame seguinte
         // (updatePlantSpots ergue assim que o tile está livre) — os dois estados provam o mesmo.
@@ -233,7 +233,7 @@ export default {
     await driver.settle(900); // o arremesso viaja em arco; a terra bebe ao pousar
     const watered = await page.evaluate((at) => {
       const s = window.__scene;
-      const spot = s.plantSpots.find((p) => p.worldX === at.x && p.worldY === at.y);
+      const spot = s.props.plantSpots.find((p) => p.worldX === at.x && p.worldY === at.y);
       return {
         isWatered: spot?.isWatered ?? false,
         heldItem: window.gameDebug.getState().heldItem,
@@ -253,7 +253,7 @@ export default {
       const s = window.__scene;
       const state = window.gameDebug.getState();
       return {
-        spotOnStone: s.plantSpots.some((p) => p.worldX === stone.x && p.worldY === stone.y),
+        spotOnStone: s.props.plantSpots.some((p) => p.worldX === stone.x && p.worldY === stone.y),
         groundItems: state.groundItems.length,
         heldItem: state.heldItem,
       };
@@ -277,7 +277,7 @@ export default {
       const s = window.__scene;
       const state = window.gameDebug.getState();
       return {
-        spotOnDrop: s.plantSpots.some((p) => p.worldX === drop.x && p.worldY === drop.y),
+        spotOnDrop: s.props.plantSpots.some((p) => p.worldX === drop.x && p.worldY === drop.y),
         shovelOnGround: state.groundItems.some(
           (i) => i.kind === 'shovel' && i.worldX === drop.x && i.worldY === drop.y,
         ),

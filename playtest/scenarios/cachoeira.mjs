@@ -30,14 +30,14 @@ export default {
     const map = await page.evaluate(([sp, po]) => {
       const s = window.__scene;
       return {
-        exists: !!s.waterfall,
-        springSolid: s.isSolidForEntities(sp.x, sp.y),
-        poolSolid: s.isSolidForEntities(po.x, po.y),
-        poolWater: s.isOpenWaterAt(po.x, po.y),
-        sideFree: !s.isSolidForEntities(51, 58),
-        pondWater: [52, 53, 54, 55, 56].every((x) => [56, 57, 58].every((y) => s.isOpenWaterAt(x, y))),
-        koi: s.koiPond?.fish.length ?? 0,
-        streamSolid: s.isSolidForEntities(52, 54) && s.isSolidForEntities(53, 54),
+        exists: !!s.valley.waterfall,
+        springSolid: s.query.isSolidForEntities(sp.x, sp.y),
+        poolSolid: s.query.isSolidForEntities(po.x, po.y),
+        poolWater: s.query.isOpenWaterAt(po.x, po.y),
+        sideFree: !s.query.isSolidForEntities(51, 58),
+        pondWater: [52, 53, 54, 55, 56].every((x) => [56, 57, 58].every((y) => s.query.isOpenWaterAt(x, y))),
+        koi: s.valley.koiPond?.fish.length ?? 0,
+        streamSolid: s.query.isSolidForEntities(52, 54) && s.query.isSolidForEntities(53, 54),
       };
     }, [SPRING, POOL]);
     assert('A cachoeira está na cena', map.exists, JSON.stringify(map));
@@ -48,7 +48,7 @@ export default {
 
     const frames = new Set();
     for (let i = 0; i < 12; i += 1) {
-      frames.add(await page.evaluate(() => window.__scene.waterfall.currentFrame));
+      frames.add(await page.evaluate(() => window.__scene.valley.waterfall.currentFrame));
       await sleep(70);
     }
     log(`  quadros vistos: ${[...frames].join(',')}`);
@@ -56,9 +56,9 @@ export default {
     await shot('00-dia', { note: 'A cachoeira de dia, da beira do laguinho' });
 
     // As carpas nadam, e com o herói parado na beira elas vêm para perto dele.
-    const fishA = await page.evaluate(() => window.__scene.koiPond.fish);
+    const fishA = await page.evaluate(() => window.__scene.valley.koiPond.fish);
     await sleep(6000);
-    const fishB = await page.evaluate(() => window.__scene.koiPond.fish);
+    const fishB = await page.evaluate(() => window.__scene.valley.koiPond.fish);
     const moved = fishA.some((f, i) => Math.hypot(f.x - fishB[i].x, f.y - fishB[i].y) > 0.15);
     const inside = fishB.every((f) => f.x >= 51.79 && f.x <= 56.21 && f.y >= 55.79 && f.y <= 57.89);
     const nearHero = fishB.filter((f) => Math.hypot(f.x - 51, f.y - 58) < 1.8).length;

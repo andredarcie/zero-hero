@@ -36,7 +36,7 @@ export class SwingGateObject implements WorldProp {
     this.worldX = worldX;
     this.worldY = worldY;
     this.sprite = world3d()
-      .addBillboard('swing-gate-object', 0, { groundShadow: true })
+      .objects.addBillboard('swing-gate-object', 0, { groundShadow: true })
       .setPosition(worldX, worldY)
       .setDisplaySize(0.98, 0.98)
       // O mesmo tint da porta trancada, pelo mesmo motivo: metal quase branco estoura em bloom

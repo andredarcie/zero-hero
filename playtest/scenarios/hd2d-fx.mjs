@@ -16,15 +16,15 @@ export default {
     await page.evaluate(() => {
       const s = window.__scene;
       s.heldItem = 'wood';
-      s.heldOnFire = true;
-      s.torchFuelMs = 60000; // a healthy flame, far from guttering
-      s.updateBackItem();
+      s.torch.heldOnFire = true;
+      s.torch.torchFuelMs = 60000; // a healthy flame, far from guttering
+      s.carry.updateBackItem();
     });
     await driver.settle(500);
     await shot('torch-flame', { note: 'Lit torch: the flame is a 3D emissive billboard on the tip' });
 
     const torch = await page.evaluate(() => {
-      const bb = window.__scene.torchFlameBb;
+      const bb = window.__scene.torch.torchFlameBb;
       return bb ? { visible: bb.visible, w: bb.displayWidth, tex: bb.texKey } : null;
     });
     assert('Torch flame is a visible billboard', torch?.visible === true, JSON.stringify(torch));
@@ -39,8 +39,8 @@ export default {
       const { worldX, worldY } = s.playerWorld;
       s.spawnHitSpark(worldX + 1, worldY, true);   // hot flash + sparks
       s.spawnDeflect(worldX - 1, worldY);          // cold shockwave + shards
-      s.spawnFireHitEffect(worldX, worldY - 1);    // little fires
-      s.spawnSmokePuff(worldX + 1, worldY - 1);    // grey puffs
+      s.sparkle.spawnFireHitEffect(worldX, worldY - 1);    // little fires
+      s.debris.spawnSmokePuff(worldX + 1, worldY - 1);    // grey puffs
       s.spawnHealBurst();                          // warm ground wave under the hero
       s.spawnHealMote();                           // a mote streaming fire → hero
       return { before, after: s.world3d.scene.children.length };
@@ -74,7 +74,7 @@ export default {
     await shot('death-fade', { note: 'Death: the world drains and sinks to black in the post' });
 
     const after = await page.evaluate(() => ({
-      fade: window.__scene.world3d.finishPass.uniforms.uFade.value,
+      fade: window.__scene.world3d.screen.finishPass.uniforms.uFade.value,
     }));
     assert('World faded to black', after.fade > 0.98, `uFade=${after.fade}`);
   },

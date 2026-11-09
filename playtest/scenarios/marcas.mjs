@@ -12,7 +12,7 @@ const boot = async (driver, save) => {
   await driver.open('/?play');
   await page.waitForFunction(() => window.gameDebug?.getState()?.scene === 'game', null, { timeout: 30000 });
   await sleep(700);
-  return page.evaluate(() => window.__scene.questMarks.map((m) => ({
+  return page.evaluate(() => window.__scene.marks.questMarks.map((m) => ({
     dialog: m.def.dialog, done: m.done, texture: m.bb ? m.def[m.done ? 'after' : 'before'] : null, tile: m.tile,
   })));
 };
@@ -37,7 +37,7 @@ export default {
     await sleep(600);
     const fire = await page.evaluate(() => {
       const s = window.__scene;
-      return [...s.keptLitFires].map((f) => ({ x: f.worldX, y: f.worldY, lit: f.isLit }));
+      return [...s.fire.keptLitFires].map((f) => ({ x: f.worldX, y: f.worldY, lit: f.isLit }));
     });
     assert('A fogueira do Marco fica acesa ao meio-dia', fire.length === 1 && fire[0].lit, JSON.stringify(fire));
     for (const m of all) {
@@ -59,12 +59,12 @@ export default {
     await page.evaluate(() => {
       const s = window.__scene;
       window.__hearts = 0;
-      const orig = s.spawnHearts.bind(s);
-      s.spawnHearts = (x, y) => { window.__hearts += 1; orig(x, y); };
+      const orig = s.sparkle.spawnHearts.bind(s);
+      s.sparkle.spawnHearts = (x, y) => { window.__hearts += 1; orig(x, y); };
     });
     await page.evaluate(([x, y]) => { const s = window.__scene; s.playerWorld.worldX = x; s.playerWorld.worldY = y + 1; s.movementController.interruptMovement(x, y + 1); s.streamChunks(true); }, [thea.x, thea.y]);
     await sleep(500);
-    const greeted = await page.evaluate(([x, y]) => window.__scene.greetedNpcs.has(`${x},${y}`), [thea.x, thea.y]);
+    const greeted = await page.evaluate(([x, y]) => window.__scene.dialog.greetedNpcs.has(`${x},${y}`), [thea.x, thea.y]);
     assert('Chegar perto faz a Thea dar oi (pulinho)', greeted, '');
     const breath = await page.evaluate(async () => {
       const sizes = [];
@@ -87,7 +87,7 @@ export default {
     await sleep(450);
     await shot('marco-surgindo', { note: 'O marco da Thea surge, e ela agradece' });
     assert('O obrigado vem com coracoes', (await page.evaluate(() => window.__hearts)) === 1, '');
-    const after = await page.evaluate(() => window.__scene.questMarks.find((m) => m.def.dialog === 'astronaut'));
+    const after = await page.evaluate(() => window.__scene.marks.questMarks.find((m) => m.def.dialog === 'astronaut'));
     assert('Entregar as pedras faz o marco surgir', after?.done === true && Boolean(after.bb), JSON.stringify({ done: after?.done }));
     void live;
   },

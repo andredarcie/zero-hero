@@ -57,7 +57,7 @@ export class WorldCamera {
     tileSize: number,
     elevationTiles = 0,
   ): { x: number; y: number } {
-    if (this.world3d) return this.world3d.projectTile(tileX, tileY, elevationTiles);
+    if (this.world3d) return this.world3d.projection.projectTile(tileX, tileY, elevationTiles);
     return {
       x: Math.round(this.screenCenterX + (tileX - this.camX) * tileSize),
       y: Math.round(this.screenCenterY + (tileY - this.camY) * tileSize - elevationTiles * tileSize),

@@ -1,4 +1,4 @@
-﻿// As três formas de onde sai todo efeito de uma vez do mundo (ver FX_DOT_TEXTURE no World3D): o ponto que brilha, o anel
+// As três formas de onde sai todo efeito de uma vez do mundo (ver FX_DOT_TEXTURE no World3D): o ponto que brilha, o anel
 // deitado no chão e a baforada de fumaça. Registradas como textura no começo; quem quer uma usa addBillboard.
 
 import * as THREE from 'three';

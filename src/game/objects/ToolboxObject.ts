@@ -25,7 +25,7 @@ export class ToolboxObject implements WorldProp {
     public readonly dir: PropDir = 1,
   ) {
     this.body = world3d()
-      .addBillboard(ASSET_KEYS.toolbox, TOOLBOX_FRAMES.closed, { groundShadow: true })
+      .objects.addBillboard(ASSET_KEYS.toolbox, TOOLBOX_FRAMES.closed, { groundShadow: true })
       .setPosition(worldX, worldY)
       .setDisplaySize(1, 1)
       .setTint(METAL_TINT);

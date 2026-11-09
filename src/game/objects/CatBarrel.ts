@@ -38,7 +38,7 @@ export class CatBarrel {
 
   public constructor() {
     registerTexture();
-    this.body = world3d().addBillboard(TEXTURE, 0, { groundShadow: { rx: 0.46, rz: 0.2, alpha: 0.3 } })
+    this.body = world3d().objects.addBillboard(TEXTURE, 0, { groundShadow: { rx: 0.46, rz: 0.2, alpha: 0.3 } })
       .setDisplaySize(1, 1)
       .setTint(TINT)
       .setPosition(CAT_BARREL.x, CAT_BARREL.y);

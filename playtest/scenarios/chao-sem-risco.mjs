@@ -25,7 +25,7 @@ export default {
 
     const seams = await page.evaluate(() => {
       const w3 = window.__scene.world3d;
-      const meshes = w3.terrainMeshes.filter((m) => {
+      const meshes = w3.tiles.terrainMeshes.filter((m) => {
         const mat = Array.isArray(m.material) ? m.material[0] : m.material;
         return mat?.vertexColors && m.geometry.getAttribute('color') && m.geometry.getAttribute('normal');
       });
@@ -67,7 +67,7 @@ export default {
       const s = window.__scene;
       return list.map((p) => {
         const near = [[0, 0], [-0.5, 0], [0.5, 0], [0, -0.5], [0, 0.5]].map(([dx, dz]) => [Math.round(p.x + dx), Math.round(p.z + dz)]);
-        return near.some(([x, z]) => s.world3d.solidTiles?.some((t) => t.x === x && t.z === z && (t.frame === 39 || t.frame === 40)));
+        return near.some(([x, z]) => s.world3d.tiles.solidTiles?.some((t) => t.x === x && t.z === z && (t.frame === 39 || t.frame === 40)));
       });
     }, seams);
     const real = seams.filter((_, i) => !material[i]);
@@ -104,8 +104,8 @@ export default {
       await page.evaluate(([px, py]) => {
         const s = window.__scene; window.gameTime.set(0.5);
         s.playerWorld.worldX = px; s.playerWorld.worldY = py; s.movementController.interruptMovement(px, py); s.streamChunks(true);
-        s.actionPrompt?.destroy(); s.actionPrompt = undefined;
-        void s.dollyTo(1.5, 100);
+        s.verbs.actionPrompt?.destroy(); s.verbs.actionPrompt = undefined;
+        void s.cinema.dollyTo(1.5, 100);
       }, [x, y]);
       await sleep(1800);
       await shot(name, { note: `o chão em volta de (${x}, ${y})` });

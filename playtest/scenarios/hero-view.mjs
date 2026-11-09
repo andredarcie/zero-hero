@@ -64,8 +64,8 @@ export default {
     await page.evaluate(() => {
       const s = window.__scene;
       s.heldItem = 'sword';
-      s.heldOnFire = false;
-      s.updateBackItem();
+      s.torch.heldOnFire = false;
+      s.carry.updateBackItem();
     });
     await driver.settle(400);
     await shot('back-item', { note: 'sword slung on the back: only the tip clears the shoulder' });

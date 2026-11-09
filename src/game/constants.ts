@@ -1,4 +1,4 @@
-﻿import { WHITE_SAFE_TINT } from '@/game/render3d/pixelForms';
+import { WHITE_SAFE_TINT } from '@/game/render3d/pixelForms';
 import { biomeEarthCutAt } from '@/game/world/biomes';
 
 export const TILE_SIZE = 8;

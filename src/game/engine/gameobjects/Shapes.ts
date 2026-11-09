@@ -87,7 +87,7 @@ export class Shape extends OriginGameObject {
     for (let i = 2; i < pathLength; i += 2) {
       const px2 = path[i] - dx;
       const py2 = path[i + 1] - dy;
-      renderer.batchLine(px1, py1, px2, py2, halfLineWidth, halfLineWidth, lineWidth, i - 2, this.closePath ? (i === pathLength - 1) : false);
+      renderer.batch.batchLine(px1, py1, px2, py2, halfLineWidth, halfLineWidth, lineWidth, i - 2, this.closePath ? (i === pathLength - 1) : false);
       px1 = px2;
       py1 = py2;
     }
@@ -108,7 +108,7 @@ export class Shape extends OriginGameObject {
       const y1 = path[i * 2 + 1] - dy;
       const x2 = path[i * 2 + 2] - dx;
       const y2 = path[i * 2 + 3] - dy;
-      renderer.batchTri(tx0, ty0, calcMatrix.getX(x1, y1), calcMatrix.getY(x1, y1), calcMatrix.getX(x2, y2), calcMatrix.getY(x2, y2),
+      renderer.batch.batchTri(tx0, ty0, calcMatrix.getX(x1, y1), calcMatrix.getY(x1, y1), calcMatrix.getX(x2, y2), calcMatrix.getY(x2, y2),
         0, 0, 1, 1, fillTintColor, fillTintColor, fillTintColor, 2);
     }
   }
@@ -158,7 +158,7 @@ export class Rectangle extends Shape {
       fillTint.TR = fillTintColor;
       fillTint.BL = fillTintColor;
       fillTint.BR = fillTintColor;
-      renderer.batchFillRect(-dx, -dy, this.width, this.height);
+      renderer.batch.batchFillRect(-dx, -dy, this.width, this.height);
     }
     if (this.isStroked) this.strokePathWebGL(renderer, alpha, dx, dy);
   }

@@ -83,7 +83,7 @@ export class LavaObject implements WorldProp {
     this.scene = scene;
     this.worldX = worldX;
     this.worldY = worldY;
-    const fireLight = world3d().addFireLight(worldX, worldY, true);
+    const fireLight = world3d().lights.addFireLight(worldX, worldY, true);
     fireLight.setIntensityScale(lightScale);
     this.fireLight = fireLight;
   }
@@ -126,7 +126,7 @@ export class LavaObject implements WorldProp {
       const restElev = SURFACE_Y + spec.top - CROWN_H / 2; // most of the box below the surface
       const surfaceElev = SURFACE_Y + CROWN_H / 2; // the moment it lands, riding on the surface
       const box = w3
-        .addBox(spec.w, CROWN_H, spec.d, getStoneTexture(spec.kind))
+        .objects.addBox(spec.w, CROWN_H, spec.d, getStoneTexture(spec.kind))
         .setPosition(this.worldX + spec.ox, this.worldY + spec.oy)
         .setElevation(surfaceElev + CROWN_DROP_FROM);
       this.crownParts.push(box);
@@ -140,7 +140,7 @@ export class LavaObject implements WorldProp {
         ease: 'Quad.easeIn',
         onComplete: () => {
           if (i === 0) {
-            getSoundManager().playRockSmash();
+            getSoundManager().work.playRockSmash();
             if (!isReducedMotion()) this.scene.cameras.main.shake(120, 0.004);
             this.spawnLavaSplash();
           }
@@ -168,7 +168,7 @@ export class LavaObject implements WorldProp {
       const ang = (i / 7) * Math.PI * 2 + Math.random() * 0.6;
       const reach = 0.3 * (0.6 + Math.random() * 0.7);
       const drop = world3d()
-        .addBillboard(FX_PUFF_TEXTURE, 0, { centered: true, fog: false, depthWrite: false, emissive: true, alphaTest: 0.02 })
+        .objects.addBillboard(FX_PUFF_TEXTURE, 0, { centered: true, fog: false, depthWrite: false, emissive: true, alphaTest: 0.02 })
         .setTint(0xff8a34) // molten orange, not river foam
         .setPosition(this.worldX, this.worldY)
         .setElevation(SURFACE_Y + 0.02)

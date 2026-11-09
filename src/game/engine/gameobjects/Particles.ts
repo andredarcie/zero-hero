@@ -543,7 +543,7 @@ export class ParticleEmitter extends GameObject {
       const y = -frame.halfHeight;
       const quad = calcMatrix.setQuad(x, y, x + frame.width, y + frame.height);
       const tint = getTintAppendFloatAlpha(particle.tint, alpha);
-      renderer.batchQuad(quad[0], quad[1], quad[2], quad[3], quad[4], quad[5], quad[6], quad[7],
+      renderer.batch.batchQuad(quad[0], quad[1], quad[2], quad[3], quad[4], quad[5], quad[6], quad[7],
         frame.u0, frame.v0, frame.u1, frame.v1, tint, tint, tint, tint, tintEffect, frame.glTexture);
     }
   }

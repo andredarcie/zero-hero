@@ -21,7 +21,7 @@ export default {
     const wizard = await page.evaluate(async () => {
       const url = performance.getEntriesByType('resource').map((e) => e.name).find((u) => u.includes('/i18n/i18n.ts'));
       const { tLines } = await import(url);
-      return { intro: tLines('wizard.intro').map((l) => l.text).join(' '), line: window.__scene.wizardLine() };
+      return { intro: tLines('wizard.intro').map((l) => l.text).join(' '), line: window.__scene.delivery.wizardLine() };
     });
     assert('A abertura do mago manda o herói descansar no acampamento', /acampamento/i.test(wizard.intro) && /descansar/i.test(wizard.intro), wizard.intro);
     assert('Antes da primeira noite, o mago lembra do acampamento', wizard.line === 'tent', wizard.line);
@@ -35,13 +35,13 @@ export default {
     await page.keyboard.press('z');
     // O passo até o colchão é animado: com a máquina carregada ele atrasa, então espera ele deitar (até 6 s), em vez
     // de olhar num instante fixo (era isso que fazia o cenário falhar às vezes com o herói já no colchão, de pé).
-    await page.waitForFunction(() => window.__scene.rest.isResting && window.__scene.rest.isSleeping, null, { timeout: 6000 }).catch(() => {});
+    await page.waitForFunction(() => window.__scene.camp.rest.isResting && window.__scene.camp.rest.isSleeping, null, { timeout: 6000 }).catch(() => {});
     await sleep(300);
     const lying = await page.evaluate(() => {
       const s = window.__scene;
       return {
-        resting: s.rest.isResting, sleeping: s.rest.isSleeping, camp: s.rest.sleepingAtCamp, at: [s.playerWorld.worldX, s.playerWorld.worldY],
-        probe: { cutscene: s.cutsceneActive, dialog: s.dialogOpen, tScale: s.tweens.timeScale, paused: s.tweens.paused, tweens: s.tweens.getTweens?.().length, sceneTime: s.time.timeScale, frame: s.game.loop.frame },
+        resting: s.camp.rest.isResting, sleeping: s.camp.rest.isSleeping, camp: s.camp.rest.sleepingAtCamp, at: [s.playerWorld.worldX, s.playerWorld.worldY],
+        probe: { cutscene: s.cutsceneActive, dialog: s.dialog.dialogOpen, tScale: s.tweens.timeScale, paused: s.tweens.paused, tweens: s.tweens.getTweens?.().length, sceneTime: s.time.timeScale, frame: s.game.loop.frame },
       };
     });
     assert('O Z diante do colchão deita o herói em cima dele para dormir', lying.resting && lying.sleeping && lying.camp && lying.at[0] === 53 && lying.at[1] === 48, JSON.stringify({ ...lying, frameAgain: await page.evaluate(() => window.__scene.game.loop.frame) }));
@@ -62,8 +62,8 @@ export default {
     }
     const after = await page.evaluate(() => ({
       visited: window.__scene.seenDialogKeys.has('death/visit'),
-      death: window.__scene.rest.deathTile ?? null,
-      line: window.__scene.wizardLine(),
+      death: window.__scene.camp.rest.deathTile ?? null,
+      line: window.__scene.delivery.wizardLine(),
     }));
     log(`  depois da noite: ${JSON.stringify(after)}`);
     assert('Na primeira noite na barraca, a Morte aparece', deathSeen && after.visited, JSON.stringify({ deathSeen, ...after }));
@@ -78,7 +78,7 @@ export default {
 
     // Acordado em cima do colchão, ele sai dele andando (o colchão é sólido para quem chega, não para quem está nele).
     for (let i = 0; i < 10 && (await state()).cutsceneActive; i += 1) await sleep(300);
-    const from = await page.evaluate(() => [window.__scene.playerWorld.worldX, window.__scene.playerWorld.worldY, window.__scene.rest.isResting]);
+    const from = await page.evaluate(() => [window.__scene.playerWorld.worldX, window.__scene.playerWorld.worldY, window.__scene.camp.rest.isResting]);
     await page.keyboard.down('ArrowUp'); await sleep(250); await page.keyboard.up('ArrowUp');
     await sleep(700);
     const to = await page.evaluate(() => [window.__scene.playerWorld.worldX, window.__scene.playerWorld.worldY]);

@@ -3,9 +3,10 @@ import type * as Engine from '@/game/engine';
 import { ASSET_KEYS } from '@/game/constants';
 import { itemGroundVisual, type HeldItemKind } from '@/game/entities/ItemPickup';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
-import { FX_DOT_TEXTURE, world3d } from '@/game/render3d/World3D';
+import { world3d } from '@/game/render3d/World3D';
 import type { PropDir } from '@/game/world/worldSchema';
 import type { WorldProp } from './WorldProp';
+import { FurnaceEffects, MOUTH_ELEV, HAND_ELEV, DEPTH_ITEM, ITEM_SIZE, ease, arc } from './FurnaceEffects';
 
 /**
  * O FORNO DA THEA — o único do vale, fixo ao lado dela, e o GUIA da quest (pedido do autor). Não há
@@ -21,18 +22,6 @@ const FRAME_COLD = 0;
 const FRAME_LIT = 1;
 
 const STONE_TINT = 0xd2d2d2;
-
-// A boca acesa: um quad additive na frente da alvenaria, como o brilho da forja da bancada. Nao e
-// uma luz THREE — a contagem de luzes deste renderer nunca muda em tempo de execucao.
-const MOUTH_ELEV = 0.34;
-const EMBER = 0xe7462a;
-const EMBER_HOT = 0xf8e394;
-
-/** A altura de onde os insumos saem da mao do heroi. */
-const HAND_ELEV = 0.42;
-
-const DEPTH_ITEM = 0.05;
-const ITEM_SIZE = 0.5;
 
 export type FurnaceWorldPort = {
   put(kind: HeldItemKind, x: number, y: number, units?: number): void;
@@ -57,20 +46,16 @@ const HAND_CYCLE_MS = 1600;
 /** O esguicho de brasa no instante em que a peca pula da boca. */
 const DELIVER_SPARKS = 5;
 
-const ease = (t: number): number => 0.5 - Math.cos(Math.PI * t) / 2;
-const arc = (t: number): number => Math.sin(Math.PI * t);
-
 export class FurnaceObject implements WorldProp {
   private readonly body: Billboard3D;
-  private glow?: Billboard3D;
-  private readonly flying: Billboard3D[] = [];
-  private readonly sparks = new Set<Billboard3D>();
+  public glow?: Billboard3D;
+  public readonly sparks = new Set<Billboard3D>();
   /** Os itens a caminho da boca (ver swallow). */
   private readonly swallowing = new Set<Billboard3D>();
 
   private phase: FurnacePhase = 'idle';
   private elapsed = 0;
-  private aliveMs = 0;
+  public aliveMs = 0;
   private frame = FRAME_COLD;
   private breathsPlayed = 0;
 
@@ -88,20 +73,18 @@ export class FurnaceObject implements WorldProp {
   private deliverTo: readonly [number, number] | null = null;
   /** A fornada pediu fogo e ainda nao teve voz: quem tem o port e o update, nao o gesto. */
   private pendingLit = false;
-  /**
-   * De onde cada carga voando partiu — tile e altura da mao do heroi.
-   */
-  private chargeFrom: Array<readonly [number, number, number]> = [];
+  /** A carga voando, o produto, o brilho e as faíscas. (ver FurnaceEffects) */
+  private readonly fx = new FurnaceEffects(this);
 
   public constructor(
-    private readonly scene: Engine.Scene,
+    public readonly scene: Engine.Scene,
     public readonly worldX: number,
     public readonly worldY: number,
     public readonly dir: PropDir = 1,
     public readonly playerBuilt = false,
   ) {
     this.body = world3d()
-      .addBillboard(ASSET_KEYS.furnace, FRAME_COLD, { groundShadow: true })
+      .objects.addBillboard(ASSET_KEYS.furnace, FRAME_COLD, { groundShadow: true })
       .setPosition(worldX, worldY)
       .setDisplaySize(1, 1)
       .setTint(STONE_TINT);
@@ -137,8 +120,8 @@ export class FurnaceObject implements WorldProp {
     switch (this.phase) {
       case 'idle': {
         this.pose(this.kindled ? FRAME_LIT : FRAME_COLD);
-        if (this.kindled) this.pulseGlow(0.3 + 0.06 * Math.sin(this.aliveMs * 0.004), effectsVisible);
-        else this.fadeGlow(deltaMs);
+        if (this.kindled) this.fx.pulseGlow(0.3 + 0.06 * Math.sin(this.aliveMs * 0.004), effectsVisible);
+        else this.fx.fadeGlow(deltaMs);
         break;
       }
 
@@ -149,16 +132,16 @@ export class FurnaceObject implements WorldProp {
         }
         const t = Math.min(1, this.elapsed / HAND_CYCLE_MS);
         this.pose(FRAME_LIT);
-        this.moveCharge(ease(Math.min(1, t * 2.6)));
+        this.fx.moveCharge(ease(Math.min(1, t * 2.6)));
         // O calor SOBE e desce: a fornada pega, ruge no meio e cai. Um brilho constante leria
         // como lampada acesa, e nao como coisa queimando.
-        this.pulseGlow(0.45 + 0.55 * arc(t), effectsVisible);
+        this.fx.pulseGlow(0.45 + 0.55 * arc(t), effectsVisible);
         const due = Math.min(BREATHS, Math.floor(t * BREATHS) + 1);
         while (this.breathsPlayed < due) {
           this.breathsPlayed += 1;
           if (effectsVisible) {
             port.breath();
-            this.spawnSparks(2);
+            this.fx.spawnSparks(2);
             // O FOLE SACODE A ALVENARIA. O sopro era so som e faisca; um forno que ruge e nao se
             // mexe le como uma lampada com efeito sonoro. O tranco e o mesmo `bump` da entrega —
             // dois graus, sem escala nenhuma (nada pode vazar do tile).
@@ -166,7 +149,7 @@ export class FurnaceObject implements WorldProp {
           }
         }
         if (t >= 1) {
-          this.clearFlying();
+          this.fx.clearFlying();
           // Fornada sem peça (o carvão que fica aceso lá dentro, à espera do minério): ela pega, ruge
           // e assenta, e nada pula da boca.
           if (!this.handProduct) {
@@ -175,10 +158,10 @@ export class FurnaceObject implements WorldProp {
             break;
           }
           this.enter('deliver');
-          if (this.handProduct) this.spawnProduct(this.handProduct);
+          if (this.handProduct) this.fx.spawnProduct(this.handProduct);
           // A BRASA ESGUICHA DA BOCA quando a peca nasce: e o instante que o jogador esta esperando
           // desde que confirmou no catalogo, e ate aqui ele era o unico da fornada sem nada na tela.
-          if (effectsVisible) this.spawnSparks(DELIVER_SPARKS, MOUTH_ELEV);
+          if (effectsVisible) this.fx.spawnSparks(DELIVER_SPARKS, MOUTH_ELEV);
         }
         break;
       }
@@ -191,26 +174,26 @@ export class FurnaceObject implements WorldProp {
           // ENTUPIDO: a peca fica visivel na BOCA, quicando, ate haver onde pousar. E uma recusa
           // fisica — o jogador ve o que a maquina esta segurando e por que ela nao larga.
           this.pose(FRAME_LIT);
-          this.pulseGlow(0.3, effectsVisible);
-          this.holdProduct();
+          this.fx.pulseGlow(0.3, effectsVisible);
+          this.fx.holdProduct();
           this.elapsed = 0;
           break;
         }
         const [tx, ty] = this.deliverTo;
         const t = Math.min(1, this.elapsed / DELIVER_MS);
         this.pose(FRAME_LIT);
-        this.moveProduct(t, tx, ty);
-        this.fadeGlow(deltaMs);
+        this.fx.moveProduct(t, tx, ty);
+        this.fx.fadeGlow(deltaMs);
         if (t >= 1) {
           if (this.handProduct) port.put(this.handProduct, tx, ty, this.handUnits);
           this.handProduct = null;
           this.handUnits = 1;
           this.deliverTo = null;
           this.smeltCount += 1;
-          this.clearFlying();
+          this.fx.clearFlying();
           if (effectsVisible) {
             port.delivered();
-            world3d().shake(70, 0.002);
+            world3d().cam.shake(70, 0.002);
           }
           this.enter('idle');
         }
@@ -241,7 +224,7 @@ export class FurnaceObject implements WorldProp {
     if (charge.length > 0) {
       // As duas cargas partem do MESMO tile (a mao do heroi) — o desencontro que impede uma de
       // esconder a outra e o atraso que `moveCharge` ja da a segunda, mais meio passo lateral.
-      this.spawnCharge(
+      this.fx.spawnCharge(
         charge,
         charge.map((_, i) => [from[0] + (i === 0 ? -0.16 : 0.16), from[1]] as const),
         HAND_ELEV,
@@ -273,7 +256,7 @@ export class FurnaceObject implements WorldProp {
   public swallow(kind: HeldItemKind, from: readonly [number, number]): void {
     const visual = itemGroundVisual(kind);
     const bb = world3d()
-      .addBillboard(visual.texture, visual.frame, { emissive: true, centered: true })
+      .objects.addBillboard(visual.texture, visual.frame, { emissive: true, centered: true })
       .setPosition(from[0], from[1] + DEPTH_ITEM)
       .setElevation(HAND_ELEV)
       .setDisplaySize(ITEM_SIZE, ITEM_SIZE);
@@ -294,7 +277,7 @@ export class FurnaceObject implements WorldProp {
         this.swallowing.delete(bb);
         bb.destroy();
         this.bump();
-        this.spawnSparks(2, MOUTH_ELEV);
+        this.fx.spawnSparks(2, MOUTH_ELEV);
       },
     });
   }
@@ -322,129 +305,10 @@ export class FurnaceObject implements WorldProp {
     this.body.setTexture(ASSET_KEYS.furnace, frame);
   }
 
-  /**
-   * A carga voando da mao do heroi para a boca usa a arte de `itemGroundVisual`.
-   * Duas tabelas de sprite para o mesmo item e como uma delas envelhece errada.
-   */
-  private spawnCharge(
-    kinds: readonly HeldItemKind[],
-    origins: readonly (readonly [number, number])[],
-    elev = HAND_ELEV,
-  ): void {
-    kinds.forEach((kind, i) => {
-      const [sx, sy] = origins[i] ?? origins[origins.length - 1];
-      this.chargeFrom.push([sx, sy, elev]);
-      const visual = itemGroundVisual(kind);
-      this.flying.push(world3d()
-        .addBillboard(visual.texture, visual.frame, { emissive: true, centered: true })
-        .setPosition(sx, sy + DEPTH_ITEM)
-        .setElevation(elev)
-        .setDisplaySize(ITEM_SIZE, ITEM_SIZE));
-    });
-  }
-
-  private moveCharge(k: number): void {
-    this.flying.forEach((bb, i) => {
-      const [sx, sy, se] = this.chargeFrom[i] ?? [this.worldX, this.worldY, HAND_ELEV];
-      const t = Math.max(0, Math.min(1, (k - (i === 0 ? 0 : 0.16)) / (i === 0 ? 1 : 0.84)));
-      bb.setPosition(sx + (this.worldX - sx) * t, sy + (this.worldY - sy) * t + DEPTH_ITEM)
-        .setElevation(se + (MOUTH_ELEV - se) * t + 0.2 * arc(t))
-        .setDisplaySize(ITEM_SIZE * (1 - t * 0.9), ITEM_SIZE * (1 - t * 0.9));
-    });
-  }
-
-  /** A peca pedida no catalogo nascendo na boca. */
-  private spawnProduct(kind: HeldItemKind): void {
-    const visual = itemGroundVisual(kind);
-    this.flying.push(world3d()
-      .addBillboard(visual.texture, visual.frame, { emissive: true, centered: true })
-      .setPosition(this.worldX, this.worldY + DEPTH_ITEM)
-      .setElevation(MOUTH_ELEV)
-      .setDisplaySize(0.02, 0.02));
-  }
-
-  private holdProduct(): void {
-    const bb = this.flying[0];
-    if (!bb) return;
-    bb.setPosition(this.worldX, this.worldY + DEPTH_ITEM)
-      .setElevation(MOUTH_ELEV + Math.sin(this.aliveMs * 0.004) * 0.03)
-      .setDisplaySize(ITEM_SIZE, ITEM_SIZE);
-  }
-
-  private moveProduct(t: number, ox: number, oy: number): void {
-    const bb = this.flying[0];
-    if (!bb) return;
-    const born = Math.min(1, t / 0.25);
-    const fly = Math.max(0, (t - 0.2) / 0.8);
-    bb.setPosition(
-      this.worldX + (ox - this.worldX) * ease(fly),
-      this.worldY + (oy - this.worldY) * ease(fly) + DEPTH_ITEM * (1 - fly),
-    )
-      .setElevation(MOUTH_ELEV + 0.26 * arc(fly) - (MOUTH_ELEV - 0.1) * fly)
-      .setDisplaySize(ITEM_SIZE * born, ITEM_SIZE * born);
-  }
-
-  private clearFlying(): void {
-    for (const bb of this.flying) bb.destroy();
-    this.flying.length = 0;
-    this.chargeFrom.length = 0;
-  }
-
-  private pulseGlow(strength: number, effectsVisible: boolean): void {
-    if (!effectsVisible) { this.glow?.setAlpha(0); return; }
-    if (!this.glow) {
-      this.glow = world3d()
-        .addBillboard(FX_DOT_TEXTURE, 0, {
-          centered: true, additive: true, fog: false, depthWrite: false,
-        })
-        .setTint(EMBER)
-        .setPosition(this.worldX, this.worldY + 0.03)
-        .setElevation(MOUTH_ELEV);
-    }
-    const flicker = 0.8 + 0.2 * Math.sin(this.aliveMs * 0.019);
-    this.glow
-      .setAlpha(Math.min(0.9, strength * flicker))
-      .setDisplaySize(0.8 * strength + 0.25, 0.5 * strength + 0.2);
-  }
-
-  private fadeGlow(deltaMs: number): void {
-    if (!this.glow) return;
-    const next = this.glow.alpha - deltaMs / 300;
-    if (next <= 0) { this.glow.destroy(); this.glow = undefined; return; }
-    this.glow.setAlpha(next);
-  }
-
-  /**
-   * A brasa subindo. `from` e a altura de onde ela sai: o sopro do fole sobe pela CHAMINE (0,9,
-   * acima da alvenaria) e o esguicho da entrega sai pela BOCA (a mesma altura da peca), porque as
-   * duas coisas contam eventos diferentes — uma e a maquina respirando, a outra e a peca nascendo.
-   */
-  private spawnSparks(count: number, from = 0.9): void {
-    for (let i = 0; i < count; i += 1) {
-      const spark = world3d()
-        .addBillboard(FX_DOT_TEXTURE, 0, {
-          centered: true, additive: true, emissive: true, fog: false, depthWrite: false,
-        })
-        .setTint(i % 2 === 0 ? EMBER_HOT : EMBER)
-        .setPosition(this.worldX + (Math.random() - 0.5) * 0.25, this.worldY + DEPTH_ITEM)
-        .setElevation(from)
-        .setDisplaySize(0.05, 0.05);
-      this.sparks.add(spark);
-      this.scene.tweens.add({
-        targets: spark,
-        elevation: from + 0.45 + Math.random() * 0.25,
-        alpha: 0,
-        duration: 620 + i * 90,
-        ease: 'Quad.easeOut',
-        onComplete: () => { this.sparks.delete(spark); spark.destroy(); },
-      });
-    }
-  }
-
   public destroy(): void {
     this.scene.tweens.killTweensOf(this.body);
     this.body.destroy();
-    this.clearFlying();
+    this.fx.clearFlying();
     this.glow?.destroy();
     this.glow = undefined;
     for (const spark of this.sparks) {

@@ -38,7 +38,7 @@ export default {
         let best = null;
         for (let r = 0; r <= 6 && !best; r += 1) {
           for (let dy = -r; dy <= r && !best; dy += 1) for (let dx = -r; dx <= r; dx += 1) {
-            if (!s.isSolidForEntities(sx + dx, sy + dy)) { best = { x: sx + dx, y: sy + dy }; break; }
+            if (!s.query.isSolidForEntities(sx + dx, sy + dy)) { best = { x: sx + dx, y: sy + dy }; break; }
           }
         }
         best ??= { x: sx, y: sy };

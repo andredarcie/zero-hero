@@ -29,7 +29,7 @@ export default {
     // 1. O barril existe antes do gato, sólido, e vazio ele é uma linha do narrador.
     await put(BARREL.x, BARREL.y + 1, 0, -1);
     await sleep(800);
-    const empty = await page.evaluate(([x, y]) => ({ solid: window.__scene.isSolidForEntities(x, y), verb: window.__scene.handVerbAt(x, y) }), [BARREL.x, BARREL.y]);
+    const empty = await page.evaluate(([x, y]) => ({ solid: window.__scene.query.isSolidForEntities(x, y), verb: window.__scene.verbs.handVerbAt(x, y) }), [BARREL.x, BARREL.y]);
     assert('O barril está no mapa, sólido, e o Z nele é "olhar"', empty.solid && empty.verb === 'look', JSON.stringify(empty));
     await page.keyboard.press('z');
     await sleep(900);
@@ -40,18 +40,18 @@ export default {
     // 2. O gato chega e segue; o relógio dele é encurtado, e ele cansa e vai para casa.
     await put(30, 50, 0, 1);
     await sleep(600);
-    await page.evaluate(() => { const s = window.__scene; s.catCare.ensure(false); s.catCare.cat.followSpellMs = 1500; });
+    await page.evaluate(() => { const s = window.__scene; s.camp.catCare.ensure(false); s.camp.catCare.cat.followSpellMs = 1500; });
     await sleep(800);
-    assert('Ao chegar, ele segue o herói', !(await page.evaluate(() => window.__scene.catCare.cat.atHome)), '');
-    await page.waitForFunction(() => window.__scene.catCare.cat.atHome, null, { timeout: 15000 });
-    const home = await page.evaluate(() => window.__scene.catCare.cat.position);
+    assert('Ao chegar, ele segue o herói', !(await page.evaluate(() => window.__scene.camp.catCare.cat.atHome)), '');
+    await page.waitForFunction(() => window.__scene.camp.catCare.cat.atHome, null, { timeout: 15000 });
+    const home = await page.evaluate(() => window.__scene.camp.catCare.cat.position);
     log(`  em casa: ${JSON.stringify(home)}`);
     assert('Cansado, ele está dormindo no barril', Math.abs(home.x - BARREL.x) < 0.1 && Math.abs(home.y - BARREL.y) < 0.3, JSON.stringify(home));
 
     // 3. O Z no barril com ele dentro: carinho e lição.
     await put(BARREL.x, BARREL.y + 1, 0, -1);
     await sleep(900);
-    const verb = await page.evaluate(([x, y]) => window.__scene.handVerbAt(x, y), [BARREL.x, BARREL.y]);
+    const verb = await page.evaluate(([x, y]) => window.__scene.verbs.handVerbAt(x, y), [BARREL.x, BARREL.y]);
     assert('Com o gato em casa, o Z no barril é carinho', verb === 'pet', String(verb));
     await page.keyboard.press('z');
     await sleep(1400);
@@ -59,15 +59,15 @@ export default {
     assert('O carinho no barril tem a lição', (await state()).dialogOpen && talked, '');
     await shot('gato-no-barril', { note: 'O gato dormindo no barril, e a lição' });
     await closeDialog();
-    assert('Antes de descansar, ele fica em casa mesmo com o herói do lado', await page.evaluate(() => window.__scene.catCare.cat.atHome), '');
+    assert('Antes de descansar, ele fica em casa mesmo com o herói do lado', await page.evaluate(() => window.__scene.camp.catCare.cat.atHome), '');
 
     // 4. Descansado (relógio encurtado), o herói colado no barril o acorda, e ele volta a seguir.
-    await page.evaluate(() => { window.__scene.catCare.cat.homeMs = 1e9; });
+    await page.evaluate(() => { window.__scene.camp.catCare.cat.homeMs = 1e9; });
     await sleep(600);
-    assert('Descansado, o herói passando o acorda e ele volta a seguir', !(await page.evaluate(() => window.__scene.catCare.cat.atHome)), '');
+    assert('Descansado, o herói passando o acorda e ele volta a seguir', !(await page.evaluate(() => window.__scene.camp.catCare.cat.atHome)), '');
     await put(BARREL.x + 2, BARREL.y + 2, 0, 1);
     await sleep(1500);
-    const near = await page.evaluate(() => { const s = window.__scene; const c = s.catCare.cat.position; return Math.hypot(c.x - s.playerWorld.worldX, c.y - s.playerWorld.worldY); });
+    const near = await page.evaluate(() => { const s = window.__scene; const c = s.camp.catCare.cat.position; return Math.hypot(c.x - s.playerWorld.worldX, c.y - s.playerWorld.worldY); });
     assert('E anda atrás do herói de novo', near < 3, String(near));
   },
 };

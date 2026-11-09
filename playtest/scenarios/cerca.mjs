@@ -23,7 +23,7 @@ export default {
     const solid = await page.evaluate(() => {
       const s = window.__scene;
       const fence = [[48, 5], [52, 11], [55, 11], [59, 8], [50, 1]];
-      return { fence: fence.every(([x, y]) => s.isSolidForEntities(x, y)), gate: !s.isSolidForEntities(53, 11) && !s.isSolidForEntities(54, 11) };
+      return { fence: fence.every(([x, y]) => s.query.isSolidForEntities(x, y)), gate: !s.query.isSolidForEntities(53, 11) && !s.query.isSolidForEntities(54, 11) };
     });
     assert('Cerca: os tiles da cerca barram o passo', solid.fence, JSON.stringify(solid));
     assert('Cerca: o portão (53-54, 11) deixa passar', solid.gate, JSON.stringify(solid));
@@ -41,8 +41,8 @@ export default {
     // ── O QUINTAL (objects/LumberYard): as peças e a quest do Marco, que ainda acha onde pôr o cepo e a fogueira ──
     const yard = await page.evaluate(() => {
       const s = window.__scene;
-      const q = s.lumberQuest;
-      return { solid: [[49, 2], [54, 2], [58, 9], [58, 6], [52, 12]].every(([x, y]) => s.isSolidForEntities(x, y)), block: q?.blockTile ?? null, pit: q?.pitTile ?? null };
+      const q = s.questSetup.lumberQuest;
+      return { solid: [[49, 2], [54, 2], [58, 9], [58, 6], [52, 12]].every(([x, y]) => s.query.isSolidForEntities(x, y)), block: q?.blockTile ?? null, pit: q?.pitTile ?? null };
     });
     assert('Quintal: as peças barram o passo', yard.solid, JSON.stringify(yard));
     assert('Quintal: a quest do lenhador ainda acha o cepo e a fogueira', !!yard.block && !!yard.pit, JSON.stringify(yard));

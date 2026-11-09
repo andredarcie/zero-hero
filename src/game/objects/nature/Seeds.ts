@@ -60,7 +60,7 @@ export class Seeds implements NatureSystem {
     this.spawnAcc += amount * 14 * f.dt;
     while (this.spawnAcc >= 1 && this.seeds.length < MAX) {
       this.spawnAcc -= 1;
-      const bb = world3d().addBillboard(FRAMES[0], 0, { centered: true, depthWrite: false, alphaTest: 0.01 }).setDisplaySize(7 / 16, 7 / 16);
+      const bb = world3d().objects.addBillboard(FRAMES[0], 0, { centered: true, depthWrite: false, alphaTest: 0.01 }).setDisplaySize(7 / 16, 7 / 16);
       // Quando o vento acaba de chegar, o quadro já tem algumas no meio do caminho; depois, entram pelo oeste.
       const fill = this.seeds.length < 8;
       this.seeds.push({

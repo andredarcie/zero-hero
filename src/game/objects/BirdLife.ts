@@ -175,7 +175,7 @@ export class BirdLife {
   }
 
   private make(species: number, mode: Mode, x: number, y: number, z: number): Bird {
-    const bb = world3d().addBillboard(key(species, 'stand'), 0, { groundShadow: { rx: 0.14, rz: 0.06, alpha: 0.35 } })
+    const bb = world3d().objects.addBillboard(key(species, 'stand'), 0, { groundShadow: { rx: 0.14, rz: 0.06, alpha: 0.35 } })
       .setDisplaySize(BIRD_W, BIRD_H)
       .setTint(TINT);
     const b: Bird = { bb, species, mode, x, y, z, vx: 0, vy: 0, vz: 0, tx: x, ty: y, timer: 0, frame: 'stand', flap: this.rand() * 10 };

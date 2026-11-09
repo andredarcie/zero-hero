@@ -127,7 +127,7 @@ export class GardenMist {
         const fade = fadeAt(Math.hypot(px - center.x, py - 1.5 - center.y));
         if (fade <= 0.02) continue;
         const alpha = Math.min(1, (0.82 + noise(x, y, 4) * 0.2) * fade);
-        const bb = overlay(w3.addBillboard(CLOUD, 0, { centered: true, depthWrite: false, alphaTest: 0.01 })
+        const bb = overlay(w3.objects.addBillboard(CLOUD, 0, { centered: true, depthWrite: false, alphaTest: 0.01 })
           .setTint(TINT)
           .setDisplaySize(width, width * 0.6));
         this.puffs.push({ bb, x: px, y: py, lift: 0.35 + noise(x, y, 5) * 1.1, alpha, phase: n * 1.7, gone: 0 });
@@ -139,7 +139,7 @@ export class GardenMist {
         n += 1;
         const fade = fadeAt(Math.hypot(x - center.x, y - center.y));
         if (fade <= 0.02) continue;
-        const bb = overlay(w3.addBillboard(SHEET, 0, { flat: true, flatY: 0.18, depthWrite: false, alphaTest: 0.01 })
+        const bb = overlay(w3.objects.addBillboard(SHEET, 0, { flat: true, flatY: 0.18, depthWrite: false, alphaTest: 0.01 })
           .setTint(TINT)
           .setDisplaySize(4.6, 4.6));
         this.puffs.push({ bb, x, y, lift: 0, alpha: 0.72 * fade, phase: n * 2.3, gone: 0 });

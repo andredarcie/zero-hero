@@ -64,9 +64,9 @@ try {
   await page.evaluate(({ dolly, clock }) => {
     const s = window.__scene;
     window.gameTime.set(clock);
-    s.actionPrompt?.destroy();
-    s.actionPrompt = undefined;
-    void s.dollyTo(dolly, 400);
+    s.verbs.actionPrompt?.destroy();
+    s.verbs.actionPrompt = undefined;
+    void s.cinema.dollyTo(dolly, 400);
     // Só o mundo: toda interface de DOM some (o canvas fica visível dentro de um pai escondido).
     const st = document.createElement('style');
     st.textContent = '* { visibility: hidden !important; } canvas { visibility: visible !important; }';

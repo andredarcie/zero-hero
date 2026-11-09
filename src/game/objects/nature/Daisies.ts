@@ -99,7 +99,7 @@ export class Daisies implements NatureSystem {
         const n = 3 + Math.floor(hash(x, y, 82) * 3);
         const clump: Daisy[] = [];
         for (let i = 0; i < n; i += 1) {
-          const bb = world3d().addBillboard(FRAMES[0], 0, { depthLayer: 'ground' })
+          const bb = world3d().objects.addBillboard(FRAMES[0], 0, { depthLayer: 'ground' })
             .setDisplaySize(5 / 16, 5 / 16)
             .setPosition(x + (hash(x, i, 83) - 0.5) * 0.7, y + (hash(i, y, 84) - 0.5) * 0.6);
           // O tom do chão do bioma, como as florzinhas do tileset (é a mesma família): sem ele, um branco solto.

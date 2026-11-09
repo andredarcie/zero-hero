@@ -1,4 +1,4 @@
-﻿// As poças de luz no chão e a névoa da borda do mundo: o material da poça quente de cada fogo (em bandas, na grade de
+// As poças de luz no chão e a névoa da borda do mundo: o material da poça quente de cada fogo (em bandas, na grade de
 // pixels da arte), o lugar dela a cada quadro, e a cortina de névoa que esconde o vazio além do mapa.
 
 import * as THREE from 'three';

@@ -182,7 +182,7 @@ export class TilemapLayer extends OriginGameObject {
       const texture = tileset.glTexture;
       if (!texture) continue;
       const tint = getTintAppendFloatAlpha(tile.tint, alpha * tile.alpha);
-      renderer.batchTexture(this, texture, texture.width, texture.height,
+      renderer.batch.batchTexture(this, texture, texture.width, texture.height,
         x + tile.pixelX * sx + (halfWidth * sx - tileset.tileOffset.x),
         y + tile.pixelY * sy + (halfHeight * sy - tileset.tileOffset.y),
         tileWidth, tileHeight, sx, sy, tile.rotation, tile.flipX, tile.flipY, this.scrollFactorX, this.scrollFactorY,

@@ -19,7 +19,7 @@ export default {
     // Uma fogueira acesa com o tile ao sul livre: o heroi fica ali, olhando para o norte.
     const spot = await page.evaluate(() => {
       const s = window.__scene;
-      const f = s.campfires.find((c) => c.isLit && !s.isSolidForEntities(c.worldX, c.worldY + 1));
+      const f = s.props.campfires.find((c) => c.isLit && !s.query.isSolidForEntities(c.worldX, c.worldY + 1));
       s.playerWorld.worldX = f.worldX; s.playerWorld.worldY = f.worldY + 1;
       s.movementController.interruptMovement(f.worldX, f.worldY + 1);
       s.streamChunks(true);

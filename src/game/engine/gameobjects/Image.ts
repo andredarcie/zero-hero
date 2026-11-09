@@ -85,7 +85,7 @@ export class Image extends QuadGameObject {
 
   public override renderWebGL(renderer: Renderer, _src: Image, camera: Camera, parentMatrix?: TransformMatrix): void {
     camera.addToRenderList(this);
-    renderer.batchSprite(this, camera, parentMatrix);
+    renderer.batch.batchSprite(this, camera, parentMatrix);
   }
 }
 

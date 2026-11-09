@@ -165,7 +165,7 @@ export class Resting {
     host.scene.tweens.add({ targets: host.hero, scaleY: 0.84, scaleX: 1.05, duration: 380, ease: 'Sine.easeOut' });
     host.dolly(0.82, 1600);
     host.vignette(0.35, 1600);
-    getSoundManager().playCozyChime();
+    getSoundManager().ui.playCozyChime();
     host.setTimeScale(timeScale);
     this.restFireTile = { x: wx, y: wy };
     // Seta ou qualquer tecla levanta — as setas não passam por pressAttack/pressUse.

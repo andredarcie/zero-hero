@@ -86,14 +86,14 @@ export class HearthReunion {
     const body = visitor.bodySprite;
     squashBounce(scene, body, SEATED_W, SEATED_H, 0.12);
     sparkle(body.x, body.y);
-    getSoundManager().playCozyChime();
+    getSoundManager().ui.playCozyChime();
   }
 
   /** Os quatro, um a um, pelo portão. */
   public async friends(): Promise<void> {
     const { host } = this;
     squashBounce(host.scene, host.heroBody, host.heroBody.scaleX, host.heroBody.scaleY, 0.12);
-    getSoundManager().playPaperUnfold();
+    getSoundManager().ui.playPaperUnfold();
     const arriving: Array<Promise<void>> = [];
     for (const kind of FRIENDS) {
       const visitor = this.send(kind, host.gate);
@@ -131,7 +131,7 @@ export class HearthReunion {
     });
     host.hearts(thea.bodySprite.x, thea.bodySprite.y);
     host.hearts(host.fire.x, host.fire.y);
-    getSoundManager().playSingingBowl();
+    getSoundManager().ui.playSingingBowl();
     await this.pause(1500);
   }
 }

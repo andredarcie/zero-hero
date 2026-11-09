@@ -32,7 +32,7 @@ export default {
     /** Os itens do chão nas frentes de NPC, e onde estão os de um tipo. */
     const ground = () => page.evaluate(() => {
       const s = window.__scene;
-      const fronts = new Set(s.npcTiles().map((n) => `${n.worldX},${n.worldY + 1}`));
+      const fronts = new Set(s.groundItems.npcTiles().map((n) => `${n.worldX},${n.worldY + 1}`));
       const items = s.itemManager.snapshot();
       return {
         inFront: items.filter((i) => fronts.has(`${i.worldX},${i.worldY}`)).map((i) => `${i.kind}@${i.worldX},${i.worldY}`),
@@ -59,7 +59,7 @@ export default {
 
     // ── 2. A TROCA DE VERDADE: conversar com a pedra na mão e ganhar a faca ─────────────────────
     await standInFront();
-    await page.evaluate(() => window.__scene.takeIntoHand('stone'));
+    await page.evaluate(() => window.__scene.hand.takeIntoHand('stone'));
     await sleep(600);
     await page.keyboard.press('z');
     await sleep(500);
@@ -75,15 +75,15 @@ export default {
     // ── 3. OS LADOS OCUPADOS, UM A UM ─────────────────────────────────────────────────────────
     // Direita ocupada (a pedra de agora): a próxima troca cai à esquerda.
     await standInFront();
-    await page.evaluate(() => window.__scene.takeIntoHand('wood'));
+    await page.evaluate(() => window.__scene.hand.takeIntoHand('wood'));
     const left = await ground();
     assert('Com a direita ocupada, o que cai vai para a ESQUERDA do NPC', at(left, 'knife').includes(LEFT) && left.inFront.length === 0, JSON.stringify({ knife: at(left, 'knife'), inFront: left.inFront }));
     // Direita e esquerda ocupadas: vai para trás.
-    await page.evaluate(() => window.__scene.takeIntoHand('bucket'));
+    await page.evaluate(() => window.__scene.hand.takeIntoHand('bucket'));
     const back = await ground();
     assert('Com os dois lados ocupados, vai para TRÁS do NPC', at(back, 'wood').includes(BACK) && back.inFront.length === 0, JSON.stringify({ wood: at(back, 'wood'), inFront: back.inFront }));
     // Os três ocupados: qualquer lugar, menos a frente.
-    await page.evaluate(() => window.__scene.takeIntoHand('shovel'));
+    await page.evaluate(() => window.__scene.hand.takeIntoHand('shovel'));
     const any = await ground();
     assert('Com direita, esquerda e trás ocupados, cai em outro lugar — nunca na frente', at(any, 'bucket').length === 1 && !at(any, 'bucket').includes(FRONT) && any.inFront.length === 0, JSON.stringify({ bucket: at(any, 'bucket'), inFront: any.inFront }));
 
@@ -92,7 +92,7 @@ export default {
       const s = window.__scene;
       s.playerWorld.worldX = x; s.playerWorld.worldY = y + 2;
       s.movementController.interruptMovement(x, y + 2); s.movementController.faceTo(0, -1);
-      return s.placeItemAt(x, y + 1);
+      return s.hand.placeItemAt(x, y + 1);
     }, [H.x, H.y]);
     const afterPlace = await ground();
     assert('O herói não consegue pousar um item na frente do NPC', placed === false && afterPlace.inFront.length === 0, JSON.stringify({ placed, inFront: afterPlace.inFront }));
@@ -101,13 +101,13 @@ export default {
     const moved = await page.evaluate(([x, y]) => {
       const s = window.__scene;
       s.itemManager.drop('stool', x, y + 1); // direto no gerente, como um save de antes da regra
-      return s.enforceNpcFrontRule();
+      return s.groundItems.enforceNpcFrontRule();
     }, [H.x, H.y]);
     const afterLoad = await ground();
     assert('Um item que estava na frente (save antigo) é tirado de lá ao carregar', moved === 1 && afterLoad.inFront.length === 0 && at(afterLoad, 'stool').length === 1, JSON.stringify({ moved, stool: at(afterLoad, 'stool'), inFront: afterLoad.inFront }));
 
     // ── 6. O CAMINHO DAS QUESTS E DA BANCADA (o ponto único de drop) ──────────────────────────
-    const dropped = await page.evaluate(([x, y]) => window.__scene.dropItem('lantern', x, y + 1), [H.x, H.y]);
+    const dropped = await page.evaluate(([x, y]) => window.__scene.groundItems.dropItem('lantern', x, y + 1), [H.x, H.y]);
     const afterDrop = await ground();
     assert('Pedir para largar na frente do NPC larga em outro lugar', dropped && `${dropped[0]},${dropped[1]}` !== FRONT && afterDrop.inFront.length === 0, JSON.stringify({ dropped, inFront: afterDrop.inFront }));
 

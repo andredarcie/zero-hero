@@ -51,27 +51,27 @@ export class TextureSource {
     const renderer = game.renderer;
     if (renderer) {
       this.glTexture = this.isCanvas
-        ? renderer.createCanvasTexture(source as HTMLCanvasElement)
-        : renderer.createTextureFromSource(source, this.width, this.height);
+        ? renderer.glTextures.createCanvasTexture(source as HTMLCanvasElement)
+        : renderer.glTextures.createTextureFromSource(source, this.width, this.height);
     }
     if (!game.config.antialias) this.setFilter(FilterMode.NEAREST);
   }
 
   public setFilter(filterMode: number): void {
     const renderer = this.texture.manager.game.renderer;
-    if (renderer && this.glTexture) renderer.setTextureFilter(this.glTexture, filterMode);
+    if (renderer && this.glTexture) renderer.glTextures.setTextureFilter(this.glTexture, filterMode);
     this.scaleMode = filterMode;
   }
 
   /** O canvas mudou: sobe de novo. */
   public update(): void {
     const renderer = this.texture.manager.game.renderer;
-    if (renderer && this.isCanvas && this.glTexture) renderer.updateCanvasTexture(this.image as HTMLCanvasElement, this.glTexture);
+    if (renderer && this.isCanvas && this.glTexture) renderer.glTextures.updateCanvasTexture(this.image as HTMLCanvasElement, this.glTexture);
   }
 
   public destroy(): void {
     const renderer = this.texture.manager.game.renderer;
-    if (this.glTexture && renderer) renderer.deleteTexture(this.glTexture);
+    if (this.glTexture && renderer) renderer.glTextures.deleteTexture(this.glTexture);
     this.glTexture = null;
   }
 }

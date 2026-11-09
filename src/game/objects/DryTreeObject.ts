@@ -29,7 +29,7 @@ export class DryTreeObject implements WorldProp {
     this.worldX = worldX;
     this.worldY = worldY;
     this.sprite = world3d()
-      .addBillboard('dry-tree', 0, { groundShadow: true })
+      .objects.addBillboard('dry-tree', 0, { groundShadow: true })
       .setPosition(worldX, worldY)
       .setDisplaySize(0.95, 0.95);
   }

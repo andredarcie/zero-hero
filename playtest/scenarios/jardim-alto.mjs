@@ -40,7 +40,7 @@ export default {
       const { reliefLevelAt } = await import(url);
       let top = 0;
       for (let y = 0; y < 60; y += 1) for (let x = 0; x < 60; x += 1) top = Math.max(top, reliefLevelAt(x, y));
-      const hearth = window.__scene.hearths?.[0];
+      const hearth = window.__scene.props.hearths?.[0];
       return { top, hearth: hearth ? reliefLevelAt(hearth.worldX, hearth.worldY) : null, at: hearth ? [hearth.worldX, hearth.worldY] : null };
     });
     log(`  relevo: fogueira no nível ${levels.hearth}, o mais alto do vale é ${levels.top}`);
@@ -49,7 +49,7 @@ export default {
     const [hx, hy] = levels.at;
 
     // A ESTRADA ANTIGA: da espada, reto para o norte, só com a seta para cima até o pé do portão (fechado).
-    const road = await page.evaluate(() => Boolean(window.__scene.oldRoad?.body));
+    const road = await page.evaluate(() => Boolean(window.__scene.valley.oldRoad?.body));
     assert('A estrada antiga está desenhada', road, '');
     const decorOnRoad = await page.evaluate(async ([x, y0, y1]) => {
       const world = await (await fetch('/world.json', { cache: 'no-store' })).json();
@@ -83,7 +83,7 @@ export default {
     await sleep(500);
     await page.keyboard.press('z');
     await sleep(700);
-    const signSays = await page.evaluate(() => window.__scene.dialogOverlay?.script?.lines?.map((l) => l.text) ?? []);
+    const signSays = await page.evaluate(() => window.__scene.dialog.dialogOverlay?.script?.lines?.map((l) => l.text) ?? []);
     log(`  placa: ${signSays.join(' / ')}`);
     assert('A placa do portão diz que o jardim está fechado para preservação ambiental', signSays.some((t) => /preserva/i.test(t)), JSON.stringify(signSays));
     await shot('00b-placa', { note: 'A placa velha ao lado do portão' });
@@ -114,7 +114,7 @@ export default {
     assert('Os dois lados do portão ficam no chão (a escada de baixo não fica espremida)', sides[0] === 0 && sides[1] === 0, JSON.stringify(sides));
 
     // A NÉVOA cobre o jardim enquanto ninguém subiu.
-    const mistBefore = await page.evaluate(() => window.__scene.gardenMist?.count ?? 0);
+    const mistBefore = await page.evaluate(() => window.__scene.valley.gardenMist?.count ?? 0);
     assert('A névoa cobre o jardim alto antes da subida', mistBefore > 30, String(mistBefore));
 
     // A CHAVE: o portão não abre sozinho. Quem fecha o último pedido a entrega, e ela abre o portão.
@@ -128,7 +128,7 @@ export default {
       const s = window.__scene; window.gameTime.set(0.45);
       s.playerWorld.worldX = x; s.playerWorld.worldY = y;
       s.movementController.interruptMovement(x, y); s.movementController.faceTo(0, -1); s.streamChunks(true);
-      s.giveGardenKey(undefined);
+      s.gardenUnlock.giveGardenKey(undefined);
     }, [hx, hy + 6]);
     await sleep(1200);
     await drain();
@@ -142,7 +142,7 @@ export default {
     await sleep(1500);
     await shot('00c-chave-na-fechadura', { note: 'A chave girando na fechadura do portão' });
     for (let i = 0; i < 20 && (await state())?.cutsceneActive; i += 1) await sleep(300);
-    const opened = await page.evaluate(() => ({ open: window.__scene.gateOpened, held: window.__scene.heldItem, back: Boolean(window.__scene.backItemBb?.visible) }));
+    const opened = await page.evaluate(() => ({ open: window.__scene.gateOpened, held: window.__scene.heldItem, back: Boolean(window.__scene.carry.backItemBb?.visible) }));
     assert('A chave abre o portão do jardim alto', opened.open === true, JSON.stringify(opened));
     assert('A chave fica no portão: a mão e as costas do herói ficam vazias', opened.held === 'none' && !opened.back, JSON.stringify(opened));
     await shot('01-portao', { note: 'O portão aberto pela chave, e o jardim na névoa atrás dele' });
@@ -166,7 +166,7 @@ export default {
       } else if (windSeen) break;
       await sleep(400);
     }
-    const mistAfter = await page.evaluate(() => ({ live: Boolean(window.__scene.gardenMist), saved: JSON.parse(localStorage.getItem('zh.cozy.v1') || '{}').mistCleared === true }));
+    const mistAfter = await page.evaluate(() => ({ live: Boolean(window.__scene.valley.gardenMist), saved: JSON.parse(localStorage.getItem('zh.cozy.v1') || '{}').mistCleared === true }));
     assert('Ao pisar no cume, o vento leva a névoa (cena tocada e lembrada no save)', windSeen && !mistAfter.live && mistAfter.saved, JSON.stringify({ windSeen, ...mistAfter }));
     log(`  subida: ${heights.map((v) => `${v.y}`).join(' → ')}`);
     const top = await hero();
@@ -184,7 +184,7 @@ export default {
     assert('Da borda do cume não se pula para baixo', edge.x === hx - 2 && edge.y === hy + 1, JSON.stringify(edge));
 
     // Os amigos da cena final: do portão até um lugar em volta do fogo, pelas mesmas escadas.
-    const path = await page.evaluate(([x, y]) => window.__scene.visitPath([x, y + 6], [[x - 1, y + 1], [x + 1, y + 1]], [99, 99], [x, y]), [hx, hy]);
+    const path = await page.evaluate(([x, y]) => window.__scene.camp.visitPath([x, y + 6], [[x - 1, y + 1], [x + 1, y + 1]], [99, 99], [x, y]), [hx, hy]);
     log(`  amigos: ${JSON.stringify(path)}`);
     assert('Os amigos sobem pelas escadas até a fogueira', Array.isArray(path) && path.some(([px, py]) => px === hx && py === hy + 2), JSON.stringify(path));
 
@@ -202,8 +202,8 @@ export default {
     await page.evaluate(([x, y]) => {
       const s = window.__scene;
       s.playerWorld.worldX = x; s.playerWorld.worldY = y; s.movementController.interruptMovement(x, y); s.streamChunks(true);
-      s.actionPrompt?.destroy(); s.actionPrompt = undefined;
-      void s.dollyTo(2.3, 300);
+      s.verbs.actionPrompt?.destroy(); s.verbs.actionPrompt = undefined;
+      void s.cinema.dollyTo(2.3, 300);
     }, [hx, hy + 3]);
     await sleep(2000);
     await shot('03-de-cima', { note: 'O jardim do fim: o planalto e o cume com a fogueira' });

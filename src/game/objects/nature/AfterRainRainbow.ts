@@ -33,7 +33,7 @@ export class AfterRainRainbow implements NatureSystem {
   public level = 0;
 
   public constructor() {
-    this.bb = world3d().addBillboard(ARC, 0, { centered: true, additive: true, alphaTest: 0.01, fog: false })
+    this.bb = world3d().objects.addBillboard(ARC, 0, { centered: true, additive: true, alphaTest: 0.01, fog: false })
       .setDisplaySize(9, 4.5)
       .setAlpha(0)
       .setVisible(false);

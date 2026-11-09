@@ -90,7 +90,7 @@ export class TallGrassObject implements WorldProp {
     // a shadow like the tree does (every standing prop casts one), just softer: grass is wisps,
     // not trunk — the dry shrub set the precedent for the lighter alpha.
     this.sprite = world3d()
-      .addBillboard(TALL_SHEET, 0, { groundShadow: { alpha: 0.35 } })
+      .objects.addBillboard(TALL_SHEET, 0, { groundShadow: { alpha: 0.35 } })
       .setPosition(worldX, worldY)
       .setDisplaySize(TUFT_W, TUFT_H);
 
@@ -146,7 +146,7 @@ export class TallGrassObject implements WorldProp {
     for (let i = 0; i < FIRE_SPOTS.length; i += 1) {
       const spot = FIRE_SPOTS[i];
       const fire = world3d()
-        .addBillboard(FIRE_KEYS[i % FIRE_KEYS.length], 0, { emissive: true })
+        .objects.addBillboard(FIRE_KEYS[i % FIRE_KEYS.length], 0, { emissive: true })
         .setPosition(this.worldX + spot.ox, this.worldY)
         .setElevation(spot.elev)
         .setDisplaySize(spot.scale, spot.scale * 1.25);
@@ -161,7 +161,7 @@ export class TallGrassObject implements WorldProp {
 
     // Real firelight while it burns — borrowed from the pool, never a new THREE light (adding
     // one mid-run recompiles every lit material in the world; see World3D.FIRE_LIGHT_SLOTS).
-    this.fireLight = world3d().addFireLight(this.worldX, this.worldY, true);
+    this.fireLight = world3d().lights.addFireLight(this.worldX, this.worldY, true);
     this.fireLight.setIntensityScale(0);
 
     // One clock drives the whole burn: the blades char green→ash, the flames CLIMB from the

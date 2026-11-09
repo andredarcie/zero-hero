@@ -71,7 +71,7 @@ export class PlantSpotObject implements WorldProp {
     this.worldY = worldY;
     // O buraco deita no chao como o toco de grama (flat) — e um recorte no terreno, nao um cartaz.
     this.hole = world3d()
-      .addBillboard(ASSET_KEYS.plantHole, 0, { flat: true, flatY: 0.018 })
+      .objects.addBillboard(ASSET_KEYS.plantHole, 0, { flat: true, flatY: 0.018 })
       .setPosition(worldX, worldY)
       .setDisplaySize(HOLE_SIZE, HOLE_SIZE);
     // Cavado AGORA (a pa): o recorte nao surge pronto — ele APROFUNDA em quatro tempos, um
@@ -138,7 +138,7 @@ export class PlantSpotObject implements WorldProp {
     if (this.state !== 'hole') return false;
     this.state = 'sown';
     this.sownKind = kind; // o canteiro lembra O QUE recebeu — é isso que decide o broto
-    getSoundManager().playGrassCut(); // terra revirada — o farfalhar seco serve
+    getSoundManager().work.playGrassCut(); // terra revirada — o farfalhar seco serve
     return true;
   }
 
@@ -148,7 +148,7 @@ export class PlantSpotObject implements WorldProp {
     this.state = 'mound';
     this.hole.setVisible(false);
     this.mound = world3d()
-      .addBillboard(ASSET_KEYS.plantMound, 0, { groundShadow: true })
+      .objects.addBillboard(ASSET_KEYS.plantMound, 0, { groundShadow: true })
       .setPosition(this.worldX, this.worldY)
       .setDisplaySize(MOUND_SIZE * 0.3, MOUND_SIZE * 0.3);
     this.scene.tweens.add({
@@ -202,7 +202,7 @@ export class PlantSpotObject implements WorldProp {
     this.mound?.destroy();
     this.mound = undefined;
     if (!this.dyePlant) {
-      this.dyePlant = world3d().addBillboard(texture, 0, { groundShadow: { rx: 0.3, rz: 0.18, alpha: 0.25 } })
+      this.dyePlant = world3d().objects.addBillboard(texture, 0, { groundShadow: { rx: 0.3, rz: 0.18, alpha: 0.25 } })
         .setPosition(this.worldX, this.worldY);
     } else {
       this.dyePlant.setTexture(texture, 0);

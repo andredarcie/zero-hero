@@ -27,7 +27,7 @@ export class LockedDoorObject implements WorldProp {
     this.floodgate = floodgate;
     this.garden = garden;
     this.sprite = world3d()
-      .addBillboard(garden ? 'garden-gate-object' : 'locked-door-object', 0, { groundShadow: true })
+      .objects.addBillboard(garden ? 'garden-gate-object' : 'locked-door-object', 0, { groundShadow: true })
       .setPosition(worldX, worldY)
       .setDisplaySize(0.98, 0.98)
       // Same treatment as the rocks: the door's white bars bloomed under the night ambient.

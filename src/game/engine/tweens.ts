@@ -186,10 +186,12 @@ const getValueOp = (key: string, propertyValue: unknown): ValueOps => {
 
 // ── BaseTween / Tween ───────────────────────────────────────────────────────────────────────────
 
-export class Tween extends EventEmitter {
-  public parent: TweenManager | null;
-  public data: TweenData[] | null = [];
-  public totalData = 0;
+/**
+ * O CICLO DE VIDA DE UM TWEEN (o BaseTween): o estado (pendente, ativo, em atraso, terminado…), a pausa, a escala de
+ * tempo, os atrasos de início, de laço e de fim, a contagem de laços e os callbacks. O que anima — os alvos, os dados
+ * de cada propriedade e o gerenciador que o roda — é do Tween.
+ */
+export abstract class BaseTween extends EventEmitter {
   public startDelay = 0;
   public hasStarted = false;
   public timeScale = 1;
@@ -206,26 +208,12 @@ export class Tween extends EventEmitter {
   };
   public callbackScope: unknown;
   public persist = false;
-  public targets: AnyTarget[] | null;
-  public totalTargets: number;
-  public isSeeking = false;
-  public isInfinite = false;
-  public elapsed = 0;
-  public totalElapsed = 0;
-  public duration = 0;
-  public progress = 0;
-  public totalDuration = 0;
-  public totalProgress = 0;
-  public isNumberTween = false;
 
-  public constructor(parent: TweenManager, targets: AnyTarget[]) {
-    super();
-    this.parent = parent;
-    this.targets = targets;
-    this.totalTargets = targets.length;
-  }
+  /** O evento e o callback de uma passagem do ciclo (quem sabe os alvos é o Tween). */
+  public abstract dispatchEvent(event: string, callback: CallbackName): void;
+  /** O fim: o progresso vai a 1 e o tween sai da lista. */
+  public abstract onCompleteHandler(): void;
 
-  // ── BaseTween ──
   public setTimeScale(value: number): this { this.timeScale = value; return this; }
   public getTimeScale(): number { return this.timeScale; }
   public isPlaying(): boolean { return !this.paused && this.isActive(); }
@@ -247,11 +235,6 @@ export class Tween extends EventEmitter {
     return this;
   }
 
-  public makeActive(): void {
-    this.parent?.makeActive(this);
-    this.dispatchEvent(TweenEvents.TWEEN_ACTIVE, 'onActive');
-  }
-
   public complete(delay = 0): this {
     if (delay) {
       this.setCompleteDelayState();
@@ -264,19 +247,6 @@ export class Tween extends EventEmitter {
 
   public completeAfterLoop(loops = 0): this {
     if (this.loopCounter > loops) this.loopCounter = loops;
-    return this;
-  }
-
-  public remove(): this {
-    this.parent?.remove(this);
-    return this;
-  }
-
-  public stop(): this {
-    if (this.parent && !this.isRemoved() && !this.isPendingRemove() && !this.isDestroyed()) {
-      this.dispatchEvent(TweenEvents.TWEEN_STOP, 'onStop');
-      this.setPendingRemoveState();
-    }
     return this;
   }
 
@@ -327,6 +297,49 @@ export class Tween extends EventEmitter {
   public isRemoved(): boolean { return this.state === T.REMOVED; }
   public isFinished(): boolean { return this.state === T.FINISHED; }
   public isDestroyed(): boolean { return this.state === T.DESTROYED; }
+}
+
+export class Tween extends BaseTween {
+  public parent: TweenManager | null;
+  public data: TweenData[] | null = [];
+  public totalData = 0;
+  public targets: AnyTarget[] | null;
+  public totalTargets: number;
+  public isSeeking = false;
+  public isInfinite = false;
+  public elapsed = 0;
+  public totalElapsed = 0;
+  public duration = 0;
+  public progress = 0;
+  public totalDuration = 0;
+  public totalProgress = 0;
+  public isNumberTween = false;
+
+  public constructor(parent: TweenManager, targets: AnyTarget[]) {
+    super();
+    this.parent = parent;
+    this.targets = targets;
+    this.totalTargets = targets.length;
+  }
+
+  // ── o gerenciador ──
+  public makeActive(): void {
+    this.parent?.makeActive(this);
+    this.dispatchEvent(TweenEvents.TWEEN_ACTIVE, 'onActive');
+  }
+
+  public remove(): this {
+    this.parent?.remove(this);
+    return this;
+  }
+
+  public stop(): this {
+    if (this.parent && !this.isRemoved() && !this.isPendingRemove() && !this.isDestroyed()) {
+      this.dispatchEvent(TweenEvents.TWEEN_STOP, 'onStop');
+      this.setPendingRemoveState();
+    }
+    return this;
+  }
 
   // ── Tween ──
   public add(

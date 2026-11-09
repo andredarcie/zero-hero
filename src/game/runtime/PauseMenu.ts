@@ -1,12 +1,9 @@
 import type * as Engine from '@/game/engine';
 
-import { formatTime, getJukebox, JUKEBOX_TRACKS } from '@/game/audio/Jukebox';
+import { getJukebox } from '@/game/audio/Jukebox';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { getLang, setLang, t, type Lang } from '@/game/i18n/i18n';
-import {
-  getKeyLetter, getTextScale, isBindableKey, isCalmGames, isInstantText, isReducedMotion, setCalmGames, setInstantText,
-  setKeyCapture, setKeyCode, setReducedMotion, setTextScale, TEXT_SCALES, type BoundAction,
-} from '@/game/runtime/accessibility';
+import { getTextScale, isBindableKey, isCalmGames, isInstantText, isReducedMotion, setCalmGames, setInstantText, setKeyCapture, setReducedMotion, setTextScale, TEXT_SCALES } from '@/game/runtime/accessibility';
 import {
   getDaylight, getDofIntensity, isThriftyPixels, setDaylight, setDofIntensity, setThriftyPixels,
 } from '@/game/runtime/graphicsSettings';
@@ -17,6 +14,8 @@ import {
   canVibrate, haptic, hasBigButtons, hasHaptics, hasSolidButtons, isLeftHanded,
   setBigButtons, setHaptics, setLeftHanded, setSolidButtons,
 } from '@/game/runtime/touchSettings';
+import { PauseRows, type OptionDef, type OptionRow } from './PauseRows';
+import { PauseMusicPage, onOff } from './PauseMusicPage';
 
 // The pause screen is plain DOM layered over the 2D canvas — the same approach as
 // DialogOverlay / EditorDomUi. That choice matters here because DOM keeps receiving input while the
@@ -30,7 +29,6 @@ import {
 const STYLE_ID = 'zh-pause-style';
 const ROOT_ID = 'zh-pause-root';
 const TOUCH_BTN_ID = 'zh-pause-touch-btn';
-const SLIDER_STEPS = 10;
 
 const CSS = `
 #${ROOT_ID} {
@@ -186,18 +184,7 @@ export interface PauseMenuCallbacks {
   onQuit?: () => void;
 }
 
-/** Uma escolha entre valores com nome, ou um nível de 0 a 1. É tudo o que uma opção pode ser. */
-type OptionDef =
-  | { kind: 'choice'; label: string; values: { text: () => string; apply: () => void; active: () => boolean }[] }
-  | { kind: 'level'; label: string; read: () => number; write: (v: number) => void; release?: () => void }
-  | { kind: 'key'; label: string; action: BoundAction };
-
 type OptionSection = { title: string; options: OptionDef[] };
-
-const onOff = (read: () => boolean, write: (v: boolean) => void): Extract<OptionDef, { kind: 'choice' }>['values'] => [
-  { text: () => t('pause.on'), apply: () => write(true), active: read },
-  { text: () => t('pause.off'), apply: () => write(false), active: () => !read() },
-];
 
 const two = (
   a: [string, () => void, () => boolean],
@@ -254,7 +241,7 @@ const optionSections = (): OptionSection[] => {
       options: [
         { kind: 'level', label: 'pause.music', read: () => sound.getMusicVolume(), write: (v) => sound.setMusicVolume(v) },
         // O som ao soltar é o que deixa julgar o nível.
-        { kind: 'level', label: 'pause.sfx', read: () => sound.getSfxVolume(), write: (v) => sound.setSfxVolume(v), release: () => sound.playItemStash() },
+        { kind: 'level', label: 'pause.sfx', read: () => sound.getSfxVolume(), write: (v) => sound.setSfxVolume(v), release: () => sound.ui.playItemStash() },
       ],
     },
     { title: 'pause.sectionImage', options: image },
@@ -331,28 +318,18 @@ const optionSections = (): OptionSection[] => {
   return sections;
 };
 
-/** Uma linha viva da lista de opções: quem a move (teclado, mouse ou dedo) chama a mesma coisa. */
-type OptionRow = {
-  el: HTMLElement;
-  /** Seta para a esquerda (-1) ou para a direita (+1). */
-  step: (direction: number) => void;
-  /** Enter/Z: a escolha gira; o nível não faz nada (é setas ou arrasto). */
-  activate: () => void;
-  refresh: () => void;
-};
-
 export class PauseMenu {
-  private waitingKey?: (code: string | null) => void;
+  public waitingKey?: (code: string | null) => void;
   private readonly root: HTMLDivElement;
   private readonly mainPage: HTMLDivElement;
   private readonly optionsPage: HTMLDivElement;
   private readonly list: HTMLDivElement;
   private readonly mainButtons: HTMLButtonElement[] = [];
-  private readonly rows: OptionRow[] = [];
+  public readonly rows: OptionRow[] = [];
   private readonly backBtn: HTMLButtonElement;
   private readonly musicPage: HTMLDivElement;
-  private readonly musicList: HTMLDivElement;
-  private readonly musicRows: OptionRow[] = [];
+  public readonly musicList: HTMLDivElement;
+  public readonly musicRows: OptionRow[] = [];
   private readonly musicBackBtn: HTMLButtonElement;
   private readonly unsubscribeJukebox: () => void;
   private page: 'main' | 'options' | 'music' = 'main';
@@ -394,7 +371,7 @@ export class PauseMenu {
       title.textContent = t(section.title);
       box.appendChild(title);
       for (const def of section.options) {
-        const row = def.kind === 'choice' ? this.choiceRow(def) : def.kind === 'level' ? this.levelRow(def) : this.keyRow(def);
+        const row = def.kind === 'choice' ? this.rowKit.choiceRow(def) : def.kind === 'level' ? this.rowKit.levelRow(def) : this.rowKit.keyRow(def);
         const index = this.rows.length;
         this.rows.push(row);
         row.el.addEventListener('pointerenter', (event) => { if (event.pointerType === 'mouse') this.select(index); });
@@ -411,7 +388,7 @@ export class PauseMenu {
     this.musicList = document.createElement('div');
     this.musicList.className = 'zh-pause-list';
     this.musicPage.appendChild(this.musicList);
-    this.buildMusicPage();
+    this.musicView.buildMusicPage();
     this.musicBackBtn = this.pageButton(this.musicPage, t('pause.back'), () => this.showPage('main'));
     this.musicBackBtn.addEventListener('pointerenter', (event) => { if (event.pointerType === 'mouse') this.select(this.musicRows.length); });
     this.unsubscribeJukebox = getJukebox().subscribe(() => { if (!this.destroyed) this.musicRows.forEach((row) => row.refresh()); });
@@ -464,262 +441,7 @@ export class PauseMenu {
     this.mainButtons.push(btn);
   }
 
-  private rowEl(label: string): HTMLDivElement {
-    const el = document.createElement('div');
-    el.className = 'zh-pause-row';
-    const name = document.createElement('span');
-    name.textContent = t(label);
-    el.appendChild(name);
-    return el;
-  }
-
-  private choiceRow(def: Extract<OptionDef, { kind: 'choice' }>): OptionRow {
-    const el = this.rowEl(def.label);
-    const value = document.createElement('span');
-    value.className = 'zh-pause-value';
-    const text = document.createElement('b');
-    const arrow = (glyph: string, direction: number): HTMLButtonElement => {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'zh-pause-arrow';
-      btn.textContent = glyph;
-      btn.setAttribute('aria-label', glyph === '<' ? t('pause.previous') : t('pause.next'));
-      btn.addEventListener('click', (event) => { event.stopPropagation(); row.step(direction); });
-      return btn;
-    };
-    const current = (): number => Math.max(0, def.values.findIndex((v) => v.active()));
-    const row: OptionRow = {
-      el,
-      step: (direction) => {
-        const n = def.values.length;
-        def.values[(current() + direction + n) % n].apply();
-        row.refresh();
-      },
-      activate: () => row.step(1),
-      refresh: () => { text.textContent = def.values[current()].text(); },
-    };
-    value.append(arrow('<', -1), text, arrow('>', 1));
-    el.appendChild(value);
-    // A linha inteira é alvo: o dedo não precisa acertar a seta.
-    el.addEventListener('click', () => row.step(1));
-    el.style.cursor = 'pointer';
-    return row;
-  }
-
-  private levelRow(def: Extract<OptionDef, { kind: 'level' }>): OptionRow {
-    const el = this.rowEl(def.label);
-    const bar = document.createElement('div');
-    bar.className = 'zh-pause-blocks';
-    bar.setAttribute('role', 'slider');
-    bar.setAttribute('aria-label', t(def.label));
-    bar.setAttribute('aria-valuemin', '0');
-    bar.setAttribute('aria-valuemax', '100');
-    const blocks = Array.from({ length: SLIDER_STEPS }, () => bar.appendChild(document.createElement('i')));
-    el.appendChild(bar);
-    const refresh = (): void => {
-      const level = Math.round(def.read() * SLIDER_STEPS);
-      blocks.forEach((block, i) => block.classList.toggle('zh-full', i < level));
-      bar.setAttribute('aria-valuenow', String(level * SLIDER_STEPS));
-    };
-    const setLevel = (level: number): void => {
-      def.write(Math.max(0, Math.min(SLIDER_STEPS, level)) / SLIDER_STEPS);
-      refresh();
-    };
-    const fromPointer = (event: PointerEvent): void => {
-      const rect = bar.getBoundingClientRect();
-      setLevel(Math.round(((event.clientX - rect.left) / rect.width) * SLIDER_STEPS));
-    };
-    bar.addEventListener('pointerdown', (event) => {
-      bar.setPointerCapture(event.pointerId);
-      fromPointer(event);
-    });
-    bar.addEventListener('pointermove', (event) => { if (bar.hasPointerCapture(event.pointerId)) fromPointer(event); });
-    bar.addEventListener('pointerup', () => def.release?.());
-    return {
-      el,
-      step: (direction) => {
-        setLevel(Math.round(def.read() * SLIDER_STEPS) + direction);
-        def.release?.();
-      },
-      activate: () => { /* nível não gira */ },
-      refresh,
-    };
-  }
-
-  private keyRow(def: Extract<OptionDef, { kind: 'key' }>): OptionRow {
-    const el = this.rowEl(def.label);
-    const value = document.createElement('b');
-    value.className = 'zh-pause-value';
-    el.appendChild(value);
-    const row: OptionRow = {
-      el,
-      step: () => { /* a tecla não tem anterior nem próxima */ },
-      activate: () => {
-        value.textContent = t('pause.pressKey');
-        setKeyCapture(true);
-        this.waitingKey = (code) => {
-          this.waitingKey = undefined;
-          setKeyCapture(false);
-          if (code) setKeyCode(def.action, code);
-          // Trocar pode inverter com a outra tecla, então todas as linhas se redesenham.
-          this.rows.forEach((r) => r.refresh());
-        };
-      },
-      refresh: () => { value.textContent = getKeyLetter(def.action); },
-    };
-    el.addEventListener('click', () => row.activate());
-    el.style.cursor = 'pointer';
-    return row;
-  }
-
   // ── as músicas: o player e a lista ─────────────────────────────────────────
-
-  /** Uma linha nova numa página com lista: entra na seleção (mouse e dedo) e na seção. */
-  private addRow(rows: OptionRow[], row: OptionRow, box: HTMLElement): void {
-    const index = rows.length;
-    rows.push(row);
-    row.el.addEventListener('pointerenter', (event) => { if (event.pointerType === 'mouse') this.select(index); });
-    row.el.addEventListener('pointerdown', () => this.select(index));
-    row.refresh();
-    box.appendChild(row.el);
-  }
-
-  private section(list: HTMLElement, title: string): HTMLElement {
-    const box = document.createElement('section');
-    const heading = document.createElement('h2');
-    heading.textContent = t(title);
-    box.appendChild(heading);
-    list.appendChild(box);
-    return box;
-  }
-
-  private buildMusicPage(): void {
-    const jb = getJukebox();
-    const sound = getSoundManager();
-    const player = this.section(this.musicList, 'pause.musicControls');
-
-    // anterior · tocar/pausar · próxima — o nome da faixa que toca fica à esquerda
-    {
-      const el = this.rowEl('pause.musicPick');
-      const name = el.firstChild as HTMLSpanElement;
-      const value = document.createElement('span');
-      value.className = 'zh-pause-value';
-      const button = (glyph: string, label: string, onClick: () => void): HTMLButtonElement => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'zh-music-btn';
-        btn.textContent = glyph;
-        btn.setAttribute('aria-label', t(label));
-        btn.addEventListener('click', (event) => { event.stopPropagation(); onClick(); });
-        return btn;
-      };
-      const play = button('>', 'pause.musicPlay', () => jb.toggle());
-      play.classList.add('zh-big');
-      value.append(button('|<', 'pause.musicPrev', () => jb.prev()), play, button('>|', 'pause.musicNext', () => jb.next()));
-      el.appendChild(value);
-      this.addRow(this.musicRows, {
-        el,
-        step: (direction) => (direction < 0 ? jb.prev() : jb.next()),
-        activate: () => jb.toggle(),
-        refresh: () => {
-          name.textContent = jb.track ? t(jb.track.title) : t('pause.musicPick');
-          play.textContent = jb.playing ? '||' : '>';
-          play.setAttribute('aria-label', t(jb.playing ? 'pause.musicPause' : 'pause.musicPlay'));
-        },
-      }, player);
-    }
-
-    // a posição: arrasta na barra, ou setas de 10 em 10 segundos
-    {
-      const el = this.rowEl('pause.musicPosition');
-      const seek = document.createElement('span');
-      seek.className = 'zh-music-seek';
-      const bar = document.createElement('div');
-      bar.className = 'zh-music-bar';
-      bar.setAttribute('role', 'slider');
-      bar.setAttribute('aria-label', t('pause.musicPosition'));
-      const fill = bar.appendChild(document.createElement('i'));
-      const time = document.createElement('b');
-      time.className = 'zh-music-time';
-      seek.append(bar, time);
-      el.appendChild(seek);
-      const fromPointer = (event: PointerEvent): void => {
-        const rect = bar.getBoundingClientRect();
-        jb.seek(Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)) * jb.duration);
-      };
-      bar.addEventListener('pointerdown', (event) => {
-        if (!jb.duration) return;
-        bar.setPointerCapture(event.pointerId);
-        fromPointer(event);
-      });
-      bar.addEventListener('pointermove', (event) => { if (bar.hasPointerCapture(event.pointerId)) fromPointer(event); });
-      this.addRow(this.musicRows, {
-        el,
-        step: (direction) => jb.seek(jb.time + direction * 10),
-        activate: () => jb.toggle(),
-        refresh: () => {
-          const total = jb.duration || jb.track?.seconds || 0;
-          fill.style.width = `${total ? Math.min(100, (jb.time / total) * 100) : 0}%`;
-          time.textContent = `${formatTime(jb.time)} / ${formatTime(total)}`;
-          bar.setAttribute('aria-valuenow', String(Math.round(jb.time)));
-        },
-      }, player);
-    }
-
-    this.addRow(this.musicRows, this.choiceRow({
-      kind: 'choice',
-      label: 'pause.musicRepeat',
-      values: (['all', 'one', 'off'] as const).map((mode) => ({
-        text: () => t({ all: 'pause.repeatAll', one: 'pause.repeatOne', off: 'pause.repeatOff' }[mode]),
-        apply: () => jb.setRepeat(mode),
-        active: () => jb.repeat === mode,
-      })),
-    }), player);
-    this.addRow(this.musicRows, this.choiceRow({
-      kind: 'choice', label: 'pause.musicShuffle', values: onOff(() => jb.shuffle, (v) => jb.setShuffle(v)),
-    }), player);
-    // o mesmo volume de música das Opções: ajustar aqui é ajustar o do jogo
-    this.addRow(this.musicRows, this.levelRow({
-      kind: 'level',
-      label: 'pause.musicVolume',
-      read: () => sound.getMusicVolume(),
-      write: (v) => { sound.setMusicVolume(v); jb.refreshVolume(); },
-    }), player);
-
-    const list = this.section(this.musicList, 'pause.musicPage');
-    JUKEBOX_TRACKS.forEach((track, i) => {
-      const el = document.createElement('div');
-      el.className = 'zh-pause-row zh-music-track';
-      const left = document.createElement('span');
-      const mark = document.createElement('span');
-      mark.className = 'zh-music-mark';
-      const title = document.createElement('span');
-      title.textContent = t(track.title);
-      left.append(mark, title);
-      const right = document.createElement('span');
-      right.className = 'zh-pause-value';
-      const when = document.createElement('span');
-      when.className = 'zh-music-when';
-      when.textContent = t(track.when);
-      const length = document.createElement('span');
-      length.textContent = formatTime(track.seconds);
-      right.append(when, length);
-      el.append(left, right);
-      const choose = (): void => { if (jb.index === i) jb.toggle(); else jb.play(i); };
-      el.addEventListener('click', choose);
-      this.addRow(this.musicRows, {
-        el,
-        step: () => { /* a faixa não tem anterior nem próxima: são as setas para cima e para baixo */ },
-        activate: choose,
-        refresh: () => {
-          const current = jb.index === i;
-          el.classList.toggle('is-current', current);
-          mark.textContent = current ? (jb.playing ? '>' : '=') : '';
-          if (current && jb.duration) length.textContent = formatTime(jb.duration);
-        },
-      }, list);
-    });
-  }
 
   // ── a seleção: uma só, para teclado, mouse e dedo ──────────────────────────
 
@@ -748,7 +470,7 @@ export class PauseMenu {
     this.select(page === 'main' && leaving === 'options' ? 1 : page === 'main' && leaving === 'music' ? 2 : 0);
   }
 
-  private select(index: number): void {
+  public select(index: number): void {
     const items = this.selectable;
     this.selected = (index + items.length) % items.length;
     items.forEach((el, i) => el.classList.toggle('is-selected', i === this.selected));
@@ -801,6 +523,10 @@ export class PauseMenu {
       this.confirm();
     }
   };
+  /** Os montadores de linha. (ver PauseRows) */
+  public readonly rowKit = new PauseRows(this);
+  /** A página de música. (ver PauseMusicPage) */
+  private readonly musicView = new PauseMusicPage(this);
 }
 
 // ── discreet touch pause button (mobile) ──────────────────────────────────────

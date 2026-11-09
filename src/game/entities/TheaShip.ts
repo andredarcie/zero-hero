@@ -64,13 +64,13 @@ export class TheaShip {
   public constructor(private readonly host: TheaShipHost) {
     const { at } = host;
     this.ship = world3d()
-      .addBillboard(SHIP_TEXTURE, 0, { groundShadow: { rx: 0.95, rz: 0.42, alpha: 0.32 } })
+      .objects.addBillboard(SHIP_TEXTURE, 0, { groundShadow: { rx: 0.95, rz: 0.42, alpha: 0.32 } })
       .setDisplaySize(SHIP_SIZE, SHIP_SIZE)
       .setTint(WHITE_SAFE_TINT)
       .setPosition(at.x, at.y - SKY_NORTH)
       .setElevation(SKY_HIGH);
     this.flame = world3d()
-      .addBillboard(SHIP_FLAME_TEXTURE, 0, { fog: false, emissive: true, additive: true })
+      .objects.addBillboard(SHIP_FLAME_TEXTURE, 0, { fog: false, emissive: true, additive: true })
       .setVisible(false);
     this.flicker = host.scene.time.addEvent({ delay: FLICKER_MS, loop: true, callback: () => this.tickFlame() });
   }
@@ -91,7 +91,7 @@ export class TheaShip {
   public openDoor(): void {
     const { at } = this.host;
     this.ship.setTexture(SHIP_OPEN_TEXTURE, 0);
-    getSoundManager().playShipDoor();
+    getSoundManager().story.playShipDoor();
     squashBounce(this.host.scene, this.ship, SHIP_SIZE, SHIP_SIZE, 0.04);
     this.host.smoke(at.x - 0.5, at.y + 0.1);
     this.host.smoke(at.x + 0.5, at.y + 0.1);
@@ -99,7 +99,7 @@ export class TheaShip {
 
   public closeDoor(): void {
     this.ship.setTexture(SHIP_TEXTURE, 0);
-    getSoundManager().playShipDoor();
+    getSoundManager().story.playShipDoor();
     squashBounce(this.host.scene, this.ship, SHIP_SIZE, SHIP_SIZE, 0.05);
   }
 
@@ -132,7 +132,7 @@ export class TheaShip {
   /** Vem do fundo do quadro, freando no fogo, até o baque. */
   public async land(): Promise<void> {
     const { at } = this.host;
-    getSoundManager().playShipDescend();
+    getSoundManager().story.playShipDescend();
     this.flamePower = 1;
     const fromY = at.y - SKY_NORTH;
     const pass = { t: 0 };
@@ -154,7 +154,7 @@ export class TheaShip {
       },
     });
     this.flamePower = 0;
-    getSoundManager().playShipLand();
+    getSoundManager().story.playShipLand();
     this.host.shake(280, 0.075);
     squashBounce(this.host.scene, this.ship, SHIP_SIZE, SHIP_SIZE, 0.2);
     this.dustRing(1);
@@ -165,7 +165,7 @@ export class TheaShip {
   public async liftOff(): Promise<void> {
     const { at } = this.host;
     const { tweens } = this.host.scene;
-    getSoundManager().playShipLift();
+    getSoundManager().story.playShipLift();
     this.host.shake(CHARGE_MS, 0.018);
     const power = { p: 0.15 };
     let dustClock = 0;
@@ -213,7 +213,7 @@ export class TheaShip {
   private trail(): void {
     const size = 0.16 + Math.random() * 0.14;
     const puff = world3d()
-      .addBillboard(STEAM_TEXTURE, 0, { fog: false, emissive: true, alphaTest: 0.01 })
+      .objects.addBillboard(STEAM_TEXTURE, 0, { fog: false, emissive: true, alphaTest: 0.01 })
       .setDisplaySize(size, size)
       .setPosition(this.ship.x + (Math.random() - 0.5) * 0.3, this.ship.y)
       .setElevation(this.ship.elevation)

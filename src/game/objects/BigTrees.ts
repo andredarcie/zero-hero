@@ -284,7 +284,7 @@ export class BigTrees {
       const { w, h } = SIZE[t.kind];
       // A variante sai do lugar (e não da ordem no mapa): apagar uma árvore não troca a cara das outras.
       const variant = Math.floor(hash(t.x, t.y, 5) * VARIANTS);
-      const bb = w3.addBillboard(key(t.kind, variant, 0), 0, {})
+      const bb = w3.objects.addBillboard(key(t.kind, variant, 0), 0, {})
         .setDisplaySize(w / 16, h / 16)
         // O tronco caído deita em dois tiles: o meio dele fica entre x e x+1.
         .setPosition(t.kind === 'log' ? t.x + 0.5 : t.x, t.y);

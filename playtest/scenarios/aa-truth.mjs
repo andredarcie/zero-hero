@@ -57,14 +57,14 @@ const MEASURE = `async (tileX, tileY, steps, ss) => {
   s.movementController.syncPlayerToWorld(tileX, tileY, s.tileSize);
 
   w3.elapsed = 0;
-  w3.shakeMs = 0;
-  w3.fires.forEach((f, i) => {
+  w3.cam.shakeMs = 0;
+  w3.lights.fires.forEach((f, i) => {
     f.seed = i * 1.7;
     f.noise = 0; f.flare = 0; f.flareTarget = 0; f.flareTimer = 0.9; f.flicker = 0; f.level = 1;
   });
-  s.stopBreathing();
-  s.hero.scaleX = 1; s.hero.scaleY = 1; s.lastStepTime = 0;
-  for (const cf of (s.campfires ?? [])) { cf.animTimer?.remove(false); cf.animTimer = undefined; }
+  s.steps.stopBreathing();
+  s.hero.scaleX = 1; s.hero.scaleY = 1; s.frame.lastStepTime = 0;
+  for (const cf of (s.props.campfires ?? [])) { cf.animTimer?.remove(false); cf.animTimer = undefined; }
 
   // Tiles only, and no post chain. A tile mesh is a merged BufferGeometry with a mapped Lambert
   // material: billboards are PlaneGeometry, the bridge is BoxGeometry, the shadow field is an
@@ -75,8 +75,8 @@ const MEASURE = `async (tileX, tileY, steps, ss) => {
   w3.scene.traverse((o) => {
     if ((o.isMesh || o.isPoints) && !isTile(o)) o.layers.set(31);
   });
-  w3.composer.passes = [w3.composer.passes[0]];
-  w3.composer.passes[0].renderToScreen = true;
+  w3.screen.composer.passes = [w3.screen.composer.passes[0]];
+  w3.screen.composer.passes[0].renderToScreen = true;
 
   window.__reseed();
 
@@ -97,7 +97,7 @@ const MEASURE = `async (tileX, tileY, steps, ss) => {
   // preserveDrawingBuffer — which would have meant a source edit, and the old build hasn't got one.
   const shoot = (w, h) => {
     w3.renderer.setSize(w, h, false);
-    w3.composer.render();
+    w3.screen.composer.render();
     const buf = new Uint8Array(w * h * 4);
     gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, buf);
     return buf;

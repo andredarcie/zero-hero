@@ -17,7 +17,7 @@ const loadWorld = (): WorldData => JSON.parse(readFileSync(path.resolve(here, '.
 const emptyTile = (store: EditorStore): { x: number; y: number } => {
   for (let y = 1; y < 59; y++) {
     for (let x = 1; x < 59; x++) {
-      if (store.entitiesAt(x, y).length === 0 && store.readCell('upper', x, y) === null && store.readCell('collision', x, y) === false) return { x, y };
+      if (store.entities.entitiesAt(x, y).length === 0 && store.readCell('upper', x, y) === null && store.readCell('collision', x, y) === false) return { x, y };
     }
   }
   throw new Error('nenhum tile vazio');
@@ -82,25 +82,25 @@ describe('desfazer e refazer', () => {
   it('um traço inteiro desfaz de uma vez', () => {
     const { x, y } = emptyTile(store);
     const before = [store.readCell('ground', x, y), store.readCell('ground', x + 1, y)];
-    store.beginStroke();
+    store.history.beginStroke();
     store.setCell('ground', x, y, 11);
     store.setCell('ground', x + 1, y, 11);
     store.setCell('ground', x, y, 12);
-    store.commitStroke();
+    store.history.commitStroke();
     expect(store.canUndo).toBe(true);
-    expect(store.undo()).toBe(true);
+    expect(store.history.undo()).toBe(true);
     expect([store.readCell('ground', x, y), store.readCell('ground', x + 1, y)]).toEqual(before);
     expect(store.canRedo).toBe(true);
-    expect(store.redo()).toBe(true);
+    expect(store.history.redo()).toBe(true);
     expect(store.readCell('ground', x, y)).toBe(12);
-    expect(store.undo()).toBe(true);
-    expect(store.undo()).toBe(false);
+    expect(store.history.undo()).toBe(true);
+    expect(store.history.undo()).toBe(false);
   });
 
   it('um gesto novo depois de desfazer apaga o refazer', () => {
     const { x, y } = emptyTile(store);
     store.setCell('ground', x, y, 5);
-    store.undo();
+    store.history.undo();
     store.setCell('ground', x, y, 6);
     expect(store.canRedo).toBe(false);
   });
@@ -109,45 +109,45 @@ describe('desfazer e refazer', () => {
 describe('peças', () => {
   it('colocar troca tudo o que estava no tile, e um Ctrl+Z devolve o tile inteiro', () => {
     const prop = store.world.props.find((p) => p.type === 'rock')!;
-    const before = store.entitiesAt(prop.worldX, prop.worldY);
+    const before = store.entities.entitiesAt(prop.worldX, prop.worldY);
     const placed: PlacedEntity = { list: 'props', type: 'dryShrub', worldX: prop.worldX, worldY: prop.worldY };
-    store.placeEntity(placed);
-    expect(store.entitiesAt(prop.worldX, prop.worldY)).toEqual([{ ...placed, dir: undefined }]);
-    store.undo();
-    expect(store.entitiesAt(prop.worldX, prop.worldY)).toEqual(before);
+    store.entities.placeEntity(placed);
+    expect(store.entities.entitiesAt(prop.worldX, prop.worldY)).toEqual([{ ...placed, dir: undefined }]);
+    store.history.undo();
+    expect(store.entities.entitiesAt(prop.worldX, prop.worldY)).toEqual(before);
   });
 
   it('colocar a mesma peça no mesmo lugar não faz nada; girar faz', () => {
     const { x, y } = emptyTile(store);
-    store.placeEntity({ list: 'props', type: 'furnace', worldX: x, worldY: y, dir: 0 });
+    store.entities.placeEntity({ list: 'props', type: 'furnace', worldX: x, worldY: y, dir: 0 });
     const count = store.world.props.length;
-    store.placeEntity({ list: 'props', type: 'furnace', worldX: x, worldY: y, dir: 0 });
+    store.entities.placeEntity({ list: 'props', type: 'furnace', worldX: x, worldY: y, dir: 0 });
     expect(store.world.props.length).toBe(count);
-    store.placeEntity({ list: 'props', type: 'furnace', worldX: x, worldY: y, dir: 2 });
-    expect(store.entitiesAt(x, y)[0]).toMatchObject({ type: 'furnace', dir: 2 });
+    store.entities.placeEntity({ list: 'props', type: 'furnace', worldX: x, worldY: y, dir: 2 });
+    expect(store.entities.entitiesAt(x, y)[0]).toMatchObject({ type: 'furnace', dir: 2 });
   });
 
   it('um NPC aparece uma vez só: pôr de novo em outro tile MOVE o personagem', () => {
-    const wizard = store.allEntities().find((e) => e.list === 'npcs' && e.type === 'wizard')!;
+    const wizard = store.entities.allEntities().find((e) => e.list === 'npcs' && e.type === 'wizard')!;
     const { x, y } = emptyTile(store);
-    store.placeEntity({ list: 'npcs', type: 'wizard', worldX: x, worldY: y });
-    const wizards = store.allEntities().filter((e) => e.list === 'npcs' && e.type === 'wizard');
+    store.entities.placeEntity({ list: 'npcs', type: 'wizard', worldX: x, worldY: y });
+    const wizards = store.entities.allEntities().filter((e) => e.list === 'npcs' && e.type === 'wizard');
     expect(wizards).toEqual([{ list: 'npcs', type: 'wizard', worldX: x, worldY: y }]);
-    store.undo();
-    const back = store.allEntities().filter((e) => e.list === 'npcs' && e.type === 'wizard');
+    store.history.undo();
+    const back = store.entities.allEntities().filter((e) => e.list === 'npcs' && e.type === 'wizard');
     expect(back.map((e) => [e.worldX, e.worldY])).toEqual([[wizard.worldX, wizard.worldY]]);
   });
 
   it('apagar tira tudo do tile; tile vazio não tem o que apagar', () => {
     const prop = store.world.props[0];
-    expect(store.eraseEntitiesAt(prop.worldX, prop.worldY)).toBe(true);
-    expect(store.entitiesAt(prop.worldX, prop.worldY)).toEqual([]);
+    expect(store.entities.eraseEntitiesAt(prop.worldX, prop.worldY)).toBe(true);
+    expect(store.entities.entitiesAt(prop.worldX, prop.worldY)).toEqual([]);
     const { x, y } = emptyTile(store);
-    expect(store.eraseEntitiesAt(x, y)).toBe(false);
+    expect(store.entities.eraseEntitiesAt(x, y)).toBe(false);
   });
 
   it('as contas do mundo: estatísticas e o mundo copiado', () => {
-    const stats = store.stats();
+    const stats = store.checks.stats();
     expect(stats.npcs).toBe(5);
     expect(stats.pickups).toBe(6);
     expect(stats.props).toBe(store.world.props.length);
@@ -161,13 +161,13 @@ describe('ponto inicial, falas e mundo', () => {
   it('o ponto inicial anda, desfaz, e precisa estar num tile sem colisão', () => {
     const start = { ...store.spawn };
     const { x, y } = emptyTile(store);
-    store.setSpawn(x, y);
+    store.meta.setSpawn(x, y);
     expect(store.spawn).toEqual({ worldX: x, worldY: y });
-    expect(store.startPointErrors()).toEqual([]);
+    expect(store.checks.startPointErrors()).toEqual([]);
     store.setCell('collision', x, y, true);
-    expect(store.startPointErrors()).toEqual(['O Ponto Inicial precisa estar em um tile sem colisao']);
-    store.undo();
-    store.undo();
+    expect(store.checks.startPointErrors()).toEqual(['O Ponto Inicial precisa estar em um tile sem colisao']);
+    store.history.undo();
+    store.history.undo();
     expect(store.spawn).toEqual(start);
   });
 
@@ -180,25 +180,25 @@ describe('ponto inicial, falas e mundo', () => {
   });
 
   it('a fala do NPC: a do mundo, ou a do código como modelo; trocar desfaz', () => {
-    const dialog = store.getDialog('wizard');
+    const dialog = store.meta.getDialog('wizard');
     expect(dialog.lines.length).toBeGreaterThan(0);
-    store.setDialog('wizard', { ...dialog, npcName: 'Outro' });
-    expect(store.getDialog('wizard').npcName).toBe('Outro');
-    store.undo();
-    expect(store.getDialog('wizard').npcName).toBe(dialog.npcName);
+    store.meta.setDialog('wizard', { ...dialog, npcName: 'Outro' });
+    expect(store.meta.getDialog('wizard').npcName).toBe('Outro');
+    store.history.undo();
+    expect(store.meta.getDialog('wizard').npcName).toBe(dialog.npcName);
   });
 
   it('renomear e mudar o tamanho (que apaga o histórico e tira o que caiu fora)', () => {
-    store.renameWorld('  Vale Novo ');
+    store.meta.renameWorld('  Vale Novo ');
     expect(store.world.meta.name).toBe('Vale Novo');
     const { x, y } = emptyTile(store);
     store.setCell('ground', x, y, 1);
-    store.resizeWorld(2, 2);
+    store.meta.resizeWorld(2, 2);
     expect(store.world.chunks).toHaveLength(4);
     expect(store.canUndo).toBe(false);
     expect(store.world.props.every((p) => p.worldX < 24 && p.worldY < 24)).toBe(true);
     expect(store.spawn.worldX).toBeLessThan(24);
-    store.resizeWorld(3, 2);
+    store.meta.resizeWorld(3, 2);
     expect(store.world.chunks).toHaveLength(6);
   });
 
@@ -209,7 +209,7 @@ describe('ponto inicial, falas e mundo', () => {
     const wizard = world.chunks.flatMap((c) => c.npcs).find((n) => n.type === 'wizard')!;
     const chunk = world.chunks.find((c) => c.npcs.length === 0)!;
     chunk.npcs.push({ type: 'wizard', worldX: chunk.cx * 12 + 1, worldY: chunk.cy * 12 + 1 });
-    const warnings = new EditorStore(world).validate();
+    const warnings = new EditorStore(world).checks.validate();
     expect(warnings.some((w) => w.includes('mais de uma coisa'))).toBe(true);
     expect(warnings.some((w) => w.includes('NPC repetido') && w.includes('wizard x2'))).toBe(true);
     expect(wizard).toBeDefined();

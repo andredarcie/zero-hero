@@ -118,7 +118,7 @@ export class ValleyWeather {
   /** `isWater`: o tile é água aberta (o pingo vira anel em vez de coroinha). */
   public constructor(private readonly world: World3D, private readonly isWater: (x: number, y: number) => boolean = () => false) {
     registerRainTextures();
-    this.world.setSeasonGrade(this.grade.r, this.grade.g, this.grade.b, this.grade.saturation);
+    this.world.look.setSeasonGrade(this.grade.r, this.grade.g, this.grade.b, this.grade.saturation);
   }
 
   public get weather(): Weather {
@@ -136,7 +136,7 @@ export class ValleyWeather {
     this.drops.length = 0;
     this.splashes.length = 0;
     this.rings.length = 0;
-    this.world.setSeasonGrade(1, 1, 1, 1);
+    this.world.look.setSeasonGrade(1, 1, 1, 1);
   }
 
   public update(delta: number, at: { x: number; y: number }): void {
@@ -163,7 +163,7 @@ export class ValleyWeather {
     this.grade.g += (want.g - this.grade.g) * k;
     this.grade.b += (want.b - this.grade.b) * k;
     this.grade.saturation += (want.saturation - this.grade.saturation) * k;
-    this.world.setSeasonGrade(
+    this.world.look.setSeasonGrade(
       this.grade.r * this.overcast, this.grade.g * this.overcast, this.grade.b * this.overcast, this.grade.saturation,
     );
   }
@@ -174,7 +174,7 @@ export class ValleyWeather {
   }
 
   private spawn(snowy: boolean, at: { x: number; y: number }, anywhere: boolean): Drop {
-    const bb = this.world.addBillboard(FX_DOT_TEXTURE, 0, { centered: true, fog: false, depthWrite: false, emissive: true });
+    const bb = this.world.objects.addBillboard(FX_DOT_TEXTURE, 0, { centered: true, fog: false, depthWrite: false, emissive: true });
     const drop: Drop = { bb, x: 0, y: 0, elev: 0, drift: 0, speed: 0, layer: 0 };
     this.recycle(drop, snowy, at, anywhere);
     return drop;
@@ -238,8 +238,8 @@ export class ValleyWeather {
     let fx = pool.find((f) => !f.busy);
     if (!fx && pool.length < (water ? RING_POOL : SPLASH_POOL)) {
       const bb = water
-        ? this.world.addBillboard('rain-ring', 0, { flat: true, flatY: WATER_SURFACE, depthWrite: false, alphaTest: 0.01, fog: false })
-        : this.world.addBillboard('rain-splash-0', 0, { depthWrite: false, alphaTest: 0.01, fog: false, emissive: true });
+        ? this.world.objects.addBillboard('rain-ring', 0, { flat: true, flatY: WATER_SURFACE, depthWrite: false, alphaTest: 0.01, fog: false })
+        : this.world.objects.addBillboard('rain-splash-0', 0, { depthWrite: false, alphaTest: 0.01, fog: false, emissive: true });
       fx = { bb, t: 0, busy: false };
       pool.push(fx);
     }

@@ -71,7 +71,7 @@ export const stepTile = (page, key, timeoutMs = 1500) => {
       Object.defineProperty(e, 'keyCode', { get: () => code });
       window.dispatchEvent(e);
     };
-    const at = () => s.heroVisualTile();
+    const at = () => s.verbs.heroVisualTile();
     const from = at();
     const target = { x: Math.round(from.x) + sx, y: Math.round(from.y) + sy };
     const t0 = performance.now();

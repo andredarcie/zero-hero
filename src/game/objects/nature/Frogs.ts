@@ -107,7 +107,7 @@ export class Frogs implements NatureSystem {
       this.spawnIn = 6 + this.rand() * 8;
       const spot = this.bankSpot(f, 3.5, 7);
       if (spot) {
-        const bb = world3d().addBillboard(SIT, 0, { groundShadow: { rx: 0.2, rz: 0.08, alpha: 0.3 } }).setDisplaySize(9 / 16, 6 / 16).setTint(PROP_TINT);
+        const bb = world3d().objects.addBillboard(SIT, 0, { groundShadow: { rx: 0.2, rz: 0.08, alpha: 0.3 } }).setDisplaySize(9 / 16, 6 / 16).setTint(PROP_TINT);
         // Na beira do tile, do lado da água, virado para ela.
         const x = spot.x + spot.wx * 0.32;
         const y = spot.y + spot.wy * 0.3;
@@ -169,7 +169,7 @@ export class Frogs implements NatureSystem {
         q.mode = 'gone';
         this.dives += 1;
         this.splash(q.x, q.y);
-        getSoundManager().playFrogPlop();
+        getSoundManager().nature.playFrogPlop();
       }
     }
     q.bb.setFlipX(!faceRight).setPosition(q.x, q.y).setElevation(q.z);
@@ -178,11 +178,11 @@ export class Frogs implements NatureSystem {
   /** O "plop": um anel que abre na água e 5 gotinhas. */
   private splash(x: number, y: number): void {
     const w3 = world3d();
-    this.rings.push({ bb: w3.addBillboard(RING, 0, { flat: true, flatY: SURFACE, depthWrite: false, alphaTest: 0.01 }).setPosition(x, y), t: 0 });
+    this.rings.push({ bb: w3.objects.addBillboard(RING, 0, { flat: true, flatY: SURFACE, depthWrite: false, alphaTest: 0.01 }).setPosition(x, y), t: 0 });
     for (let i = 0; i < 5; i += 1) {
       const a = (i / 5) * Math.PI * 2 + this.rand();
       this.drops.push({
-        bb: w3.addBillboard(DROP, 0, { centered: true, depthWrite: false, alphaTest: 0.01 }).setDisplaySize(1 / 16, 1 / 16),
+        bb: w3.objects.addBillboard(DROP, 0, { centered: true, depthWrite: false, alphaTest: 0.01 }).setDisplaySize(1 / 16, 1 / 16),
         x, y, z: SURFACE + 0.02, vx: Math.cos(a) * 0.5, vy: Math.sin(a) * 0.3, vz: 1.1 + this.rand() * 0.6,
       });
     }

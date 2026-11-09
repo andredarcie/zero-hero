@@ -56,7 +56,7 @@ export class CanopyDrips implements NatureSystem {
         const x = t.x + (this.rand() - 0.5) * t.crown * 1.6;
         const y = t.y + 0.05 + this.rand() * 0.15;
         const z = t.height * (0.45 + this.rand() * 0.25);
-        const bb = world3d().addBillboard(GLINT, 0, { centered: true, depthWrite: false, alphaTest: 0.01, depthLayer: 'overlay' }).setDisplaySize(3 / 16, 3 / 16);
+        const bb = world3d().objects.addBillboard(GLINT, 0, { centered: true, depthWrite: false, alphaTest: 0.01, depthLayer: 'overlay' }).setDisplaySize(3 / 16, 3 / 16);
         this.drips.push({ bb, x, y, z, v: 0, stage: 'hang', t: 0 });
       }
     }

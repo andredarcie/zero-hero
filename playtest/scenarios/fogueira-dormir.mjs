@@ -30,8 +30,8 @@ export default {
     const spot = await page.evaluate(() => {
       const s = window.__scene;
       const npcs = s.npcManager.getActiveWorldPositions();
-      const f = s.campfires.find((c) => c.worldX === 42 && c.worldY === 5);
-      if (!f || s.isSolidForEntities(42, 6)) return null;
+      const f = s.props.campfires.find((c) => c.worldX === 42 && c.worldY === 5);
+      if (!f || s.query.isSolidForEntities(42, 6)) return null;
       const owner = npcs.some((n) => Math.max(Math.abs(n.worldX - f.worldX), Math.abs(n.worldY - f.worldY)) === 1);
       window.__fire = f;
       return owner ? { x: f.worldX, y: f.worldY } : null;
@@ -47,10 +47,10 @@ export default {
       return {
         lit: f.isLit,
         full: f.isFullyLit,
-        keeper: s.fireKeepers.has(f),
-        verb: s.useVerbAt(f.worldX, f.worldY),
-        sleeping: s.rest.isSleeping === true,
-        resting: s.rest.isResting === true,
+        keeper: s.fire.fireKeepers.has(f),
+        verb: s.verbs.useVerbAt(f.worldX, f.worldY),
+        sleeping: s.camp.rest.isSleeping === true,
+        resting: s.camp.rest.isResting === true,
       };
     });
 
@@ -85,7 +85,7 @@ export default {
     const ready = await page.waitForFunction(() => {
       const s = window.__scene;
       const f = window.__fire;
-      return f.isFullyLit && !s.fireKeepers.has(f);
+      return f.isFullyLit && !s.fire.fireKeepers.has(f);
     }, null, { timeout: 30000, polling: 100 }).then(() => true, () => false);
     st = await look();
     assert('O fogo termina de pegar e o vizinho vai embora', ready, JSON.stringify(st));

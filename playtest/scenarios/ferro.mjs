@@ -27,12 +27,12 @@ export default {
     // ── 1. O palco: um veio de ferro com um tile pisável ao lado ────────────
     const spot = await evaluate(() => {
       const s = window.__scene;
-      for (const r of s.rocks) {
+      for (const r of s.props.rocks) {
         if (!r.ore) continue;
         for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
           const nx = r.worldX + dx;
           const ny = r.worldY + dy;
-          if (!s.isSolidForEntities(nx, ny) && !s.itemManager.hasItemAt(nx, ny)) {
+          if (!s.query.isSolidForEntities(nx, ny) && !s.itemManager.hasItemAt(nx, ny)) {
             return { rx: r.worldX, ry: r.worldY, hx: nx, hy: ny };
           }
         }
@@ -61,7 +61,7 @@ export default {
 
     const vein = () => evaluate(([rx, ry]) => {
       const s = window.__scene;
-      const r = s.rocks.find((rock) => rock.worldX === rx && rock.worldY === ry);
+      const r = s.props.rocks.find((rock) => rock.worldX === rx && rock.worldY === ry);
       return {
         blocking: r?.blocking ?? null,
         frame: r?.sprite?.frame ?? null,

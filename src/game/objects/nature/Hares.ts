@@ -177,7 +177,7 @@ export class Hares implements NatureSystem {
       this.mode = 'graze';
       this.timer = 1 + this.rand() * 2;
       this.facing = this.rand() < 0.5 ? -1 : 1;
-      this.bb = world3d().addBillboard(FRAMES.graze, 0, { groundShadow: { rx: 0.3, rz: 0.1, alpha: 0.3 } }).setDisplaySize(12 / 16, 9 / 16).setTint(PROP_TINT);
+      this.bb = world3d().objects.addBillboard(FRAMES.graze, 0, { groundShadow: { rx: 0.3, rz: 0.1, alpha: 0.3 } }).setDisplaySize(12 / 16, 9 / 16).setTint(PROP_TINT);
       return;
     }
   }

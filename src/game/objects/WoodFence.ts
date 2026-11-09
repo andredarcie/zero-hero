@@ -149,7 +149,7 @@ export class WoodFence {
       const gate = [n, e, s, w].filter(Boolean).length === 1;
       const v = Math.floor(hash(x, y, 47) * VARIANTS);
       this.bodies.push(
-        w3.addBillboard(uprightKey(e, w, gate, v), 0, { groundShadow: { rx: 0.16, rz: 0.08, alpha: 0.26 } })
+        w3.objects.addBillboard(uprightKey(e, w, gate, v), 0, { groundShadow: { rx: 0.16, rz: 0.08, alpha: 0.26 } })
           .setDisplaySize(1, (gate ? GATE_H : POST_H) / 16)
           .setPosition(x, y)
           .setTint(PROP_TINT),
@@ -158,7 +158,7 @@ export class WoodFence {
       if (s) {
         RAIL_TOPS.forEach((top, i) => {
           this.bodies.push(
-            w3.addBillboard(flatKey((v + i) % VARIANTS), 0, { flat: true })
+            w3.objects.addBillboard(flatKey((v + i) % VARIANTS), 0, { flat: true })
               .setDisplaySize(3 / 16, 1)
               .setPosition(x, y + 0.5)
               .setElevation(top)

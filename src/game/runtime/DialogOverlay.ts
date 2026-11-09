@@ -1,15 +1,16 @@
-import { getTextScale, isInstantText } from '@/game/runtime/accessibility';
-import { markLineRead, wasLineRead } from '@/game/runtime/readLines';
+import { getTextScale } from '@/game/runtime/accessibility';
+
 import type * as Engine from '@/game/engine';
 
 import { dialogBoxMetrics, isTallDialog } from '@/game/constants';
-import type { DialogLine, DialogScript, DialogVoice } from '@/game/dialogs/NpcDialogs';
-import { personaFor, planSpeech, type SpokenChar, type VoicePersona } from '@/game/dialogs/voicePersonas';
-import { getSoundManager } from '@/game/audio/SoundManager';
+import type { DialogScript, DialogVoice } from '@/game/dialogs/NpcDialogs';
+import { personaFor, type VoicePersona } from '@/game/dialogs/voicePersonas';
+
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import { TalkingBody } from '@/game/runtime/TalkingBody';
-import { t } from '@/game/i18n/i18n';
+
 import { BOOK_FONT, PARCHMENT_ON, WOOD_PANEL } from '@/game/runtime/uiStyle';
+import { DialogLineWriter, type DialogOption } from './DialogLineWriter';
 
 // A CAIXA DE FALA TRADICIONAL: uma barra no RODAPÉ, UMA mensagem por vez.
 //
@@ -32,21 +33,11 @@ import { BOOK_FONT, PARCHMENT_ON, WOOD_PANEL } from '@/game/runtime/uiStyle';
 // desistir) que pagava em MOEDA. A moeda foi removida do jogo por inteiro, e com ela o balcão —
 // um caixa que não paga nada não é uma escolha, é um menu que gasta o item do jogador.
 
-const CHAR_DELAY_MS = 28;
 const STYLE_ID = 'zh-dialog-style';
 const ROOT_ID = 'zh-dialog-root';
-/** Palavra em maiúsculas é o nome da coisa que importa (BALDE, TOCHA): ela entra com mais peso. */
-const EMPHASIS = /^\p{Lu}{3,}$/u;
 /** O retrato em ems por unidade de esticada: ele sobe enquanto estica. */
 const PORTRAIT_LIFT_EM = 0.9;
 const PORTRAIT_TILT_DEG = 170;
-
-type DialogOption = {
-  label: string;
-  /** data-opt — a identidade do botão para o playtest, nunca para lógica. */
-  testId: string;
-  pick: () => void;
-};
 
 const CSS = `
 #${ROOT_ID} { position: fixed; inset: 0; pointer-events: none; z-index: 50; }
@@ -218,45 +209,33 @@ export class DialogOverlay {
   private readonly dock: HTMLDivElement;
   private readonly panel: HTMLDivElement;
   private readonly scrim: HTMLDivElement;
-  private readonly portraitEl: HTMLImageElement;
-  private readonly nameEl: HTMLDivElement;
-  private readonly bodyEl: HTMLDivElement;
-  private readonly nextEl: HTMLDivElement;
-  private readonly choicesEl: HTMLDivElement;
+  public readonly portraitEl: HTMLImageElement;
+  public readonly nameEl: HTMLDivElement;
+  public readonly bodyEl: HTMLDivElement;
+  public readonly nextEl: HTMLDivElement;
+  public readonly choicesEl: HTMLDivElement;
   private readonly canvas: HTMLCanvasElement;
   private readonly portraitUrl: string;
 
-  private lineIndex = 0;
-  private charIndex = 0;
-  private isTyping = false;
+  public isTyping = false;
   private pointerArmed = false;
   private destroyed = false;
   private closing = false;
-  private typewriterEvent?: Engine.Time.TimerEvent;
-  private readonly persona: VoicePersona;
-  /** A fala em curso, letra a letra: quanto cada uma espera e qual solta sílaba. */
-  private speech: SpokenChar[] = [];
-  private chars: string[] = [];
-  /** A peça de cada letra da fala; espaço não tem peça. */
-  private letters: (HTMLSpanElement | null)[] = [];
-  private readonly talk: TalkingBody;
-
-  private currentIsNarrator = false;
-  /** O texto e o "e agora?" da linha em curso — a fala pode ser do roteiro OU injetada pelo caixa. */
-  private currentText = '';
-  private currentOnDone?: () => void;
+  public typewriterEvent?: Engine.Time.TimerEvent;
+  public readonly persona: VoicePersona;
+  public readonly talk: TalkingBody;
 
   /** O menu como dado, na ordem desenhada. Uma opção só = o ▼; duas ou mais = a janela. */
-  private options: DialogOption[] = [];
-  private optionEls: HTMLDivElement[] = [];
+  public options: DialogOption[] = [];
+  public optionEls: HTMLDivElement[] = [];
   /** Qual opção Enter/Espaço/Z escolhem — movida por ↑↓/WS, hover e toque. */
-  private selected = 0;
+  public selected = 0;
 
   public constructor(
-    private readonly scene: Engine.Scene,
-    private readonly script: DialogScript,
+    public readonly scene: Engine.Scene,
+    public readonly script: DialogScript,
     private readonly onClose: () => void,
-    private readonly voice?: DialogVoice,
+    public readonly voice?: DialogVoice,
     speaker?: Billboard3D,
   ) {
     this.canvas = scene.game.canvas;
@@ -324,7 +303,7 @@ export class DialogOverlay {
     // Fade in, then reveal the first line. The pointer advance is armed a beat later so the
     // keypress that opened the dialog can't instantly skip through it.
     requestAnimationFrame(() => { if (!this.destroyed) this.root.classList.add('zh-in'); });
-    this.scene.time.delayedCall(180, () => { if (!this.destroyed) this.showLine(0); });
+    this.scene.time.delayedCall(180, () => { if (!this.destroyed) this.writer.showLine(0); });
     this.scene.time.delayedCall(220, () => {
       if (this.destroyed) return;
       this.pointerArmed = true;
@@ -405,181 +384,14 @@ export class DialogOverlay {
 
   // ── O typewriter, agora com dono: cada fala diz o que acontece quando termina ──
 
-  /** Datilografa uma fala (do roteiro ou injetada) e chama `onDone` quando ela assenta. */
-  private typeLine(line: DialogLine, onDone: () => void): void {
-    this.typewriterEvent?.remove();
-    this.typewriterEvent = undefined;
-    this.clearOptions();
-
-    this.charIndex = 0;
-    this.isTyping = true;
-    this.currentIsNarrator = line.speaker === 'narrator';
-    this.currentText = line.text;
-    this.currentOnDone = onDone;
-    this.showLineFrame(line);
-
-    // A narração é a voz do jogo, e não de alguém: aparece no mesmo passo, em silêncio.
-    const speaks = Boolean(this.voice) && !this.currentIsNarrator;
-    this.speech = speaks ? planSpeech(line.text, this.persona, this.voice?.freq ?? 0) : [];
-    this.chars = [...line.text];
-    this.buildLetters();
-    if (speaks && this.persona.radio) getSoundManager().playRadioClick(false);
-    // Fala já lida (runtime/readLines) aparece inteira: quem volta para relembrar não espera a datilografia.
-    if (isInstantText() || wasLineRead(line.text)) { this.skipTypewriter(); return; }
-    this.typeNextChar(CHAR_DELAY_MS);
-  }
-
-  /** Uma letra de cada vez: a espera muda com quem fala e com a pontuação da letra anterior. */
-  private typeNextChar(delay: number): void {
-    this.typewriterEvent = this.scene.time.delayedCall(delay, () => {
-      this.charIndex++;
-      this.revealLetter(this.charIndex - 1);
-      const spoken = this.speech[this.charIndex - 1];
-      if (spoken?.syllable) {
-        getSoundManager().playDialogSyllable(spoken.syllable);
-        this.talk.kick(this.persona, spoken.syllable.accent);
-      }
-      if (this.charIndex >= this.chars.length) {
-        this.typewriterEvent = undefined;
-        this.settleLine();
-        return;
-      }
-      this.typeNextChar(spoken?.delayMs ?? CHAR_DELAY_MS);
-    });
-  }
-
-  /** Monta a fala inteira, invisível: o lugar de cada letra já é o definitivo. */
-  private buildLetters(): void {
-    this.letters = [];
-    const body = this.bodyEl;
-    body.textContent = '';
-    body.style.setProperty('--voice', this.script.npcColorHex);
-    body.dataset.letters = this.persona.letters;
-    const words = this.currentText.split(' ');
-    let index = 0;
-    words.forEach((word, position) => {
-      const box = document.createElement('span');
-      box.className = EMPHASIS.test(word.replace(/[^\p{L}]/gu, '')) ? 'zh-word zh-em' : 'zh-word';
-      for (const char of word) {
-        const letter = document.createElement('span');
-        letter.className = 'zh-ch';
-        letter.textContent = char;
-        letter.style.setProperty('--i', String(index));
-        box.appendChild(letter);
-        this.letters.push(letter);
-        index++;
-      }
-      body.appendChild(box);
-      if (position < words.length - 1) {
-        body.appendChild(document.createTextNode(' '));
-        this.letters.push(null);
-        index++;
-      }
-    });
-  }
-
-  private revealLetter(index: number): void {
-    const letter = this.letters[index];
-    if (!letter) return;
-    letter.classList.add('zh-on');
-    // A fala maior que a caixa rola para acompanhar a letra nova.
-    const body = this.bodyEl;
-    const bottom = letter.offsetTop + letter.offsetHeight;
-    if (bottom > body.scrollTop + body.clientHeight) body.scrollTop = bottom - body.clientHeight;
-  }
-
-  private settleLine(): void {
-    if (this.persona.radio && this.voice && !this.currentIsNarrator) getSoundManager().playRadioClick(true);
-    this.finishLine();
-  }
-
-  private showLine(index: number): void {
-    this.lineIndex = index;
-    this.script.onLine?.(index);
-    this.typeLine(this.script.lines[index], () => this.scriptLineDone());
-  }
-
-  /**
-   * Veste a caixa para a fala que vai entrar: o NPC traz retrato e nome em caps na cor dele; a
-   * narração é itálico apagado, sem atribuição e com a caixa inteira para si. UMA mensagem por
-   * vez — o que estava escrito some aqui.
-   */
-  private showLineFrame(line: DialogLine): void {
-    const isNarrator = line.speaker === 'narrator';
-    this.portraitEl.style.display = isNarrator ? 'none' : '';
-    this.nameEl.style.display = isNarrator ? 'none' : '';
-    this.bodyEl.className = isNarrator ? 'zh-dlg-body zh-narr' : 'zh-dlg-body';
-    this.bodyEl.scrollTop = 0;
-  }
-
-  private finishLine(): void {
-    this.isTyping = false;
-    markLineRead(this.currentText); // inteira na tela: da próxima vez ela aparece de uma vez
-    this.currentOnDone?.();
-  }
-
-  /** Uma fala do ROTEIRO terminou: continuar, ou fechar se era a última. */
-  private scriptLineDone(): void {
-    const isLast = this.lineIndex >= this.script.lines.length - 1;
-    const next = (): void => this.showLine(this.lineIndex + 1);
-    this.setOptions([{
-      label: isLast ? t('dialog.close') : t('dialog.continue'),
-      testId: isLast ? 'close' : 'continue',
-      pick: isLast ? (): void => this.close() : next,
-    }]);
-  }
-
   // ── O menu: o ▼ do caso comum, a janela de escolha do resto ────────────────
-
-  private clearOptions(): void {
-    this.options = [];
-    this.optionEls = [];
-    this.selected = 0;
-    this.choicesEl.innerHTML = '';
-    this.choicesEl.classList.remove('zh-on');
-    this.nextEl.style.display = 'none';
-  }
 
   /** Uma escolha de verdade está na tela — e aí tocar a CAIXA não escolhe nada por engano. */
   private get choicesOpen(): boolean {
     return this.optionEls.length > 0;
   }
 
-  private setOptions(list: DialogOption[]): void {
-    this.clearOptions();
-    // Saída única: nada de menu de um item só. O ▼ diz "tem mais" e o gesto é a caixa inteira.
-    if (list.length === 1) {
-      this.options = list;
-      this.nextEl.dataset.opt = list[0].testId;
-      this.nextEl.title = list[0].label;
-      this.nextEl.style.display = '';
-      return;
-    }
-    list.forEach((option, index) => this.appendOption(option, index + 1));
-    this.choicesEl.classList.add('zh-on');
-  }
-
-  private appendOption(option: DialogOption, number: number): void {
-    const index = this.options.length;
-    this.options.push(option);
-    const el = document.createElement('div');
-    el.className = 'zh-dlg-opt';
-    el.dataset.opt = option.testId;
-    const num = document.createElement('span');
-    num.className = 'zh-opt-num';
-    num.textContent = `${number}.`;
-    const label = document.createElement('span');
-    label.textContent = option.label;
-    el.append(num, label);
-    el.addEventListener('click', option.pick);
-    // O mouse passeando move a MESMA seleção das setas — um destaque, três entradas.
-    el.addEventListener('mouseenter', () => this.select(index));
-    this.optionEls.push(el);
-    this.choicesEl.appendChild(el);
-    this.select(this.selected);
-  }
-
-  private select(index: number): void {
+  public select(index: number): void {
     if (this.options.length === 0) return;
     this.selected = Math.min(this.options.length - 1, Math.max(0, index));
     this.optionEls.forEach((el, i) => el.classList.toggle('is-selected', i === this.selected));
@@ -588,20 +400,13 @@ export class DialogOverlay {
   private advance(): void {
     if (this.destroyed || this.closing) return;
     if (this.isTyping) {
-      this.skipTypewriter();
+      this.writer.skipTypewriter();
       return;
     }
     // Com uma escolha na tela, tocar a CAIXA não decide nada: escolher é apertar a escolha — o
     // mesmo motivo de o Enter confirmar só o que está escrito no rótulo destacado.
     if (this.choicesOpen) return;
     this.options[this.selected]?.pick();
-  }
-
-  private skipTypewriter(): void {
-    this.typewriterEvent?.remove();
-    this.typewriterEvent = undefined;
-    this.letters.forEach((letter) => letter?.classList.add('zh-on'));
-    this.settleLine();
   }
 
   private readonly handlePointer = (): void => {
@@ -616,7 +421,7 @@ export class DialogOverlay {
       event.preventDefault();
       // Tecla SEGURADA não metralha a conversa: cada linha e cada escolha custam um aperto.
       if (event.repeat) return;
-      if (this.isTyping) this.skipTypewriter();
+      if (this.isTyping) this.writer.skipTypewriter();
       else this.options[this.selected]?.pick();
     } else if ((event.code === 'ArrowUp' || event.code === 'KeyW'
       || event.code === 'ArrowDown' || event.code === 'KeyS') && !this.isTyping) {
@@ -634,8 +439,10 @@ export class DialogOverlay {
       this.close();
     }
   };
+  /** A linha sendo escrita e as opções dela. (ver DialogLineWriter) */
+  private readonly writer = new DialogLineWriter(this);
 
-  private close(): void {
+  public close(): void {
     if (this.closing) return;
     this.closing = true;
     this.typewriterEvent?.remove();

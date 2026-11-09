@@ -105,7 +105,7 @@ export class OldRoad {
     registerTexture3D(TEXTURE, tex);
     // Pintura no chão, por BAIXO das sombras: sem gravar profundidade e desenhada antes delas. Gravando, a
     // estrada brigava com a sombra do portão (0,02 contra 0,012) e piscava em listras no pé da escada.
-    this.body = world3d().addBillboard(TEXTURE, 0, { flat: true, flatY: ROAD_Y, depthWrite: false, renderOrder: 1 })
+    this.body = world3d().objects.addBillboard(TEXTURE, 0, { flat: true, flatY: ROAD_Y, depthWrite: false, renderOrder: 1 })
       .setPosition(gate.worldX, (from + to) / 2)
       .setDisplaySize(WIDTH_TILES, tiles);
   }

@@ -96,12 +96,14 @@ class RecordingWorld {
   public readonly bodies: RecordedBillboard[] = [];
   /** A cachoeira lê a luz do dia (o arco-íris dela): no editor, dia claro. */
   public readonly params = { daylight: 1 };
-
-  public addBillboard(key: string, frame = 0, opts: BillboardOpts = {}): RecordedBillboard {
-    const bb = new RecordedBillboard(key, frame, opts);
-    this.bodies.push(bb);
-    return bb;
-  }
+  /** Os objetos de mapa pedem o billboard pela faceta `objects`, como no World3D de verdade (ver WorldObjects). */
+  public readonly objects = {
+    addBillboard: (key: string, frame = 0, opts: BillboardOpts = {}): RecordedBillboard => {
+      const bb = new RecordedBillboard(key, frame, opts);
+      this.bodies.push(bb);
+      return bb;
+    },
+  };
 }
 
 /** Cria as peças do jogo sobre o mundo de mentira e devolve o que elas pediram. */

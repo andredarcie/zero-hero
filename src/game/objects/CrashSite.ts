@@ -174,7 +174,7 @@ export class CrashSite {
       this.tiles.add(`${x},${y}`);
       if (kind === 'crashCrater') {
         this.bodies.push(
-          w3.addBillboard(key(kind), 0, { flat: true, flatY: 0.011, depthWrite: false, alphaTest: 0.05, depthLayer: 'ground' })
+          w3.objects.addBillboard(key(kind), 0, { flat: true, flatY: 0.011, depthWrite: false, alphaTest: 0.05, depthLayer: 'ground' })
             .setDisplaySize(CRATER_W / 16, CRATER_H / 16)
             .setPosition(x, y + 0.1)
             .setTint(PROP_TINT),
@@ -183,7 +183,7 @@ export class CrashSite {
       }
       const { w, h } = SIZES[kind];
       this.bodies.push(
-        w3.addBillboard(key(kind), 0, { groundShadow: { rx: 0.42, rz: 0.15, alpha: 0.3 } })
+        w3.objects.addBillboard(key(kind), 0, { groundShadow: { rx: 0.42, rz: 0.15, alpha: 0.3 } })
           .setDisplaySize(w / 16, h / 16)
           .setPosition(x, y)
           .setFlipX(kind === 'shipThruster' && x > 37)
@@ -193,7 +193,7 @@ export class CrashSite {
         // A fumaça sai da boca do propulsor (o lado da boca depende do espelho).
         const mouthX = x + (x > 37 ? 0.3 : -0.3);
         for (let i = 0; i < PUFFS; i += 1) {
-          const bb = w3.addBillboard(PUFF, 0, { centered: true, depthWrite: false, alphaTest: 0.01, fog: false }).setAlpha(0);
+          const bb = w3.objects.addBillboard(PUFF, 0, { centered: true, depthWrite: false, alphaTest: 0.01, fog: false }).setAlpha(0);
           this.puffs.push({ bb, x: mouthX, y: y + 0.05, phase: (i / PUFFS) * PUFF_LIFE });
         }
       }

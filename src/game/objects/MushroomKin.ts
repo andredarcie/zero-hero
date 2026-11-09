@@ -63,7 +63,7 @@ export class MushroomKin {
           // Colados no cogumelo, às vezes vêm dois juntos: é assim que um tufo nasce.
           const count = ring === 1 && hash(x, y, 2) < 0.5 ? 2 : 1;
           for (let i = 0; i < count; i += 1) {
-            const kid = w3.addBillboard(fungusKinTextureKey(mother.kind), 0, {})
+            const kid = w3.objects.addBillboard(fungusKinTextureKey(mother.kind), 0, {})
               .setPosition(x + (hash(x, y, 3 + i) - 0.5) * 0.6, y + (hash(x, y, 5 + i) - 0.5) * 0.45)
               .setDisplaySize(SIZE, SIZE)
               .setTint(KIN_TINT)

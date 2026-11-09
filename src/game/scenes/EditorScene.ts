@@ -1,167 +1,43 @@
 import * as Engine from '@/game/engine';
 
-import {
-  ASSET_KEYS, CHUNK_COLUMNS, CHUNK_ROWS, HERO_FRAMES, KEY_FRAMES,
-  groundFrameAt, MOONFLOWER_FRAMES, NPC_VISUALS, SOLID_GROUND_FRAMES, SOLID_UPPER_FRAMES,
-  TOOLBOX_FRAMES,
-} from '@/game/constants';
 import { registerSceneDebugHooks } from '@/game/debug/debugHooks';
-import {
-  EditorDomUi, PANEL_WIDTH, hasDirectionFrames, isDirectionalProp, type UiState, type ViewMode,
-} from '@/game/editor/EditorDomUi';
-import { EditorStore, type PlacedEntity, type StoreChange } from '@/game/editor/EditorStore';
-import { registerFungiTextures, fungusTextureKey } from '@/game/fungi/fungi';
+import { EditorDomUi, PANEL_WIDTH, type UiState, type ViewMode } from '@/game/editor/EditorDomUi';
+import { EditorStore, type StoreChange } from '@/game/editor/EditorStore';
+import { registerFungiTextures } from '@/game/fungi/fungi';
 import { registerBucketTextures } from '@/game/render3d/bucketTexture';
-import { GameScene } from '@/game/scenes/GameScene';
-import type { PickupKind } from '@/game/world/ScreenContent';
-import type { PropDir, PropKind } from '@/game/world/worldSchema';
-import {
-  RELIEF_GROUND, RELIEF_HIGH, RELIEF_PEAK, STAIR_CODES_GROUND, STAIR_CODES_HIGH, stairBase, stairUp,
-} from '@/game/world/relief';
-import { sessionStore } from '@/game/platform/platform';
 
-/** O código do andar `level` (0 chão, 1 planalto, 2 cume). */
-const floorCode = (level: number): number => (level === 0 ? RELIEF_GROUND : level === 1 ? RELIEF_HIGH : RELIEF_PEAK);
-/** Em que andar um código fica (a escada, no andar de onde sai). */
-const codeFloor = (code: number): number => (stairUp(code) ? stairBase(code) : code === RELIEF_HIGH ? 1 : code === RELIEF_PEAK ? 2 : 0);
-import { setWorldData } from '@/game/world/WorldData';
-import {
-  loadWorld, saveWorld, worldFilePath,
-  type WorldFileId,
-} from '@/game/worldApi';
-import { biomeTintAt, decorFrameAt } from '@/game/world/biomes';
-import { ensureFixtureTexture, recordFixtures, type FixtureSprite } from '@/game/editor/EditorFixtures';
+import { loadWorld, type WorldFileId } from '@/game/worldApi';
+
+import { ensureFixtureTexture, type FixtureSprite } from '@/game/editor/EditorFixtures';
 import { bosqueIconKey, registerBosqueTextures } from '@/game/objects/BigTrees';
 import { fenceIconKey, registerFenceTextures } from '@/game/objects/WoodFence';
 import { YARD_KINDS, registerYardTextures, yardIconKey } from '@/game/objects/LumberYard';
 import { FORGE_KINDS, forgeIconKey, registerForgeTextures } from '@/game/objects/OldForge';
 import { CRASH_KINDS, crashIconKey, registerCrashTextures } from '@/game/objects/CrashSite';
-
-/**
- * O BIOMA NO EDITOR: o tile veste a mesma decoração e leva a mesma cor que no jogo (world/biomes.ts),
- * senão o editor mente sobre o mundo que se monta nele. O tint do motor 2D só escurece, então a cor é
- * normalizada pelo canal mais forte.
- */
-const biomeTint = (tile: Engine.Tilemaps.Tile | null, wx: number, wy: number): void => {
-  if (!tile) return;
-  const [r, g, b] = biomeTintAt(wx, wy);
-  const k = 1 / Math.max(r, g, b, 1);
-  tile.tint = (Math.round(r * k * 255) << 16) | (Math.round(g * k * 255) << 8) | Math.round(b * k * 255);
-};
+import { EditorBoard } from './editor/EditorBoard';
+import { EditorPieces } from './editor/EditorPieces';
+import { EditorView } from './editor/EditorView';
+import { EditorRelief } from './editor/EditorRelief';
+import { EditorTools, type CellCoord } from './editor/EditorTools';
+import { EditorPointer } from './editor/EditorPointer';
+import { EditorCameraRig } from './editor/EditorCameraRig';
+import { EditorSession } from './editor/EditorSession';
 
 // World-editor scene: the 2D side of the game. It renders the whole authored world
 // as one pannable/zoomable tilemap and translates pointer gestures into EditorStore
 // operations; every panel, palette and modal lives in EditorDomUi (plain DOM).
 
-const WORLD_TILE = 16; // px per tile in editor world-space (native tileset frame size)
-const COLLISION_GID = 1000; // synthetic tile id for the painted-collision overlay tileset
-const COLLISION_TEXTURE = 'editor-collision-tile';
-// Trees are solid at runtime even without painted collision (ChunkManager.isCellBlocked +
-// SOLID_UPPER_FRAMES). The editor shows that implicit collision in a distinct amber so
-// authors can see trees block "by default" — and know it isn't erasable painted data.
-const TREE_COLLISION_GID = 1001;
-const TREE_COLLISION_TEXTURE = 'editor-tree-collision-tile';
-const CAMERA_PAD = WORLD_TILE * 10;
-const MIN_ZOOM = 0.3;
-const MAX_ZOOM = 8;
 // Bump whenever UiState changes so old brushes cannot restore retired entity configuration.
 const UI_STATE_KEY = 'worldEditorUi.v9';
-// A ordem em que a escada procura o andar de cima ao ser posta: norte primeiro (sobe de frente para a
-// camera, como as do script da serra), depois leste, sul, oeste. Clicar de novo gira nesta ordem. As do
-// chão sobem ao planalto; as do planalto, ao cume.
-const STAIR_CODES = [...STAIR_CODES_GROUND, ...STAIR_CODES_HIGH] as const;
-
-type CellCoord = { x: number; y: number };
-
-const PICKUP_VISUAL: Record<PickupKind, { key: string; frame?: number }> = {
-  sword: { key: ASSET_KEYS.swordItem, frame: 0 },
-  key: { key: ASSET_KEYS.keyItem, frame: KEY_FRAMES.pickup },
-  axe: { key: ASSET_KEYS.axeIcon },
-  pickaxe: { key: ASSET_KEYS.pickaxeIcon },
-  scythe: { key: ASSET_KEYS.scytheIcon },
-  shovel: { key: ASSET_KEYS.shovelIcon },
-  wood: { key: ASSET_KEYS.woodIcon },
-  stone: { key: ASSET_KEYS.rock },
-  iron: { key: ASSET_KEYS.ironItem },
-  bucket: { key: 'bucket-icon' }, // generated at boot (registerBucketTextures, called in create)
-  // A CADEIA DO FERRO como item de chao. Faltavam as tres, e a falta NAO era inofensiva: um
-  // level que autora minerio no chao (as aulas do gato) derrubava o editor inteiro no boot —
-  // `entityVisual` lia `.key` de undefined, `renderEntities` morria, e a paleta nunca chegava
-  // a ser construida. O sintoma era 'clico no mapa e nada acontece'.
-  ore: { key: ASSET_KEYS.oreItem },
-  bloom: { key: ASSET_KEYS.bloomItem },
-  charcoal: { key: 'charcoal-item' },
-  puffball: { key: fungusTextureKey('puffball') },
-  inkCap: { key: fungusTextureKey('inkCap') },
-  morel: { key: fungusTextureKey('morel') },
-  chanterelle: { key: fungusTextureKey('chanterelle') },
-  flyAgaric: { key: fungusTextureKey('flyAgaric') },
-  porcini: { key: fungusTextureKey('porcini') },
-};
-
-const PROP_VISUAL: Record<PropKind, { key: string; frame?: number }> = {
-  campfire: { key: ASSET_KEYS.campfireFrame1 },
-  dryBush: { key: ASSET_KEYS.dryBush },
-  lockedDoor: { key: ASSET_KEYS.lookedDoorObject },
-  swingGate: { key: ASSET_KEYS.swingGateObject },
-  dryTree: { key: ASSET_KEYS.dryTree, frame: 0 },
-  dryShrub: { key: ASSET_KEYS.dryShrub },
-  rock: { key: ASSET_KEYS.rock },
-  ironRock: { key: ASSET_KEYS.ironRock, frame: 0 },
-  coalRock: { key: ASSET_KEYS.coalRock, frame: 0 },
-  tallGrass: { key: ASSET_KEYS.tallGrassUp, frame: 0 },
-  water: { key: ASSET_KEYS.water },
-  lava: { key: ASSET_KEYS.lavaFloor },
-  bridgeSpot: { key: ASSET_KEYS.bridge },
-  // A pose ABERTA: e a que diz o que a peca faz (uma ponte de petalas). Ver MOONFLOWER_FRAMES.
-  moonflower: { key: ASSET_KEYS.moonflower, frame: MOONFLOWER_FRAMES.lying[3] },
-  plantSpot: { key: ASSET_KEYS.plantHole, frame: 0 },
-  toolbox: { key: ASSET_KEYS.toolbox, frame: TOOLBOX_FRAMES.closed },
-  furnace: { key: ASSET_KEYS.furnace, frame: 0 },
-  altar: { key: ASSET_KEYS.altar, frame: 0 },
-  hearth: { key: ASSET_KEYS.campfireFrame1 },
-  gardenGate: { key: ASSET_KEYS.lookedDoorObject },
-  // O bosque: o ícone é o desenho da própria árvore (registerBosqueTextures, no create).
-  oakTree: { key: bosqueIconKey('oak') },
-  birchTree: { key: bosqueIconKey('birch') },
-  youngOak: { key: bosqueIconKey('sapling') },
-  fallenLog: { key: bosqueIconKey('log') },
-  woodFence: { key: fenceIconKey },
-  woodpile: { key: yardIconKey('woodpile') },
-  sawhorse: { key: yardIconKey('sawhorse') },
-  stump: { key: yardIconKey('stump') },
-  axeStump: { key: yardIconKey('axeStump') },
-  wheelbarrow: { key: yardIconKey('wheelbarrow') },
-  yardSign: { key: yardIconKey('yardSign') },
-  forgeRubble: { key: forgeIconKey('forgeRubble') },
-  forgeRack: { key: forgeIconKey('forgeRack') },
-  crashCrater: { key: crashIconKey('crashCrater') },
-  shipHull: { key: crashIconKey('shipHull') },
-  shipThruster: { key: crashIconKey('shipThruster') },
-  shipFin: { key: crashIconKey('shipFin') },
-};
-
-const CHIP_COLOR: Record<PlacedEntity['list'], number> = {
-  npcs: 0x4488ff,
-  pickups: 0x33cc77,
-  props: 0xffaa33,
-};
-
-// N, L, S, O — a mesma tabela do mundo (worldY cresce pra baixo), usada so pela marca de proa.
-const DIR_STEP: ReadonlyArray<readonly [number, number]> = [[0, -1], [1, 0], [0, 1], [-1, 0]];
-
-const SPAWN_COLOR = 0x00e0ff;
-
-type PersistedUi = { state: UiState; cam?: { centerX: number; centerY: number; zoom: number } };
 
 export class EditorScene extends Engine.Scene {
   public static readonly key = 'editor';
 
-  private store?: EditorStore;
-  private ui?: EditorDomUi;
+  public store?: EditorStore;
+  public ui?: EditorDomUi;
   private unlistenStore?: () => void;
 
-  private uiState: UiState = {
+  public uiState: UiState = {
     tool: 'brush',
     layer: 'ground',
     tile: 5,
@@ -184,28 +60,38 @@ export class EditorScene extends Engine.Scene {
     chunkY: 0,
   };
 
-  private map?: Engine.Tilemaps.Tilemap;
-  private groundLayer?: Engine.Tilemaps.TilemapLayer;
-  private upperLayer?: Engine.Tilemaps.TilemapLayer;
-  private collisionLayer?: Engine.Tilemaps.TilemapLayer;
-  private reliefGfx?: Engine.GameObjects.Graphics;
-  private gridGfx?: Engine.GameObjects.Graphics;
-  private chunkMaskGfx?: Engine.GameObjects.Graphics;
-  private hoverGfx?: Engine.GameObjects.Graphics;
-  private rectGfx?: Engine.GameObjects.Graphics;
-  private entityContainer?: Engine.GameObjects.Container;
+  public collisionLayer?: Engine.Tilemaps.TilemapLayer;
+  public reliefGfx?: Engine.GameObjects.Graphics;
+  public gridGfx?: Engine.GameObjects.Graphics;
+  public chunkMaskGfx?: Engine.GameObjects.Graphics;
+  public hoverGfx?: Engine.GameObjects.Graphics;
+  public rectGfx?: Engine.GameObjects.Graphics;
+  public entityContainer?: Engine.GameObjects.Container;
   /** As peças do jogo (EditorFixtures): gravadas uma vez — são fixas, o editor não as move. */
-  private fixtureContainer?: Engine.GameObjects.Container;
-  private fixtures?: FixtureSprite[];
+  public fixtureContainer?: Engine.GameObjects.Container;
+  public fixtures?: FixtureSprite[];
   private loadingText?: Engine.GameObjects.Text;
 
-  private hovered: CellCoord | null = null;
-  private activeStroke: { erase: boolean; last: CellCoord } | null = null;
-  private rectDrag: CellCoord | null = null;
-  private panning: { lastX: number; lastY: number } | null = null;
-  private lastCamSync = { scrollX: NaN, scrollY: NaN, zoom: NaN };
-  private reloadArmedUntil = 0;
-  private appliedView: { mode: ViewMode | null; chunkX: number; chunkY: number } = { mode: null, chunkX: -1, chunkY: -1 };
+  public activeStroke: { erase: boolean; last: CellCoord } | null = null;
+  public rectDrag: CellCoord | null = null;
+  public panning: { lastX: number; lastY: number } | null = null;
+  public appliedView: { mode: ViewMode | null; chunkX: number; chunkY: number } = { mode: null, chunkX: -1, chunkY: -1 };
+  /** O tabuleiro: o tilemap e a grade. (ver EditorBoard) */
+  public readonly board: EditorBoard = new EditorBoard(this);
+  /** As peças desenhadas. (ver EditorPieces) */
+  public readonly pieces: EditorPieces = new EditorPieces(this);
+  /** O modo mundo/chunk e as camadas visíveis. (ver EditorView) */
+  public readonly view: EditorView = new EditorView(this);
+  /** A serra: planalto e escadas. (ver EditorRelief) */
+  public readonly relief: EditorRelief = new EditorRelief(this);
+  /** O pincel, a borracha, o balde, o retângulo e o conta-gotas. (ver EditorTools) */
+  public readonly tools: EditorTools = new EditorTools(this);
+  /** O mouse no tabuleiro. (ver EditorPointer) */
+  public readonly pointer: EditorPointer = new EditorPointer(this);
+  /** A câmera do editor. (ver EditorCameraRig) */
+  public readonly cam: EditorCameraRig = new EditorCameraRig(this);
+  /** Salvar, recarregar e testar. (ver EditorSession) */
+  public readonly session: EditorSession = new EditorSession(this);
 
   public constructor() {
     super(EditorScene.key);
@@ -234,24 +120,24 @@ export class EditorScene extends Engine.Scene {
     // The engine never auto-calls shutdown(); wire it so the DOM shell and listeners are torn
     // down when the scene stops (see also GameScene, which does the same).
     this.events.once(Engine.Scenes.Events.SHUTDOWN, this.shutdown, this);
-    this.events.on(Engine.Scenes.Events.WAKE, this.handleWake, this);
-    this.events.on(Engine.Scenes.Events.SLEEP, this.handleSleep, this);
+    this.events.on(Engine.Scenes.Events.WAKE, this.session.handleWake, this.session);
+    this.events.on(Engine.Scenes.Events.SLEEP, this.session.handleSleep, this.session);
 
     this.cameras.main.setBackgroundColor('#0a1013');
     this.input.mouse?.disableContextMenu();
-    this.scale.on(Engine.Scale.Events.RESIZE, this.handleResize, this);
-    this.handleResize({ width: this.scale.width, height: this.scale.height });
+    this.scale.on(Engine.Scale.Events.RESIZE, this.cam.handleResize, this.cam);
+    this.cam.handleResize({ width: this.scale.width, height: this.scale.height });
 
-    this.registerPointerInput();
-    registerSceneDebugHooks(this, () => this.renderSnapshot());
+    this.pointer.registerPointerInput();
+    registerSceneDebugHooks(this, () => this.session.renderSnapshot());
 
     void this.bootstrap();
   }
 
   public shutdown(): void {
-    this.scale.off(Engine.Scale.Events.RESIZE, this.handleResize, this);
-    this.events.off(Engine.Scenes.Events.WAKE, this.handleWake, this);
-    this.events.off(Engine.Scenes.Events.SLEEP, this.handleSleep, this);
+    this.scale.off(Engine.Scale.Events.RESIZE, this.cam.handleResize, this.cam);
+    this.events.off(Engine.Scenes.Events.WAKE, this.session.handleWake, this.session);
+    this.events.off(Engine.Scenes.Events.SLEEP, this.session.handleSleep, this.session);
     this.unlistenStore?.();
     this.unlistenStore = undefined;
     this.ui?.destroy();
@@ -259,27 +145,25 @@ export class EditorScene extends Engine.Scene {
   }
 
   public update(): void {
-    this.syncCameraDerivedUi();
+    this.cam.syncCameraDerivedUi();
   }
 
   // ── Boot ────────────────────────────────────────────────────────────────
 
   // O QUE ESTA CENA ABRE: o mundo de verdade (`world.json`). É um arquivo só — o subterrâneo e os
   // levels isolados foram removidos do jogo, e as rotas deles junto.
-  private get worldFileId(): WorldFileId {
+  public get worldFileId(): WorldFileId {
     return 'world';
   }
 
-
-
   // Editor and each lab level persist UI/camera separately: their worlds have different sizes,
   // so a camera restored from another would strand the view off-map.
-  private get uiStateKey(): string {
+  public get uiStateKey(): string {
     return this.worldFileId === 'world' ? UI_STATE_KEY : `${UI_STATE_KEY}.${this.worldFileId}`;
   }
 
   private async bootstrap(): Promise<void> {
-    this.restoreUi();
+    this.session.restoreUi();
     this.loadingText?.destroy();
     this.loadingText = this.add.text(PANEL_WIDTH + 24, 24, 'Carregando mundo...', {
       color: '#f4a261', fontFamily: "'Press Start 2P', monospace", fontSize: '12px',
@@ -303,402 +187,59 @@ export class EditorScene extends Engine.Scene {
 
     this.ui = new EditorDomUi(this, store, this.uiState, {
       onStateChange: () => this.handleUiStateChange(),
-      onSave: () => void this.handleSave(),
-      onReload: () => this.handleReload(),
-      onPlaytest: () => this.startPlaytest(),
-      onUndo: () => { this.store?.undo(); },
-      onRedo: () => { this.store?.redo(); },
-      onFitView: () => this.fitView(),
-      onNavigate: (tileX, tileY) => this.navigateTo(tileX, tileY),
-      onWorldApply: (settings) => this.applyWorldSettings(settings),
-      onDialogApply: (kind, dialog) => { this.store?.setDialog(kind, dialog); },
+      onSave: () => void this.session.handleSave(),
+      onReload: () => this.session.handleReload(),
+      onPlaytest: () => this.session.startPlaytest(),
+      onUndo: () => { this.store?.history.undo(); },
+      onRedo: () => { this.store?.history.redo(); },
+      onFitView: () => this.cam.fitView(),
+      onNavigate: (tileX, tileY) => this.cam.navigateTo(tileX, tileY),
+      onWorldApply: (settings) => this.session.applyWorldSettings(settings),
+      onDialogApply: (kind, dialog) => { this.store?.meta.setDialog(kind, dialog); },
       worldFile: this.worldFileId,
     });
     this.ui.setLoading(false);
 
-    this.buildWorldObjects();
-    if (!this.restoreCamera()) this.fitView();
-    this.syncViewMode();
+    this.board.buildWorldObjects();
+    if (!this.cam.restoreCamera()) this.cam.fitView();
+    this.view.syncViewMode();
     this.ui.refreshHeader();
-    this.ui.requestMinimapRedraw();
+    this.ui.minimap.requestMinimapRedraw();
   }
 
   // ── World rendering ─────────────────────────────────────────────────────
 
-  private ensureCollisionTexture(): void {
-    if (!this.textures.exists(COLLISION_TEXTURE)) {
-      const gfx = this.add.graphics();
-      gfx.fillStyle(0xff4455, 0.32).fillRect(0, 0, WORLD_TILE, WORLD_TILE);
-      gfx.lineStyle(1, 0xff4455, 0.9).strokeRect(0.5, 0.5, WORLD_TILE - 1, WORLD_TILE - 1);
-      gfx.generateTexture(COLLISION_TEXTURE, WORLD_TILE, WORLD_TILE);
-      gfx.destroy();
-    }
-    if (!this.textures.exists(TREE_COLLISION_TEXTURE)) {
-      // Amber, lighter than the painted-collision red, so trees read as implicitly solid.
-      const gfx = this.add.graphics();
-      gfx.fillStyle(0xf4a261, 0.22).fillRect(0, 0, WORLD_TILE, WORLD_TILE);
-      gfx.lineStyle(1, 0xf4a261, 0.8).strokeRect(0.5, 0.5, WORLD_TILE - 1, WORLD_TILE - 1);
-      gfx.generateTexture(TREE_COLLISION_TEXTURE, WORLD_TILE, WORLD_TILE);
-      gfx.destroy();
-    }
-  }
-
-  // Which collision overlay a cell should show: painted collision wins (red); otherwise a
-  // tree upper-tile is implicitly solid (amber); otherwise nothing. Mirrors the runtime rule
-  // in ChunkManager.isCellBlocked so the editor's collision view matches what actually blocks.
-  private collisionOverlayGid(wx: number, wy: number): number | null {
-    const store = this.store;
-    if (!store) return null;
-    if (store.readCell('collision', wx, wy) === true) return COLLISION_GID;
-    const upper = store.readCell('upper', wx, wy) as number | null;
-    if (upper !== null && SOLID_UPPER_FRAMES.has(upper)) return TREE_COLLISION_GID;
-    // The sea blocks from the GROUND layer (SOLID_GROUND_FRAMES) — same implicit rule, so it
-    // gets the same amber. Without this the editor would draw a paintable ocean as walkable.
-    const ground = store.readCell('ground', wx, wy) as number | null;
-    if (ground !== null && SOLID_GROUND_FRAMES.has(ground)) return TREE_COLLISION_GID;
-    return null;
-  }
-
-  private buildWorldObjects(): void {
-    const store = this.store;
-    if (!store) return;
-
-    this.map?.destroy();
-    this.gridGfx?.destroy();
-    this.reliefGfx?.destroy();
-    this.chunkMaskGfx?.destroy();
-    this.hoverGfx?.destroy();
-    this.rectGfx?.destroy();
-    this.entityContainer?.destroy();
-    this.fixtureContainer?.destroy();
-    this.ensureCollisionTexture();
-
-    const tilesX = store.tilesX;
-    const tilesY = store.tilesY;
-
-    this.map = this.make.tilemap({ tileWidth: WORLD_TILE, tileHeight: WORLD_TILE, width: tilesX, height: tilesY });
-    const tiles = this.map.addTilesetImage('tiles', ASSET_KEYS.forestTileset, WORLD_TILE, WORLD_TILE, 0, 0, 0)!;
-    const collisionTiles = this.map.addTilesetImage('collision', COLLISION_TEXTURE, WORLD_TILE, WORLD_TILE, 0, 0, COLLISION_GID)!;
-    const treeCollisionTiles = this.map.addTilesetImage('treeCollision', TREE_COLLISION_TEXTURE, WORLD_TILE, WORLD_TILE, 0, 0, TREE_COLLISION_GID)!;
-
-    this.groundLayer = this.map.createBlankLayer('ground', tiles, 0, 0)!.setDepth(0);
-    this.upperLayer = this.map.createBlankLayer('upper', tiles, 0, 0)!.setDepth(1);
-    this.collisionLayer = this.map.createBlankLayer('collision', [collisionTiles, treeCollisionTiles], 0, 0)!.setDepth(2);
-
-    for (let wy = 0; wy < tilesY; wy += 1) {
-      for (let wx = 0; wx < tilesX; wx += 1) {
-        biomeTint(this.groundLayer.putTileAt(groundFrameAt(store.readCell('ground', wx, wy) as number, wx, wy), wx, wy, false), wx, wy);
-        const upper = store.readCell('upper', wx, wy) as number | null;
-        if (upper !== null) biomeTint(this.upperLayer.putTileAt(decorFrameAt(upper, wx, wy), wx, wy, false), wx, wy);
-        const collisionGid = this.collisionOverlayGid(wx, wy);
-        if (collisionGid !== null) this.collisionLayer.putTileAt(collisionGid, wx, wy, false);
-      }
-    }
-
-    this.reliefGfx = this.add.graphics().setDepth(1.5);
-    this.drawRelief();
-    this.gridGfx = this.add.graphics().setDepth(3);
-    this.drawGrid();
-    this.entityContainer = this.add.container(0, 0).setDepth(4);
-    this.renderEntities();
-    // As peças do jogo POR CIMA dos marcadores de entidade: no lago das carpas, embaixo deles, as vitórias-régias,
-    // as taboas e as carpas sumiam debaixo dos chips de água. Não são clicáveis; a tecla O as esconde para editar.
-    this.fixtureContainer = this.add.container(0, 0).setDepth(4.5);
-    this.renderFixtures();
-    this.chunkMaskGfx = this.add.graphics().setDepth(5);
-    this.hoverGfx = this.add.graphics().setDepth(6);
-    this.rectGfx = this.add.graphics().setDepth(7);
-
-    const worldW = tilesX * WORLD_TILE;
-    const worldH = tilesY * WORLD_TILE;
-    this.cameras.main.setBounds(-CAMERA_PAD, -CAMERA_PAD, worldW + CAMERA_PAD * 2, worldH + CAMERA_PAD * 2);
-    this.applyViewToggles();
-  }
-
-  private drawGrid(): void {
-    const store = this.store;
-    const gfx = this.gridGfx;
-    if (!store || !gfx) return;
-    const worldW = store.tilesX * WORLD_TILE;
-    const worldH = store.tilesY * WORLD_TILE;
-
-    gfx.clear();
-    gfx.lineStyle(1, 0xffffff, 0.07);
-    for (let x = 0; x <= store.tilesX; x += 1) gfx.lineBetween(x * WORLD_TILE, 0, x * WORLD_TILE, worldH);
-    for (let y = 0; y <= store.tilesY; y += 1) gfx.lineBetween(0, y * WORLD_TILE, worldW, y * WORLD_TILE);
-
-    // Chunk seams stand out so authors can see the streaming/screen boundaries.
-    gfx.lineStyle(1, 0xf4a261, 0.28);
-    for (let cx = 0; cx <= store.world.meta.worldChunksX; cx += 1) {
-      gfx.lineBetween(cx * CHUNK_COLUMNS * WORLD_TILE, 0, cx * CHUNK_COLUMNS * WORLD_TILE, worldH);
-    }
-    for (let cy = 0; cy <= store.world.meta.worldChunksY; cy += 1) {
-      gfx.lineBetween(0, cy * CHUNK_ROWS * WORLD_TILE, worldW, cy * CHUNK_ROWS * WORLD_TILE);
-    }
-  }
-
-  private refreshCell(wx: number, wy: number): void {
-    const store = this.store;
-    if (!store || !this.groundLayer || !this.upperLayer || !this.collisionLayer) return;
-    if (!store.isInside(wx, wy)) return;
-
-    biomeTint(this.groundLayer.putTileAt(groundFrameAt(store.readCell('ground', wx, wy) as number, wx, wy), wx, wy, false), wx, wy);
-    const upper = store.readCell('upper', wx, wy) as number | null;
-    if (upper === null) this.upperLayer.removeTileAt(wx, wy, true, false);
-    else biomeTint(this.upperLayer.putTileAt(decorFrameAt(upper, wx, wy), wx, wy, false), wx, wy);
-    const collisionGid = this.collisionOverlayGid(wx, wy);
-    if (collisionGid !== null) this.collisionLayer.putTileAt(collisionGid, wx, wy, false);
-    else this.collisionLayer.removeTileAt(wx, wy, true, false);
-  }
-
-  private entityVisual(entity: PlacedEntity): { key: string; frame?: number } {
-    if (entity.list === 'npcs') return NPC_VISUALS[entity.type];
-    // O `??` e uma REDE, nao preguica: um kind de item que o editor nao conhece nao pode
-    // derrubar o tabuleiro inteiro. Sem ele, um unico item desconhecido num canto do mundo
-    // apagava a paleta e o editor virava uma tela que nao responde a clique nenhum.
-    if (entity.list === 'pickups') return PICKUP_VISUAL[entity.type] ?? { key: ASSET_KEYS.rock };
-    // Um prop com direcao desenha o frame da SUA direcao — e assim que se olha um mapa cheio de
-    // bracos e se ve, sem clicar em nada, pra que lado cada um empurra. So vale para quem tem a
-    // arte dividida por direcao: a caixa de ferramentas gira, mas seus frames sao poses da tampa
-    // (ela recebe a marca de proa em renderEntities).
-    if (entity.dir !== undefined && hasDirectionFrames(entity.type)) {
-      return { key: PROP_VISUAL[entity.type].key, frame: entity.dir };
-    }
-    return PROP_VISUAL[entity.type];
-  }
-
-  /**
-   * AS PEÇAS DO JOGO, desenhadas como o jogo as monta (EditorFixtures): o que está deitado no chão (a clareira do
-   * acampamento, a estrada, o riacho, a espuma, as vitórias-régias) fica embaixo; o que está em pé (árvores, a queda,
-   * o barril, as casas) vai por cima, com o PÉ no tile dele e os de mais ao sul na frente — a mesma ordem do jogo.
-   */
-  private renderFixtures(): void {
-    const container = this.fixtureContainer;
-    if (!container) return;
-    container.removeAll(true);
-    if (!this.fixtures) {
-      // Algumas peças leem o mapa (a estrada velha procura os portões do jardim): o mesmo retrato que o Testar usa.
-      if (this.store) setWorldData(this.store.snapshotWorld());
-      this.fixtures = recordFixtures(this);
-    }
-    const T = WORLD_TILE;
-    const ordered = [...this.fixtures].sort((a, b) => Number(b.flat) - Number(a.flat) || a.y - b.y);
-    for (const f of ordered) {
-      if (!ensureFixtureTexture(this, f.key)) continue;
-      const sprite = this.add.image((f.x + 0.5) * T, (f.y + 0.5) * T - f.elevation * T, f.key)
-        .setDisplaySize(f.w * T, f.h * T)
-        .setOrigin(0.5, f.flat || f.centered ? 0.5 : 1)
-        .setFlipX(f.flipX)
-        .setAngle(f.angle)
-        .setAlpha(f.alpha);
-      if (f.additive) sprite.setBlendMode(Engine.BlendModes.ADD);
-      // A cor do bioma que o jogo põe nas árvores, na mesma conta dos tiles do editor (biomeTint).
-      if (f.color) {
-        const [r, g, b] = f.color;
-        const k = 1 / Math.max(r, g, b, 1);
-        sprite.setTint((Math.round(r * k * 255) << 16) | (Math.round(g * k * 255) << 8) | Math.round(b * k * 255));
-      }
-      container.add(sprite);
-    }
-  }
-
-  private renderEntities(): void {
-    const store = this.store;
-    const container = this.entityContainer;
-    if (!store || !container) return;
-    container.removeAll(true);
-
-    const place = (
-      worldX: number,
-      worldY: number,
-      color: number,
-      visual: { key: string; frame?: number },
-      dir?: PropDir,
-    ): void => {
-      const cx = (worldX + 0.5) * WORLD_TILE;
-      const cy = (worldY + 0.5) * WORLD_TILE;
-      const chip = this.add.rectangle(cx, cy, WORLD_TILE * 0.86, WORLD_TILE * 0.86, color, 0.32).setStrokeStyle(1, color, 1);
-      const sprite = this.add.sprite(cx, cy, visual.key, visual.frame ?? 0).setDisplaySize(WORLD_TILE * 0.74, WORLD_TILE * 0.74);
-      container.add([chip, sprite]);
-      // A marca de PROA: um pino colado na borda do chip do lado pra onde a peca aponta. Existe
-      // so pra quem gira sem ter arte por direcao — sem ela, o autor nao ve a frente da peca.
-      if (dir === undefined) return;
-      const [dx, dy] = DIR_STEP[dir];
-      container.add(this.add.rectangle(
-        cx + dx * WORLD_TILE * 0.4,
-        cy + dy * WORLD_TILE * 0.4,
-        WORLD_TILE * (dx === 0 ? 0.44 : 0.16),
-        WORLD_TILE * (dy === 0 ? 0.44 : 0.16),
-        color,
-        1,
-      ));
-    };
-
-    store.allEntities().forEach((entity) => place(
-      entity.worldX,
-      entity.worldY,
-      CHIP_COLOR[entity.list],
-      this.entityVisual(entity),
-      entity.list === 'props' && isDirectionalProp(entity.type) && !hasDirectionFrames(entity.type)
-        ? entity.dir ?? 1
-        : undefined,
-    ));
-    const spawn = store.spawn;
-    place(spawn.worldX, spawn.worldY, SPAWN_COLOR, { key: ASSET_KEYS.hero, frame: HERO_FRAMES.idleDown });
-    const startLabel = this.add.text(
-      (spawn.worldX + 0.5) * WORLD_TILE,
-      spawn.worldY * WORLD_TILE - 1,
-      'INICIO',
-      {
-        fontFamily: '"Press Start 2P", monospace',
-        fontSize: '4px',
-        color: '#66d9ef',
-        stroke: '#061014',
-        strokeThickness: 2,
-      },
-    ).setOrigin(0.5, 1);
-    container.add(startLabel);
-  }
-
-  private applyViewToggles(): void {
-    this.gridGfx?.setVisible(this.uiState.showGrid);
-    this.collisionLayer?.setVisible(this.uiState.showCollisions);
-    this.reliefGfx?.setVisible(this.uiState.showRelief);
-    this.entityContainer?.setVisible(this.uiState.showEntities);
-    this.fixtureContainer?.setVisible(this.uiState.showFixtures);
-  }
-
   // ── View mode (mundo x chunk) ───────────────────────────────────────────
-
-  private chunkRect(): { x: number; y: number; w: number; h: number } {
-    return {
-      x: this.uiState.chunkX * CHUNK_COLUMNS * WORLD_TILE,
-      y: this.uiState.chunkY * CHUNK_ROWS * WORLD_TILE,
-      w: CHUNK_COLUMNS * WORLD_TILE,
-      h: CHUNK_ROWS * WORLD_TILE,
-    };
-  }
-
-  /** Editable area in tile coords, or null when the whole world is editable (world view). */
-  private editableBounds(): { x0: number; y0: number; x1: number; y1: number } | null {
-    if (this.uiState.viewMode !== 'chunk') return null;
-    return {
-      x0: this.uiState.chunkX * CHUNK_COLUMNS,
-      y0: this.uiState.chunkY * CHUNK_ROWS,
-      x1: (this.uiState.chunkX + 1) * CHUNK_COLUMNS - 1,
-      y1: (this.uiState.chunkY + 1) * CHUNK_ROWS - 1,
-    };
-  }
-
-  private isEditable(x: number, y: number): boolean {
-    const bounds = this.editableBounds();
-    return !bounds || (x >= bounds.x0 && x <= bounds.x1 && y >= bounds.y0 && y <= bounds.y1);
-  }
-
-  private clampChunkSelection(): void {
-    const meta = this.store?.world.meta;
-    if (!meta) return;
-    this.uiState.chunkX = Math.max(0, Math.min(meta.worldChunksX - 1, this.uiState.chunkX));
-    this.uiState.chunkY = Math.max(0, Math.min(meta.worldChunksY - 1, this.uiState.chunkY));
-  }
-
-  /** Applies viewMode/chunk selection when they changed since the last application. */
-  private syncViewMode(): void {
-    const state = this.uiState;
-    // Entering chunk view from world view focuses the chunk under the camera centre.
-    if (state.viewMode === 'chunk' && this.appliedView.mode === 'world') {
-      const cam = this.cameras.main;
-      state.chunkX = Math.floor(cam.midPoint.x / WORLD_TILE / CHUNK_COLUMNS);
-      state.chunkY = Math.floor(cam.midPoint.y / WORLD_TILE / CHUNK_ROWS);
-    }
-    this.clampChunkSelection();
-    const changed = state.viewMode !== this.appliedView.mode
-      || state.chunkX !== this.appliedView.chunkX
-      || state.chunkY !== this.appliedView.chunkY;
-    if (!changed) return;
-    this.appliedView = { mode: state.viewMode, chunkX: state.chunkX, chunkY: state.chunkY };
-    this.applyViewMode();
-    this.ui?.syncFromState();
-  }
-
-  private applyViewMode(): void {
-    const store = this.store;
-    if (!store) return;
-    const cam = this.cameras.main;
-
-    if (this.uiState.viewMode === 'chunk') {
-      const rect = this.chunkRect();
-      const pad = WORLD_TILE * 1.5;
-      cam.setBounds(rect.x - pad, rect.y - pad, rect.w + pad * 2, rect.h + pad * 2);
-      this.fitChunk();
-      this.drawChunkMask();
-    } else {
-      const worldW = store.tilesX * WORLD_TILE;
-      const worldH = store.tilesY * WORLD_TILE;
-      cam.setBounds(-CAMERA_PAD, -CAMERA_PAD, worldW + CAMERA_PAD * 2, worldH + CAMERA_PAD * 2);
-      this.chunkMaskGfx?.clear();
-    }
-    this.persistUi();
-  }
-
-  private fitChunk(): void {
-    const cam = this.cameras.main;
-    const rect = this.chunkRect();
-    const zoom = Engine.Math.Clamp(Math.min(cam.width / rect.w, cam.height / rect.h) * 0.94, MIN_ZOOM, MAX_ZOOM);
-    cam.setZoom(zoom);
-    cam.centerOn(rect.x + rect.w / 2, rect.y + rect.h / 2);
-  }
-
-  /** Dims everything outside the selected chunk so the focused screen pops out. */
-  private drawChunkMask(): void {
-    const store = this.store;
-    const gfx = this.chunkMaskGfx;
-    if (!store || !gfx) return;
-    const rect = this.chunkRect();
-    const minX = -CAMERA_PAD * 2;
-    const minY = -CAMERA_PAD * 2;
-    const maxX = store.tilesX * WORLD_TILE + CAMERA_PAD * 2;
-    const maxY = store.tilesY * WORLD_TILE + CAMERA_PAD * 2;
-
-    gfx.clear();
-    gfx.fillStyle(0x05090b, 0.78);
-    gfx.fillRect(minX, minY, rect.x - minX, maxY - minY);
-    gfx.fillRect(rect.x + rect.w, minY, maxX - (rect.x + rect.w), maxY - minY);
-    gfx.fillRect(rect.x, minY, rect.w, rect.y - minY);
-    gfx.fillRect(rect.x, rect.y + rect.h, rect.w, maxY - (rect.y + rect.h));
-    gfx.lineStyle(2, 0xf4a261, 0.9);
-    gfx.strokeRect(rect.x, rect.y, rect.w, rect.h);
-  }
 
   // ── Store events ────────────────────────────────────────────────────────
 
   private handleStoreChange(change: StoreChange): void {
     if (change.structure) {
-      this.buildWorldObjects();
+      this.board.buildWorldObjects();
       this.appliedView = { mode: null, chunkX: -1, chunkY: -1 };
-      this.syncViewMode();
-      if (this.uiState.viewMode === 'world') this.fitView();
+      this.view.syncViewMode();
+      if (this.uiState.viewMode === 'world') this.cam.fitView();
     } else if (change.cells) {
       const seen = new Set<string>();
       change.cells.forEach((cell) => {
         const key = `${cell.wx},${cell.wy}`;
         if (seen.has(key)) return;
         seen.add(key);
-        this.refreshCell(cell.wx, cell.wy);
+        this.board.refreshCell(cell.wx, cell.wy);
       });
-      this.drawRelief();
+      this.relief.drawRelief();
     }
     if (!change.structure && (change.entities || change.spawn)) {
-      this.renderEntities();
+      this.pieces.renderEntities();
       // Um prop do bosque posto ou apagado muda as peças do jogo: grava de novo (o mapa mudou).
       if (change.entities) {
         this.fixtures = undefined;
-        this.renderFixtures();
+        this.pieces.renderFixtures();
       }
     }
-    if (change.cells || change.entities || change.spawn || change.structure) this.ui?.requestMinimapRedraw();
+    if (change.cells || change.entities || change.spawn || change.structure) this.ui?.minimap.requestMinimapRedraw();
     this.ui?.refreshHeader();
-    this.refreshHoverStatus();
+    this.pointer.refreshHoverStatus();
   }
 
   private handleUiStateChange(): void {
@@ -710,677 +251,24 @@ export class EditorScene extends Engine.Scene {
       this.uiState.showRelief = true;
       this.ui?.syncFromState();
     }
-    this.syncViewMode();
-    this.applyViewToggles();
-    this.drawHover();
-    this.persistUi();
+    this.view.syncViewMode();
+    this.view.applyViewToggles();
+    this.pointer.drawHover();
+    this.session.persistUi();
   }
 
   // ── Pointer input ───────────────────────────────────────────────────────
 
-  private registerPointerInput(): void {
-    this.input.on(Engine.Input.Events.POINTER_DOWN, (pointer: Engine.Input.Pointer) => this.onPointerDown(pointer));
-    this.input.on(Engine.Input.Events.POINTER_MOVE, (pointer: Engine.Input.Pointer) => this.onPointerMove(pointer));
-    this.input.on(Engine.Input.Events.POINTER_UP, (pointer: Engine.Input.Pointer) => this.onPointerUp(pointer));
-    this.input.on(Engine.Input.Events.POINTER_UP_OUTSIDE, (pointer: Engine.Input.Pointer) => this.onPointerUp(pointer));
-    this.input.on(Engine.Input.Events.GAME_OUT, () => {
-      this.hovered = null;
-      this.drawHover();
-      this.ui?.setStatus(null);
-    });
-    this.input.on(
-      Engine.Input.Events.POINTER_WHEEL,
-      (pointer: Engine.Input.Pointer, _over: unknown, _dx: number, dy: number) => this.onWheel(pointer, dy),
-    );
-  }
-
-  private screenToCell(screenX: number, screenY: number): CellCoord {
-    const cam = this.cameras.main;
-    const worldX = cam.midPoint.x + (screenX - cam.x - cam.width / 2) / cam.zoom;
-    const worldY = cam.midPoint.y + (screenY - cam.y - cam.height / 2) / cam.zoom;
-    return { x: Math.floor(worldX / WORLD_TILE), y: Math.floor(worldY / WORLD_TILE) };
-  }
-
-  private onPointerDown(pointer: Engine.Input.Pointer): void {
-    if (!this.store || pointer.x < PANEL_WIDTH) return;
-
-    if (pointer.middleButtonDown() || (this.ui?.spaceHeld && pointer.leftButtonDown())) {
-      this.panning = { lastX: pointer.x, lastY: pointer.y };
-      return;
-    }
-
-    const cell = this.screenToCell(pointer.x, pointer.y);
-
-    if (pointer.rightButtonDown()) {
-      this.store.beginStroke();
-      this.activeStroke = { erase: true, last: cell };
-      this.applyEraseAt(cell.x, cell.y);
-      return;
-    }
-    if (!pointer.leftButtonDown()) return;
-
-    const tool = this.uiState.tool;
-    if (tool === 'picker') {
-      this.pickTileAt(cell.x, cell.y);
-      return;
-    }
-    if (tool === 'fill') {
-      this.fillAt(cell.x, cell.y);
-      return;
-    }
-    if (tool === 'rect') {
-      this.rectDrag = cell;
-      this.drawRectPreview(cell);
-      return;
-    }
-
-    this.store.beginStroke();
-    this.activeStroke = { erase: false, last: cell };
-    this.applyToolAt(cell.x, cell.y);
-  }
-
-  private onPointerMove(pointer: Engine.Input.Pointer): void {
-    if (this.panning) {
-      const cam = this.cameras.main;
-      cam.scrollX -= (pointer.x - this.panning.lastX) / cam.zoom;
-      cam.scrollY -= (pointer.y - this.panning.lastY) / cam.zoom;
-      this.panning = { lastX: pointer.x, lastY: pointer.y };
-      return;
-    }
-
-    const cell = this.screenToCell(pointer.x, pointer.y);
-    if (!this.hovered || this.hovered.x !== cell.x || this.hovered.y !== cell.y) {
-      this.hovered = cell;
-      this.drawHover();
-      this.refreshHoverStatus();
-    }
-
-    if (this.activeStroke) {
-      const last = this.activeStroke.last;
-      if (last.x !== cell.x || last.y !== cell.y) {
-        const erase = this.activeStroke.erase;
-        // A escada e posta um clique de cada vez: arrastar faria uma fileira de escadas.
-        const oneShot = !erase && this.uiState.tool === 'relief' && this.uiState.reliefMode === 'stair';
-        if (!oneShot) this.lineCells(last.x, last.y, cell.x, cell.y, (x, y) => {
-          if (erase) this.applyEraseAt(x, y);
-          else this.applyToolAt(x, y);
-        });
-        this.activeStroke.last = cell;
-      }
-    }
-
-    if (this.rectDrag) this.drawRectPreview(cell);
-  }
-
-  private onPointerUp(pointer: Engine.Input.Pointer): void {
-    if (this.panning) {
-      this.panning = null;
-      this.persistUi();
-      return;
-    }
-    if (this.activeStroke) {
-      this.store?.commitStroke();
-      this.activeStroke = null;
-      return;
-    }
-    if (this.rectDrag) {
-      const end = this.screenToCell(pointer.x, pointer.y);
-      this.applyRect(this.rectDrag, end);
-      this.rectDrag = null;
-      this.rectGfx?.clear();
-    }
-  }
-
-  private onWheel(pointer: Engine.Input.Pointer, dy: number): void {
-    if (pointer.x < PANEL_WIDTH) return;
-    const cam = this.cameras.main;
-    const factor = dy > 0 ? 1 / 1.2 : 1.2;
-    const zoom = Engine.Math.Clamp(cam.zoom * factor, MIN_ZOOM, MAX_ZOOM);
-    if (zoom === cam.zoom) return;
-
-    // Zoom towards the cursor: keep the world point under the pointer fixed on screen.
-    const viewX = pointer.x - cam.x - cam.width / 2;
-    const viewY = pointer.y - cam.y - cam.height / 2;
-    const worldX = cam.midPoint.x + viewX / cam.zoom;
-    const worldY = cam.midPoint.y + viewY / cam.zoom;
-    cam.setZoom(zoom);
-    cam.centerOn(worldX - viewX / zoom, worldY - viewY / zoom);
-
-    this.drawHover();
-    this.refreshHoverStatus();
-    this.persistUi();
-  }
-
   // ── Tool application ────────────────────────────────────────────────────
-
-  private forEachBrushCell(x: number, y: number, fn: (cx: number, cy: number) => void): void {
-    const size = this.uiState.brushSize;
-    const from = size === 3 ? -1 : 0;
-    const to = size === 1 ? 0 : 1;
-    for (let dy = from; dy <= to; dy += 1) {
-      for (let dx = from; dx <= to; dx += 1) fn(x + dx, y + dy);
-    }
-  }
-
-  private applyToolAt(x: number, y: number): void {
-    const tool = this.uiState.tool;
-    if (tool === 'brush') this.forEachBrushCell(x, y, (cx, cy) => this.paintTileCell(cx, cy));
-    else if (tool === 'eraser') this.forEachBrushCell(x, y, (cx, cy) => this.eraseCell(cx, cy));
-    else if (tool === 'collision') {
-      this.forEachBrushCell(x, y, (cx, cy) => {
-        if (this.isEditable(cx, cy)) this.store?.setCell('collision', cx, cy, true);
-      });
-    } else if (tool === 'relief') {
-      if (this.uiState.reliefMode === 'stair') this.placeStair(x, y);
-      else {
-        const code = this.uiState.reliefMode === 'peak' ? RELIEF_PEAK : RELIEF_HIGH;
-        this.forEachBrushCell(x, y, (cx, cy) => {
-          if (this.isEditable(cx, cy)) this.store?.setCell('relief', cx, cy, code);
-        });
-      }
-    } else if (tool === 'entity') this.placeSelectedEntity(x, y);
-    else if (tool === 'spawn' && this.isEditable(x, y)) this.store?.setSpawn(x, y);
-  }
-
-  private applyEraseAt(x: number, y: number): void {
-    if (this.uiState.tool === 'collision') {
-      this.forEachBrushCell(x, y, (cx, cy) => {
-        if (this.isEditable(cx, cy)) this.store?.setCell('collision', cx, cy, false);
-      });
-      return;
-    }
-    if (this.uiState.tool === 'relief') {
-      this.forEachBrushCell(x, y, (cx, cy) => this.clearRelief(cx, cy));
-      return;
-    }
-    this.forEachBrushCell(x, y, (cx, cy) => this.eraseCell(cx, cy));
-  }
 
   // ── Serra ───────────────────────────────────────────────────────────────
 
-  private reliefAt(x: number, y: number): number {
-    return (this.store?.readCell('relief', x, y) as number | undefined) ?? RELIEF_GROUND;
-  }
-
-  /** A escada em (x, y) leva ao andar de cima e sai no de baixo? (a mesma regra de canStep em relief.ts) */
-  private stairWorks(x: number, y: number, code: number): boolean {
-    const up = stairUp(code);
-    if (!up) return false;
-    const base = stairBase(code);
-    return this.reliefAt(x + up[0], y + up[1]) === floorCode(base + 1) && this.reliefAt(x - up[0], y - up[1]) === floorCode(base);
-  }
-
-  /**
-   * Poe (ou GIRA) uma escada. Ela so vale encostada num planalto e com chao do outro lado, entao a
-   * direcao nao se escolhe na mao: o editor acha as que funcionam e clicar de novo passa para a
-   * proxima. Uma escada que nao leva a lugar nenhum nunca e criada aqui.
-   */
-  private placeStair(x: number, y: number): void {
-    const store = this.store;
-    if (!store || !this.isEditable(x, y)) return;
-    const current = this.reliefAt(x, y);
-    if (current === RELIEF_PEAK) {
-      this.ui?.toast('A escada vai no chao (ou no planalto), encostada no andar de cima');
-      return;
-    }
-    // O andar do tile escolhe que escada cabe: do chão ao planalto, ou do planalto ao cume.
-    const floor = codeFloor(current);
-    // A escada e passagem: uma peca ou arvore em cima dela a tranca.
-    const upper = store.readCell('upper', x, y) as number | null;
-    if (store.entitiesAt(x, y).length > 0 || (upper !== null && SOLID_UPPER_FRAMES.has(upper))) {
-      this.ui?.toast('A escada precisa de um tile livre');
-      return;
-    }
-    const options = STAIR_CODES.filter((code) => stairBase(code) === floor && this.stairWorks(x, y, code));
-    if (options.length === 0) {
-      this.ui?.toast('A escada precisa encostar no andar de cima, com o andar de baixo do outro lado');
-      return;
-    }
-    const at = options.indexOf(current as (typeof STAIR_CODES)[number]);
-    const next = at < 0 ? options[0] : options[(at + 1) % options.length];
-    if (next === current) this.ui?.toast('So ha um jeito desta escada subir');
-    else store.setCell('relief', x, y, next);
-  }
-
-  /**
-   * Volta o tile ao chao; a escada que subia para ele cai junto (ficaria levando a lugar nenhum) e vira o
-   * andar de onde ela saía.
-   */
-  private clearRelief(x: number, y: number): void {
-    const store = this.store;
-    if (!store || !this.isEditable(x, y)) return;
-    const was = this.reliefAt(x, y);
-    if (was === RELIEF_GROUND) return;
-    store.setCell('relief', x, y, RELIEF_GROUND);
-    if (was !== RELIEF_HIGH && was !== RELIEF_PEAK) return;
-    STAIR_CODES.forEach((code) => {
-      if (floorCode(stairBase(code) + 1) !== was) return;
-      const up = stairUp(code)!;
-      const sx = x - up[0];
-      const sy = y - up[1];
-      if (this.reliefAt(sx, sy) === code && this.isEditable(sx, sy)) store.setCell('relief', sx, sy, floorCode(stairBase(code)));
-    });
-  }
-
-  /**
-   * A serra por cima do mapa: o planalto em ocre com o PAREDAO (borda escura) onde ele cai para o
-   * chao, e a escada clara com degraus e uma seta para onde ela sobe. Escada que nao funciona fica
-   * com borda vermelha. Redesenhada inteira a cada mudanca: sao poucos tiles.
-   */
-  private drawRelief(): void {
-    const store = this.store;
-    const gfx = this.reliefGfx;
-    if (!store || !gfx) return;
-    gfx.clear();
-    const T = WORLD_TILE;
-    // O andar nao tem paredao do lado de outro tile do mesmo andar (ou mais alto), nem onde uma escada chega nele.
-    const joins = (x: number, y: number, dx: number, dy: number): boolean => {
-      const mine = codeFloor(this.reliefAt(x, y));
-      const n = this.reliefAt(x + dx, y + dy);
-      const up = stairUp(n);
-      if (up) return (up[0] === -dx && up[1] === -dy && stairBase(n) + 1 === mine) || stairBase(n) >= mine;
-      return codeFloor(n) >= mine;
-    };
-    for (let y = 0; y < store.tilesY; y += 1) {
-      for (let x = 0; x < store.tilesX; x += 1) {
-        const code = this.reliefAt(x, y);
-        if (code === RELIEF_GROUND) continue;
-        const px = x * T;
-        const py = y * T;
-        if (code === RELIEF_HIGH || code === RELIEF_PEAK) {
-          // O cume é o mesmo ocre, mais forte: dois níveis acima.
-          gfx.fillStyle(code === RELIEF_PEAK ? 0xb5702a : 0xd9a55a, code === RELIEF_PEAK ? 0.52 : 0.34).fillRect(px, py, T, T);
-          gfx.lineStyle(1.5, 0x4a2e14, 0.95);
-          if (!joins(x, y, 0, -1)) gfx.lineBetween(px, py + 0.75, px + T, py + 0.75);
-          if (!joins(x, y, 1, 0)) gfx.lineBetween(px + T - 0.75, py, px + T - 0.75, py + T);
-          if (!joins(x, y, -1, 0)) gfx.lineBetween(px + 0.75, py, px + 0.75, py + T);
-          // A face sul e a que a camera do jogo ve: um paredao mais grosso.
-          if (!joins(x, y, 0, 1)) gfx.fillStyle(0x4a2e14, 0.55).fillRect(px, py + T - 3, T, 3);
-          continue;
-        }
-        const up = stairUp(code);
-        if (!up) continue;
-        const [dx, dy] = up;
-        const cx = px + T / 2;
-        const cy = py + T / 2;
-        gfx.fillStyle(0xf1e3b8, 0.62).fillRect(px + 1, py + 1, T - 2, T - 2);
-        gfx.lineStyle(1, 0x6b4a26, 0.9);
-        for (const s of [-4, 0, 4]) {
-          const ox = cx + dx * s;
-          const oy = cy + dy * s;
-          gfx.lineBetween(ox - dy * 5, oy - dx * 5, ox + dy * 5, oy + dx * 5);
-        }
-        gfx.fillStyle(0x4a2e14, 1).fillTriangle(
-          cx + dx * 6, cy + dy * 6,
-          cx - dy * 3.5 + dx * 1.5, cy - dx * 3.5 + dy * 1.5,
-          cx + dy * 3.5 + dx * 1.5, cy + dx * 3.5 + dy * 1.5,
-        );
-        if (!this.stairWorks(x, y, code)) {
-          gfx.lineStyle(1.5, 0xff4455, 1).strokeRect(px + 0.75, py + 0.75, T - 1.5, T - 1.5);
-        }
-      }
-    }
-  }
-
-  private paintTileCell(x: number, y: number): void {
-    const store = this.store;
-    if (!store || !this.isEditable(x, y)) return;
-    const { layer, tile, collisionMode } = this.uiState;
-    if (tile === null) {
-      if (layer === 'upper') store.setCell('upper', x, y, null);
-    } else {
-      store.setCell(layer, x, y, tile);
-    }
-    if (collisionMode !== 'keep') store.setCell('collision', x, y, collisionMode === 'set');
-  }
-
-  private eraseCell(x: number, y: number): void {
-    const store = this.store;
-    if (!store || !this.isEditable(x, y)) return;
-    store.eraseEntitiesAt(x, y);
-    store.setCell('upper', x, y, null);
-    store.setCell('collision', x, y, false);
-  }
-
-  private placeSelectedEntity(x: number, y: number): void {
-    const store = this.store;
-    if (!store || !this.isEditable(x, y)) return;
-    const sel = this.uiState.entity;
-    if (sel.list === 'npcs') store.placeEntity({ list: 'npcs', type: sel.type, worldX: x, worldY: y });
-    else if (sel.list === 'pickups') store.placeEntity({ list: 'pickups', type: sel.type, worldX: x, worldY: y });
-    else {
-      store.placeEntity({
-        list: 'props', type: sel.type, worldX: x, worldY: y,
-        ...(isDirectionalProp(sel.type) ? { dir: this.uiState.propDir } : {}),
-      });
-    }
-  }
-
-  private pickTileAt(x: number, y: number): void {
-    const store = this.store;
-    if (!store || !store.isInside(x, y)) return;
-    const upper = store.readCell('upper', x, y) as number | null;
-    if (upper !== null) {
-      this.uiState.tile = upper;
-      this.uiState.layer = 'upper';
-    } else {
-      this.uiState.tile = store.readCell('ground', x, y) as number;
-      this.uiState.layer = 'ground';
-    }
-    this.uiState.tool = 'brush';
-    this.uiState.tab = 'tiles';
-    this.ui?.syncFromState();
-    this.persistUi();
-  }
-
-  private fillAt(x: number, y: number): void {
-    const store = this.store;
-    if (!store || !store.isInside(x, y)) return;
-    const { layer, tile, collisionMode } = this.uiState;
-    if (tile === null && layer === 'ground') {
-      this.ui?.toast('O chao nao pode ficar vazio — escolha um tile');
-      return;
-    }
-    store.beginStroke();
-    const filled = store.floodFill(layer, x, y, tile, this.editableBounds() ?? undefined);
-    if (collisionMode !== 'keep') {
-      filled.forEach((cell) => store.setCell('collision', cell.wx, cell.wy, collisionMode === 'set'));
-    }
-    store.commitStroke();
-    if (filled.length > 0) this.ui?.toast(`Balde: ${filled.length} tiles`);
-  }
-
-  /** Rect corners ordered and, in chunk view, intersected with the editable chunk. */
-  private clampRect(a: CellCoord, b: CellCoord): { x0: number; x1: number; y0: number; y1: number } | null {
-    let x0 = Math.min(a.x, b.x);
-    let x1 = Math.max(a.x, b.x);
-    let y0 = Math.min(a.y, b.y);
-    let y1 = Math.max(a.y, b.y);
-    const bounds = this.editableBounds();
-    if (bounds) {
-      x0 = Math.max(x0, bounds.x0);
-      x1 = Math.min(x1, bounds.x1);
-      y0 = Math.max(y0, bounds.y0);
-      y1 = Math.min(y1, bounds.y1);
-      if (x0 > x1 || y0 > y1) return null;
-    }
-    return { x0, x1, y0, y1 };
-  }
-
-  private applyRect(a: CellCoord, b: CellCoord): void {
-    const store = this.store;
-    if (!store) return;
-    const rect = this.clampRect(a, b);
-    if (!rect) return;
-    const { x0, x1, y0, y1 } = rect;
-    store.beginStroke();
-    for (let y = y0; y <= y1; y += 1) {
-      for (let x = x0; x <= x1; x += 1) this.paintTileCell(x, y);
-    }
-    store.commitStroke();
-  }
-
-  private lineCells(x0: number, y0: number, x1: number, y1: number, fn: (x: number, y: number) => void): void {
-    const dx = Math.abs(x1 - x0);
-    const dy = -Math.abs(y1 - y0);
-    const sx = x0 < x1 ? 1 : -1;
-    const sy = y0 < y1 ? 1 : -1;
-    let err = dx + dy;
-    let x = x0;
-    let y = y0;
-    for (;;) {
-      fn(x, y);
-      if (x === x1 && y === y1) break;
-      const e2 = 2 * err;
-      if (e2 >= dy) { err += dy; x += sx; }
-      if (e2 <= dx) { err += dx; y += sy; }
-    }
-  }
-
   // ── Overlays / status ───────────────────────────────────────────────────
-
-  private drawHover(): void {
-    const gfx = this.hoverGfx;
-    if (!gfx) return;
-    gfx.clear();
-    const cell = this.hovered;
-    if (!cell || !this.store) return;
-    // In chunk view the outside is masked and read-only; only the picker still works there.
-    if (!this.isEditable(cell.x, cell.y) && this.uiState.tool !== 'picker') return;
-
-    const size = (this.uiState.tool === 'brush' || this.uiState.tool === 'eraser' || this.uiState.tool === 'collision'
-      || (this.uiState.tool === 'relief' && this.uiState.reliefMode === 'high'))
-      ? this.uiState.brushSize
-      : 1;
-    const from = size === 3 ? -1 : 0;
-    const span = size === 1 ? 1 : size === 2 ? 2 : 3;
-    gfx.lineStyle(Math.max(1, 2 / this.cameras.main.zoom), 0xf4a261, 0.95);
-    gfx.strokeRect((cell.x + from) * WORLD_TILE, (cell.y + from) * WORLD_TILE, span * WORLD_TILE, span * WORLD_TILE);
-  }
-
-  private drawRectPreview(current: CellCoord): void {
-    const gfx = this.rectGfx;
-    const anchor = this.rectDrag;
-    if (!gfx || !anchor) return;
-    gfx.clear();
-    const rect = this.clampRect(anchor, current);
-    if (!rect) return;
-    const { x0, x1, y0, y1 } = rect;
-    gfx.lineStyle(Math.max(1, 2 / this.cameras.main.zoom), 0xf4a261, 1);
-    gfx.fillStyle(0xf4a261, 0.12);
-    gfx.fillRect(x0 * WORLD_TILE, y0 * WORLD_TILE, (x1 - x0 + 1) * WORLD_TILE, (y1 - y0 + 1) * WORLD_TILE);
-    gfx.strokeRect(x0 * WORLD_TILE, y0 * WORLD_TILE, (x1 - x0 + 1) * WORLD_TILE, (y1 - y0 + 1) * WORLD_TILE);
-  }
-
-  private refreshHoverStatus(): void {
-    const store = this.store;
-    if (!store || !this.ui) return;
-    const cell = this.hovered;
-    if (!cell) {
-      this.ui.setStatus(null);
-      return;
-    }
-    const inside = store.isInside(cell.x, cell.y);
-    this.ui.setStatus({
-      tileX: cell.x,
-      tileY: cell.y,
-      inside,
-      ground: inside ? (store.readCell('ground', cell.x, cell.y) as number) : 0,
-      upper: inside ? (store.readCell('upper', cell.x, cell.y) as number | null) : null,
-      collision: inside ? (store.readCell('collision', cell.x, cell.y) as boolean) : false,
-      relief: inside ? this.reliefAt(cell.x, cell.y) : RELIEF_GROUND,
-      entities: inside ? store.entitiesAt(cell.x, cell.y).map((e) => e.type) : [],
-      zoom: this.cameras.main.zoom,
-    });
-  }
-
-  private syncCameraDerivedUi(): void {
-    const cam = this.cameras.main;
-    if (cam.scrollX === this.lastCamSync.scrollX && cam.scrollY === this.lastCamSync.scrollY && cam.zoom === this.lastCamSync.zoom) {
-      return;
-    }
-    this.lastCamSync = { scrollX: cam.scrollX, scrollY: cam.scrollY, zoom: cam.zoom };
-    const view = cam.worldView;
-    this.ui?.updateMinimapViewport({
-      x: view.x / WORLD_TILE,
-      y: view.y / WORLD_TILE,
-      w: view.width / WORLD_TILE,
-      h: view.height / WORLD_TILE,
-    });
-  }
 
   // ── Camera helpers ──────────────────────────────────────────────────────
 
-  private fitView(): void {
-    const store = this.store;
-    if (!store) return;
-    if (this.uiState.viewMode === 'chunk') {
-      this.fitChunk();
-      this.persistUi();
-      return;
-    }
-    const cam = this.cameras.main;
-    const worldW = store.tilesX * WORLD_TILE;
-    const worldH = store.tilesY * WORLD_TILE;
-    const zoom = Engine.Math.Clamp(Math.min(cam.width / worldW, cam.height / worldH) * 0.95, MIN_ZOOM, MAX_ZOOM);
-    cam.setZoom(zoom);
-    cam.centerOn(worldW / 2, worldH / 2);
-    this.persistUi();
-  }
-
-  private centerOnTile(tileX: number, tileY: number): void {
-    this.cameras.main.centerOn((tileX + 0.5) * WORLD_TILE, (tileY + 0.5) * WORLD_TILE);
-    this.persistUi();
-  }
-
-  /** Minimap click: world view pans to the tile; chunk view jumps to that chunk. */
-  private navigateTo(tileX: number, tileY: number): void {
-    if (this.uiState.viewMode === 'chunk') {
-      this.uiState.chunkX = Math.floor(tileX / CHUNK_COLUMNS);
-      this.uiState.chunkY = Math.floor(tileY / CHUNK_ROWS);
-      this.syncViewMode();
-      return;
-    }
-    this.centerOnTile(tileX, tileY);
-  }
-
-  private handleResize(size: { width: number; height: number }): void {
-    const { width, height } = size;
-    this.cameras.main.setViewport(PANEL_WIDTH, 0, Math.max(1, width - PANEL_WIDTH), height);
-  }
-
   // ── Actions ─────────────────────────────────────────────────────────────
-
-  private requireValidStartPoint(): boolean {
-    const errors = this.store?.startPointErrors() ?? ['Todo level precisa de um Ponto Inicial'];
-    if (errors.length === 0) return true;
-    this.uiState.tool = 'spawn';
-    this.ui?.syncFromState();
-    this.ui?.toast(errors[0], 3600);
-    return false;
-  }
-
-  private async handleSave(): Promise<void> {
-    const store = this.store;
-    if (!store) return;
-    if (!this.requireValidStartPoint()) return;
-    try {
-      // Persist UI first: writing public/world.json makes Vite reload the whole page.
-      this.persistUi();
-      store.world.meta.exportedAt = new Date().toISOString();
-      const warnings = store.validate();
-      await saveWorld(store.world, this.worldFileId);
-      store.markSaved();
-      this.ui?.toast(
-        warnings.length > 0
-          ? `Salvo com ${warnings.length} aviso(s) — veja em Mundo...`
-          // O caminho é a única prova de QUAL arquivo levou a edição, e o subterrâneo não mora em
-          // `levels/` — o toast dizia `public/levels/underworld.json`, que não existe.
-          : `Salvo em ${worldFilePath(this.worldFileId)}`,
-      );
-    } catch (error) {
-      this.ui?.toast(error instanceof Error ? error.message : 'Falha ao salvar');
-    }
-  }
-
-  private handleReload(): void {
-    if (this.store?.dirty && this.time.now > this.reloadArmedUntil) {
-      this.reloadArmedUntil = this.time.now + 3000;
-      this.ui?.toast('Ha alteracoes nao salvas — clique de novo para descartar');
-      return;
-    }
-    this.persistUi();
-    this.scene.restart();
-  }
-
-  private applyWorldSettings(settings: { name: string; chunksX: number; chunksY: number }): void {
-    const store = this.store;
-    if (!store) return;
-    store.renameWorld(settings.name);
-    const resized = store.world.meta.worldChunksX !== 5 || store.world.meta.worldChunksY !== 5;
-    if (resized) store.resizeWorld(5, 5);
-    this.ui?.refreshHeader();
-    this.ui?.toast(resized ? 'Mundo fixado em 5x5 chunks' : 'Mundo atualizado');
-  }
-
-  /** Runs the real GameScene over the in-memory (possibly unsaved) world; ESC comes back. */
-  private startPlaytest(): void {
-    const store = this.store;
-    if (!store) return;
-    if (!this.requireValidStartPoint()) return;
-    this.persistUi();
-    setWorldData(store.snapshotWorld());
-    this.scene.run(GameScene.key);
-    this.scene.sleep();
-  }
-
-  private handleWake(): void {
-    this.ui?.setVisible(true);
-    this.ui?.requestMinimapRedraw();
-  }
-
-  private handleSleep(): void {
-    this.ui?.setVisible(false);
-    this.activeStroke = null;
-    this.rectDrag = null;
-    this.panning = null;
-  }
 
   // ── Persistence (survives the post-save Vite reload) ────────────────────
 
-  private persistUi(): void {
-    try {
-      const cam = this.cameras.main;
-      const persisted: PersistedUi = {
-        state: this.uiState,
-        cam: { centerX: cam.midPoint.x, centerY: cam.midPoint.y, zoom: cam.zoom },
-      };
-      sessionStore().setItem(this.uiStateKey, JSON.stringify(persisted));
-    } catch { /* ignore */ }
-  }
-
-  private restoreUi(): void {
-    try {
-      const raw = sessionStore().getItem(this.uiStateKey);
-      if (!raw) return;
-      const persisted = JSON.parse(raw) as Partial<PersistedUi>;
-      if (persisted.state && typeof persisted.state === 'object') {
-        this.uiState = { ...this.uiState, ...persisted.state };
-      }
-    } catch { /* ignore */ }
-  }
-
-  private restoreCamera(): boolean {
-    try {
-      const raw = sessionStore().getItem(this.uiStateKey);
-      if (!raw) return false;
-      const persisted = JSON.parse(raw) as Partial<PersistedUi>;
-      if (!persisted.cam) return false;
-      const cam = this.cameras.main;
-      cam.setZoom(Engine.Math.Clamp(persisted.cam.zoom, MIN_ZOOM, MAX_ZOOM));
-      cam.centerOn(persisted.cam.centerX, persisted.cam.centerY);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  private renderSnapshot(): string {
-    return JSON.stringify({
-      mode: 'editor',
-      loaded: Boolean(this.store),
-      tool: this.uiState.tool,
-      layer: this.uiState.layer,
-      tile: this.uiState.tile,
-      tab: this.uiState.tab,
-      viewMode: this.uiState.viewMode,
-      chunk: { cx: this.uiState.chunkX, cy: this.uiState.chunkY },
-      dirty: this.store?.dirty ?? false,
-      world: this.store
-        ? { name: this.store.world.meta.name, chunksX: this.store.world.meta.worldChunksX, chunksY: this.store.world.meta.worldChunksY }
-        : null,
-      spawn: this.store?.spawn ?? null,
-      zoom: this.cameras.main.zoom,
-    });
-  }
 }

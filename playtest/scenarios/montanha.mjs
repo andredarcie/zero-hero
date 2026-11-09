@@ -109,7 +109,7 @@ export default {
 
     const cube = await evaluate(({ x, y }) => {
       const w3 = window.__scene.world3d;
-      const mesh = w3.terrainMeshes.find((m) => m.material?.name === 'terrain-rock');
+      const mesh = w3.tiles.terrainMeshes.find((m) => m.material?.name === 'terrain-rock');
       if (!mesh) return { mesh: false };
       const pos = mesh.geometry.attributes.position;
       const col = mesh.geometry.attributes.color;
@@ -153,8 +153,8 @@ export default {
     // A parte que nao pode ter mudado: cubo e desenho, colisao e colisao.
     const solid = await evaluate(
       ([x, y]) => [
-        window.__scene.isSolidForEntities(x, y, false),
-        window.__scene.isSolidForEntities(x, y, true),
+        window.__scene.query.isSolidForEntities(x, y, false),
+        window.__scene.query.isSolidForEntities(x, y, true),
       ],
       [cliff.x, cliff.y],
     );
@@ -209,8 +209,8 @@ export default {
       const rad = cropRad;
       const r = await evaluate(([x, y, k]) => {
         const w3 = window.__scene.world3d;
-        const a = w3.projectTile(x - k, y - k, 0);
-        const b = w3.projectTile(x - 1, y - 1, 0);
+        const a = w3.projection.projectTile(x - k, y - k, 0);
+        const b = w3.projection.projectTile(x - 1, y - 1, 0);
         return {
           x: Math.min(a.x, b.x), y: Math.min(a.y, b.y),
           w: Math.abs(b.x - a.x), h: Math.abs(b.y - a.y),
@@ -266,7 +266,7 @@ export default {
     // ── 4. A praia existe na propria malha ───────────────────────────────────
     log('PRAIA: a malha do mar carrega o degrau de costa (aShore)');
     const shore = await evaluate(() => {
-      const mesh = window.__scene.world3d.terrainMeshes
+      const mesh = window.__scene.world3d.tiles.terrainMeshes
         .find((m) => m.material?.name === 'terrain-sea');
       if (!mesh) return { mesh: false };
       const a = mesh.geometry.attributes.aShore;

@@ -24,7 +24,7 @@ export const makePlayer = ({ page, log = console.log }) => {
     const t0 = performance.now();
     fire('keydown');
     const settle = () => {
-      const v = s.heroVisualTile();
+      const v = s.verbs.heroVisualTile();
       if ((Math.abs(v.x - s.playerWorld.worldX) < 0.02 && Math.abs(v.y - s.playerWorld.worldY) < 0.02) || performance.now() - t0 > 1500) resolve();
       else requestAnimationFrame(settle);
     };
@@ -80,7 +80,7 @@ export const makePlayer = ({ page, log = console.log }) => {
     const rows = [];
     for (let y = 0; y < n; y += 1) {
       let row = '';
-      for (let x = 0; x < n; x += 1) row += s.isSolidForEntities(x, y) ? '#' : '.';
+      for (let x = 0; x < n; x += 1) row += s.query.isSolidForEntities(x, y) ? '#' : '.';
       rows.push(row);
     }
     return rows;
@@ -250,7 +250,7 @@ export const makePlayer = ({ page, log = console.log }) => {
     const c = near ?? { x: st.player.worldX, y: st.player.worldY };
     return page.evaluate(([b, v, cx, cy, r, n]) => {
       const s = window.__scene;
-      const ask = b === 'x' ? (x, y) => s.useVerbAt(x, y) : (x, y) => s.handVerbAt(x, y);
+      const ask = b === 'x' ? (x, y) => s.verbs.useVerbAt(x, y) : (x, y) => s.verbs.handVerbAt(x, y);
       const out = [];
       for (let y = Math.max(0, cy - r); y <= Math.min(n - 1, cy + r); y += 1) {
         for (let x = Math.max(0, cx - r); x <= Math.min(n - 1, cx + r); x += 1) if (ask(x, y) === v) out.push({ x, y, d: Math.abs(x - cx) + Math.abs(y - cy) });
@@ -261,7 +261,7 @@ export const makePlayer = ({ page, log = console.log }) => {
 
   /** Chega diante de `target` (sólido ou livre) e o encara. */
   const reach = async (target, label) => {
-    const solid = await page.evaluate(([x, y]) => window.__scene.isSolidForEntities(x, y), [target.x, target.y]);
+    const solid = await page.evaluate(([x, y]) => window.__scene.query.isSolidForEntities(x, y), [target.x, target.y]);
     if (solid) await approachSolid(target, label);
     else await approachFree(target, label);
   };
@@ -274,13 +274,13 @@ export const makePlayer = ({ page, log = console.log }) => {
     if (!tiles.length) throw new Error(`nenhum tile aceita ${button}:${verb} (${label})`);
     for (const t of tiles) {
       try { await reach(t, `${label} @${t.x},${t.y}`); } catch (e) { log(`  (${label}: ${t.x},${t.y} sem caminho: ${e.message})`); continue; }
-      const now = await page.evaluate(([b, x, y]) => (b === 'x' ? window.__scene.useVerbAt(x, y) : window.__scene.handVerbAt(x, y)), [button, t.x, t.y]);
+      const now = await page.evaluate(([b, x, y]) => (b === 'x' ? window.__scene.verbs.useVerbAt(x, y) : window.__scene.verbs.handVerbAt(x, y)), [button, t.x, t.y]);
       if (now !== verb) { log(`  (${label}: ${t.x},${t.y} agora diz ${now})`); continue; }
       await press(button, 60, 350);
       // `repeat`: bate de novo enquanto o tile ainda aceita o gesto (a árvore seca cai em etapas, a rocha racha antes).
       for (let i = 0; opts.repeat && i < 12; i += 1) {
         await sleep(250);
-        const again = await page.evaluate(([b, x, y]) => (b === 'x' ? window.__scene.useVerbAt(x, y) : window.__scene.handVerbAt(x, y)), [button, t.x, t.y]);
+        const again = await page.evaluate(([b, x, y]) => (b === 'x' ? window.__scene.verbs.useVerbAt(x, y) : window.__scene.verbs.handVerbAt(x, y)), [button, t.x, t.y]);
         if (again !== verb) break;
         await press(button, 60, 350);
       }

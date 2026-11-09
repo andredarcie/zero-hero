@@ -4,7 +4,7 @@ import { getSoundManager } from '@/game/audio/SoundManager';
 import type { DialogScript } from '@/game/dialogs/NpcDialogs';
 import type { HeldItemKind } from '@/game/entities/ItemPickup';
 import { tLines, type I18nLine } from '@/game/i18n/i18n';
-import { isLastQuest } from '@/game/runtime/QuestLog';
+
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import {
   ASH_TEXTURE, SAND_TEXTURE, TELESCOPE_STAND_TEXTURE, TRIPOD_TEXTURE,
@@ -12,7 +12,9 @@ import {
 import { CAIRN_TEXTURE } from '@/game/render3d/cozyTextures';
 import { world3d } from '@/game/render3d/World3D';
 import { adventureState, type SkyQuestSave } from '@/game/runtime/adventureState';
-import { LensOverlay, SkyOverlay, SKY_TARGETS, type SkyTarget } from '@/game/runtime/SkyOverlays';
+
+import { AstronomerScope, SPOT_TILE, STAIR_FOOT } from './AstronomerScope';
+import { AstronomerForge } from './AstronomerForge';
 
 /**
  * A QUEST DA THEA: o telescópio. O tubo sobrou; faltam o tripé e a lente. Ela dá a picareta (a ÚNICA do
@@ -67,16 +69,6 @@ export interface AstronomerHost {
   theaGone: () => void;
 }
 
-/** Para onde a câmera olha enquanto se pole: o trecho mais fechado do bosque perto dela, a nordeste. */
-const LENS_LOOK_OFFSET = [7.5, -3.5] as const;
-/** O topo do planalto ao sul, e o pé da escada por onde se sobe. */
-const SPOT_TILE = { x: 32, y: 20 };
-const STAIR_FOOT = [31, 23] as const;
-/** Onde a nave pousa: no planalto, à esquerda do telescópio, sem encostar em quem estiver ao lado dele. */
-const SHIP_LANDING = { x: 29.3, y: 20 };
-// O que a Thea lembra em cada degrau do ferro: buscar o minério, levar ao forno (ele pede o resto) e
-// martelar a esponja. O forno não se constrói mais, então não há degrau de forno nem de carvão.
-const IRON_STEPS: readonly HeldItemKind[] = ['ore', 'bloom', 'iron'];
 /**
  * A AREIA SÓ EXISTE NA BEIRA DO LAGO GRANDE, no sul, ao lado do tronco onde se senta para olhar a água
  * (pedido do autor): o herói desce o vale inteiro para buscá-la. O primeiro tile livre desta lista.
@@ -89,20 +81,24 @@ const SIZE_MARK = 0.8;
 const POP_MS = 320;
 
 export class AstronomerQuest {
-  private readonly save: SkyQuestSave;
-  private npc?: { worldX: number; worldY: number };
-  private tripod?: Billboard3D;
-  private tripodTile?: { x: number; y: number };
-  private sand?: Billboard3D;
+  public readonly save: SkyQuestSave;
+  public npc?: { worldX: number; worldY: number };
+  public tripod?: Billboard3D;
+  public tripodTile?: { x: number; y: number };
+  public sand?: Billboard3D;
   private sandTile?: { x: number; y: number };
-  private ash?: Billboard3D;
+  public ash?: Billboard3D;
   private ashTile?: { x: number; y: number };
-  private mark?: Billboard3D;
+  public mark?: Billboard3D;
   private telescope?: Billboard3D;
-  private overlay?: { destroy: () => void };
-  private dialogBase: () => DialogScript = () => ({ npcName: '', npcColorHex: '#ffffff', npcAssetKey: '', lines: [] });
+  public overlay?: { destroy: () => void };
+  public dialogBase: () => DialogScript = () => ({ npcName: '', npcColorHex: '#ffffff', npcAssetKey: '', lines: [] });
+  /** A lente, o telescópio e o céu. (ver AstronomerScope) */
+  private readonly scope = new AstronomerScope(this);
+  /** O forno, a barra e o tripé. (ver AstronomerForge) */
+  private readonly forge = new AstronomerForge(this);
 
-  public constructor(private readonly host: AstronomerHost) {
+  public constructor(public readonly host: AstronomerHost) {
     this.save = adventureState().skyQuest;
     const state = adventureState();
     // Saves de quando ela só pedia a barra de ferro: quem entregou está fechado, e quem já tinha a
@@ -125,7 +121,7 @@ export class AstronomerQuest {
 
   public talkKey(): string {
     const { stage } = this.save;
-    if (stage === 'iron') return `astronaut:iron:${this.host.held() === 'iron' ? 'ready' : this.ironStep()}`;
+    if (stage === 'iron') return `astronaut:iron:${this.host.held() === 'iron' ? 'ready' : this.forge.ironStep()}`;
     if (stage === 'glass') return `astronaut:glass:${this.host.held() === 'glass' ? 'ready' : 'wait'}`;
     return `astronaut:${stage}`;
   }
@@ -147,7 +143,7 @@ export class AstronomerQuest {
    * À esquerda dela o tripé, e atrás dele a areia; à direita, além da fogueira, a cinza. Só se escolhe na
    * hora de mostrar: até lá o herói pode ter posto o forno, ou estar parado, num desses tiles.
    */
-  private placeCamp(): void {
+  public placeCamp(): void {
     const npc = this.npc;
     if (!npc) return;
     const hero = this.host.hero();
@@ -199,44 +195,44 @@ export class AstronomerQuest {
     this.host.scene.tweens.add({ targets: bb, displayWidth: size, displayHeight: size, duration: POP_MS, ease: 'Back.easeOut' });
   }
 
-  private showTripod(animate: boolean): void {
+  public showTripod(animate: boolean): void {
     const tile = this.tripodTile;
     if (!tile || this.tripod) return;
-    this.tripod = world3d().addBillboard(TRIPOD_TEXTURE, 0, { groundShadow: { rx: 0.3, rz: 0.16, alpha: 0.26 } })
+    this.tripod = world3d().objects.addBillboard(TRIPOD_TEXTURE, 0, { groundShadow: { rx: 0.3, rz: 0.16, alpha: 0.26 } })
       .setPosition(tile.x, tile.y)
       .setDisplaySize(SIZE_TRIPOD, SIZE_TRIPOD);
     if (animate) {
       this.pop(this.tripod, SIZE_TRIPOD);
       this.host.sparkle(tile.x, tile.y);
-      getSoundManager().playBridgePlank();
+      getSoundManager().work.playBridgePlank();
     }
   }
 
-  private showHeaps(animate: boolean): void {
+  public showHeaps(animate: boolean): void {
     if (!this.sand && this.sandTile) {
-      this.sand = world3d().addBillboard(SAND_TEXTURE, 0, { groundShadow: { rx: 0.36, rz: 0.16, alpha: 0.2 } })
+      this.sand = world3d().objects.addBillboard(SAND_TEXTURE, 0, { groundShadow: { rx: 0.36, rz: 0.16, alpha: 0.2 } })
         .setPosition(this.sandTile.x, this.sandTile.y)
         .setDisplaySize(SIZE_HEAP, SIZE_HEAP);
       if (animate) this.pop(this.sand, SIZE_HEAP);
     }
     if (!this.ash && this.ashTile) {
-      this.ash = world3d().addBillboard(ASH_TEXTURE, 0, { groundShadow: { rx: 0.36, rz: 0.16, alpha: 0.2 } })
+      this.ash = world3d().objects.addBillboard(ASH_TEXTURE, 0, { groundShadow: { rx: 0.36, rz: 0.16, alpha: 0.2 } })
         .setPosition(this.ashTile.x, this.ashTile.y)
         .setDisplaySize(SIZE_HEAP, SIZE_HEAP);
       if (animate) this.pop(this.ash, SIZE_HEAP);
     }
   }
 
-  private showMark(): void {
+  public showMark(): void {
     if (this.mark) return;
-    this.mark = world3d().addBillboard(CAIRN_TEXTURE, 0, { groundShadow: { rx: 0.3, rz: 0.14, alpha: 0.24 } })
+    this.mark = world3d().objects.addBillboard(CAIRN_TEXTURE, 0, { groundShadow: { rx: 0.3, rz: 0.14, alpha: 0.24 } })
       .setPosition(SPOT_TILE.x, SPOT_TILE.y)
       .setDisplaySize(SIZE_MARK, SIZE_MARK);
   }
 
-  private showTelescope(animate: boolean): void {
+  public showTelescope(animate: boolean): void {
     if (this.telescope) return;
-    this.telescope = world3d().addBillboard(TELESCOPE_STAND_TEXTURE, 0, { groundShadow: { rx: 0.34, rz: 0.18, alpha: 0.28 } })
+    this.telescope = world3d().objects.addBillboard(TELESCOPE_STAND_TEXTURE, 0, { groundShadow: { rx: 0.34, rz: 0.18, alpha: 0.28 } })
       .setPosition(SPOT_TILE.x, SPOT_TILE.y)
       .setDisplaySize(SIZE_TELESCOPE, SIZE_TELESCOPE);
     if (animate) this.pop(this.telescope, SIZE_TELESCOPE);
@@ -244,66 +240,7 @@ export class AstronomerQuest {
 
   // ── o forno guia ────────────────────────────────────────────────────────────────────────────────
 
-  private get oven(): NonNullable<SkyQuestSave['furnace']> {
-    this.save.furnace ??= { charcoal: false, bloom: false, sand: false, glass: false };
-    return this.save.furnace;
-  }
-
-  /**
-   * O QUE O FORNO PEDE AGORA, ou `null` se ele não tem nada a fazer nesta etapa. A ordem é a da química e
-   * a da quest: o carvão (fica aceso lá dentro), o minério (sai a esponja); depois a areia e a cinza (sai o
-   * vidro). Ele nunca abre escolha: o jogador só entrega o que ele pede.
-   */
-  public furnaceNeed(): HeldItemKind | null {
-    const oven = this.oven;
-    if (this.save.stage === 'iron') {
-      if (oven.bloom || this.host.seen('bloom')) return null;
-      return oven.charcoal ? 'ore' : 'charcoal';
-    }
-    if (this.save.stage === 'glass') {
-      if (oven.glass) return null;
-      return oven.sand ? 'ash' : 'sand';
-    }
-    return null;
-  }
-
-  /** Há fogo esperando dentro do forno: o carvão antes do minério, a areia antes da cinza. */
-  public furnaceKindled(): boolean {
-    const oven = this.oven;
-    if (this.save.stage === 'iron') return oven.charcoal && !oven.bloom;
-    if (this.save.stage === 'glass') return oven.sand && !oven.glass;
-    return false;
-  }
-
-  /**
-   * O herói entregou `kind` (que é o que `furnaceNeed` pedia). Devolve se a receita FECHOU e o que sai pela
-   * boca (`null` = a fornada não devolve peça: o carvão fica lá dentro esperando o minério).
-   */
-  public feedFurnace(kind: HeldItemKind): { done: boolean; product: HeldItemKind | null } {
-    const oven = this.oven;
-    let result: { done: boolean; product: HeldItemKind | null } = { done: false, product: null };
-    if (kind === 'charcoal') {
-      // O carvão acende e fica lá dentro, em brasa, esperando o minério.
-      oven.charcoal = true;
-      result = { done: true, product: null };
-    } else if (kind === 'ore') {
-      oven.bloom = true;
-      result = { done: true, product: 'bloom' };
-    } else if (kind === 'sand') {
-      oven.sand = true;
-    } else if (kind === 'ash') {
-      oven.glass = true;
-      result = { done: true, product: 'glass' };
-    }
-    this.host.persist();
-    return result;
-  }
-
   // ── as conversas ────────────────────────────────────────────────────────────────────────────────
-
-  private ironStep(): HeldItemKind {
-    return IRON_STEPS.find((item) => !this.host.seen(item)) ?? 'iron';
-  }
 
   public talk(base: DialogScript, at: { worldX: number; worldY: number }): boolean {
     if (this.isDone) return false;
@@ -322,17 +259,17 @@ export class AstronomerQuest {
         });
         return true;
       case 'iron':
-        if (this.host.held() === 'iron') { this.deliverIron(base, at); return true; }
-        say(tLines(`npc.astronautHint.${this.ironStep()}`), () => {
-          if (this.ironStep() === 'ore' && this.host.held() !== 'pickaxe' && !this.host.onGround('pickaxe')) this.give('pickaxe', at);
+        if (this.host.held() === 'iron') { this.forge.deliverIron(base, at); return true; }
+        say(tLines(`npc.astronautHint.${this.forge.ironStep()}`), () => {
+          if (this.forge.ironStep() === 'ore' && this.host.held() !== 'pickaxe' && !this.host.onGround('pickaxe')) this.give('pickaxe', at);
         });
         return true;
       case 'glass':
-        if (this.host.held() === 'glass') { say(step('polish'), () => this.startPolish()); return true; }
+        if (this.host.held() === 'glass') { say(step('polish'), () => this.scope.startPolish()); return true; }
         say(step('wait'));
         return true;
       case 'polish':
-        say(step('polish'), () => this.openPolish());
+        say(step('polish'), () => this.scope.openPolish());
         return true;
       case 'carry':
         say(step('carry'), () => {
@@ -356,56 +293,23 @@ export class AstronomerQuest {
     this.host.itemGet(kind, () => {});
   }
 
-  /** O ferro salta para ela, e o tripé nasce ao lado, com a cinza e a areia já esperando. */
-  private deliverIron(base: DialogScript, at: { worldX: number; worldY: number }): void {
-    const hero = this.host.hero();
-    this.placeCamp();
-    const tile = this.tripodTile ?? { x: at.worldX, y: at.worldY };
-    this.host.removeFromHand('iron', 1);
-    this.host.fling('iron', hero.x, hero.y, tile.x, tile.y);
-    getSoundManager().playItemStash();
-    this.host.hop(at.worldX, at.worldY, 0.34);
-    this.showTripod(true);
-    this.showHeaps(true);
-    this.save.stage = 'glass';
-    this.host.persist();
-    this.host.say({ ...base, lines: tLines('npc.astronautStep.tripod') }, at, () => this.host.markHeard());
-  }
-
-  /** A Thea está esperando a barra de ferro (é ela quem vem buscá-la na bigorna). */
-  public wantsIronAtAnvil(): boolean {
-    return this.save.stage === 'iron';
-  }
-
-  /**
-   * A BARRA FOI BUSCADA NA BIGORNA (pedido do autor): a Thea veio correndo, pegou a barra e voltou dizendo que vai
-   * construir o tripé — o que `deliverIron` fazia quando o herói levava a barra, sem a barra passar pela mão dele.
-   */
-  public ironFromAnvil(): void {
-    this.placeCamp();
-    this.showTripod(true);
-    this.showHeaps(true);
-    this.save.stage = 'glass';
-    this.host.persist();
-  }
-
   // ── os gestos no mundo ──────────────────────────────────────────────────────────────────────────
 
   public interactAt(x: number, y: number): boolean {
     if (this.isSand(x, y)) { this.takeHeap('sand', x, y); return true; }
     if (this.isAsh(x, y)) { this.takeHeap('ash', x, y); return true; }
     if (this.isTripod(x, y)) {
-      if (this.save.stage === 'polish') this.openPolish();
-      else if (this.host.held() === 'glass') this.startPolish();
+      if (this.save.stage === 'polish') this.scope.openPolish();
+      else if (this.host.held() === 'glass') this.scope.startPolish();
       return true;
     }
     if (this.isMark(x, y)) {
-      if (this.host.held() === 'telescope') this.install();
+      if (this.host.held() === 'telescope') this.scope.install();
       return true;
     }
     if (this.isTelescope(x, y)) {
-      if (this.host.isNight()) this.openSky();
-      else this.host.waitForNight(x, y, () => this.openSky(), this.isDone ? undefined : { from: STAIR_FOOT, beside: SPOT_TILE });
+      if (this.host.isNight()) this.scope.openSky();
+      else this.host.waitForNight(x, y, () => this.scope.openSky(), this.isDone ? undefined : { from: STAIR_FOOT, beside: SPOT_TILE });
       return true;
     }
     return false;
@@ -433,130 +337,35 @@ export class AstronomerQuest {
     const hero = this.host.hero();
     this.host.fling(kind, x, y, hero.x, hero.y);
     this.host.takeIntoHand(kind, 1);
-    getSoundManager().playSandTrickle();
+    getSoundManager().work.playSandTrickle();
     this.host.persist();
     this.host.itemGet(kind, () => {});
   }
 
-  private openUi(): boolean {
-    if (this.overlay) return false;
-    this.host.freeze(true);
-    this.host.showButtons(false);
-    return true;
-  }
-
-  private closeUi(): void {
-    this.overlay?.destroy();
-    this.overlay = undefined;
-    this.host.lookAt(null);
-    this.host.freeze(false);
-    this.host.showButtons(true);
-  }
-
-  private startPolish(): void {
-    if (this.host.held() !== 'glass') return;
-    const hero = this.host.hero();
-    const tile = this.tripodTile ?? hero;
-    this.host.removeFromHand('glass', 1);
-    this.host.fling('glass', hero.x, hero.y, tile.x, tile.y);
-    this.save.stage = 'polish';
-    this.host.persist();
-    this.openPolish();
-  }
-
-  private openPolish(): void {
-    const npc = this.npc;
-    if (!npc || !this.openUi()) return;
-    const sound = getSoundManager();
-    this.host.lookAt({ x: npc.worldX + LENS_LOOK_OFFSET[0], y: npc.worldY + LENS_LOOK_OFFSET[1] });
-    this.overlay = new LensOverlay({
-      onRub: () => sound.playSandTrickle(),
-      onPhase: () => sound.playCozyChime(),
-      onLeave: () => this.closeUi(),
-      onDone: () => {
-        this.closeUi();
-        this.finishLens();
-      },
-    });
-  }
-
-  /** A lente boa vai ao tubo, o tubo ao tripé, e o conjunto às costas do herói. */
-  private finishLens(): void {
-    const tile = this.tripodTile;
-    const hero = this.host.hero();
-    this.tripod?.destroy();
-    this.tripod = undefined;
-    this.sand?.destroy();
-    this.sand = undefined;
-    this.ash?.destroy();
-    this.ash = undefined;
-    if (tile) this.host.fling('telescope', tile.x, tile.y, hero.x, hero.y);
-    this.host.takeIntoHand('telescope', 1);
-    this.save.stage = 'carry';
-    this.showMark();
-    this.host.persist();
-    this.host.itemGet('telescope', () => {
-      const at = this.npc;
-      if (at) this.host.say({ ...this.dialogBase(), lines: tLines('npc.astronautStep.carry') }, at, () => this.host.markHeard());
-    });
-  }
-
-  /** O telescópio em pé, no lugar do marco. */
-  private install(): void {
-    this.host.removeFromHand('telescope', 1);
-    this.mark?.destroy();
-    this.mark = undefined;
-    this.showTelescope(true);
-    this.host.sparkle(SPOT_TILE.x, SPOT_TILE.y);
-    getSoundManager().playBridgePlank();
-    getSoundManager().playCozyChime();
-    this.save.stage = 'night';
-    this.host.persist();
-  }
-
   // ── a noite ─────────────────────────────────────────────────────────────────────────────────────
 
-  private openSky(): void {
-    if (!this.openUi()) return;
-    const sound = getSoundManager();
-    sound.playPaperUnfold();
-    this.overlay = new SkyOverlay({
-      onFound: (target: SkyTarget) => {
-        if (!this.save.found.includes(target)) this.save.found.push(target);
-        this.host.persist();
-      },
-      onFocus: () => sound.playItemBonk(),
-      onCard: () => { sound.playPaperUnfold(); sound.playCozyChime(); },
-      onLeave: () => {
-        this.closeUi();
-        this.host.sendSkyVisitorHome();
-      },
-      onDone: () => {
-        this.overlay?.destroy();
-        this.overlay = undefined;
-        if (this.isDone) { this.closeUi(); return; }
-        this.farewell();
-      },
-    }, this.save.found.filter((target): target is SkyTarget => (SKY_TARGETS as readonly string[]).includes(target)));
+  /** (ver AstronomerForge.feedFurnace) */
+  public feedFurnace(...args: Parameters<AstronomerForge['feedFurnace']>): ReturnType<AstronomerForge['feedFurnace']> {
+    return this.forge.feedFurnace(...args);
   }
 
-  /** O save só aprende no fim: fechar o jogo no meio da cena volta para diante do telescópio. */
-  private farewell(): void {
-    this.host.showButtons(true);
-    this.host.playFarewell({
-      from: STAIR_FOOT,
-      beside: SPOT_TILE,
-      script: { ...this.dialogBase(), calm: true, lines: tLines('npc.astronautStep.farewell') },
-      // Se este é o último pedido do vale, o adeus dela termina com a chave do jardim alto, antes da nave.
-      goodbye: { ...this.dialogBase(), calm: true, lines: [...tLines('npc.astronautStep.goodbye'), ...(isLastQuest('astronaut') ? tLines('garden.key') : [])] },
-      ship: SHIP_LANDING,
-    }, () => {
-      this.save.stage = 'done';
-      this.save.departed = true;
-      this.host.theaGone();
-      this.host.persist();
-      this.host.closeQuest();
-      this.host.markHeard();
-    });
+  /** (ver AstronomerForge.furnaceKindled) */
+  public furnaceKindled(...args: Parameters<AstronomerForge['furnaceKindled']>): ReturnType<AstronomerForge['furnaceKindled']> {
+    return this.forge.furnaceKindled(...args);
+  }
+
+  /** (ver AstronomerForge.furnaceNeed) */
+  public furnaceNeed(...args: Parameters<AstronomerForge['furnaceNeed']>): ReturnType<AstronomerForge['furnaceNeed']> {
+    return this.forge.furnaceNeed(...args);
+  }
+
+  /** (ver AstronomerForge.ironFromAnvil) */
+  public ironFromAnvil(...args: Parameters<AstronomerForge['ironFromAnvil']>): ReturnType<AstronomerForge['ironFromAnvil']> {
+    return this.forge.ironFromAnvil(...args);
+  }
+
+  /** (ver AstronomerForge.wantsIronAtAnvil) */
+  public wantsIronAtAnvil(...args: Parameters<AstronomerForge['wantsIronAtAnvil']>): ReturnType<AstronomerForge['wantsIronAtAnvil']> {
+    return this.forge.wantsIronAtAnvil(...args);
   }
 }

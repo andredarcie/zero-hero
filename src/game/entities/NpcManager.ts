@@ -109,7 +109,7 @@ class NpcEntity {
     this.size = size;
     this.breathPhase = ((worldX * 7 + worldY * 13) % 17) / 17 * Math.PI * 2;
     this.sprite = world3d()
-      .addBillboard(visual.key, visual.frame ?? 0, { groundShadow: true, reflected: true })
+      .objects.addBillboard(visual.key, visual.frame ?? 0, { groundShadow: true, reflected: true })
       .setPosition(worldX, worldY)
       .setDisplaySize(size, size);
     if (visual.tint !== undefined) this.sprite.setTint(visual.tint);

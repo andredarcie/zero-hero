@@ -31,10 +31,10 @@ const PROFILE = `async (ms, walk) => {
       // Steer: keep walking, and turn whenever the tile ahead is solid. Real traversal, so the
       // chunk streamer, the enemy AI, the shadow casters and the fire pool all do real work.
       const blocked = held
-        && s.isSolidForEntities(s.playerWorld.worldX + held[2], s.playerWorld.worldY + held[3], false);
+        && s.query.isSolidForEntities(s.playerWorld.worldX + held[2], s.playerWorld.worldY + held[3], false);
       if (!held || blocked) {
         stop();
-        const open = DIRS.filter((d) => !s.isSolidForEntities(
+        const open = DIRS.filter((d) => !s.query.isSolidForEntities(
           s.playerWorld.worldX + d[2], s.playerWorld.worldY + d[3], false,
         ));
         if (open.length) {

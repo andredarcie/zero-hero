@@ -272,19 +272,19 @@ export class KoiPond {
       [1, 54.4, 57.7, 0.62], [0, 54.9, 57.5, 0.5], [2, 55.5, 56.3, 0.55],
       [0, 55.55, 57.55, 0.46],
     ] as const) {
-      this.pads.push(w3.addBillboard(`koi-pad-${i}`, 0, { flat: true, flatY: POOL_SURFACE + 0.02, depthWrite: false, renderOrder: WATER_LAYER.pad })
+      this.pads.push(w3.objects.addBillboard(`koi-pad-${i}`, 0, { flat: true, flatY: POOL_SURFACE + 0.02, depthWrite: false, renderOrder: WATER_LAYER.pad })
         .setDisplaySize(size, size)
         .setTint(TINT)
         .setPosition(x, y));
     }
     REEDS.forEach(([x, y], i) => {
-      this.reeds.push(w3.addBillboard(`koi-reed-${i}-0`, 0, {})
+      this.reeds.push(w3.objects.addBillboard(`koi-reed-${i}-0`, 0, {})
         .setDisplaySize(REED_W / 16, REED_H / 16)
         .setTint(TINT)
         .setPosition(x, y)
         .setElevation(POOL_SURFACE));
     });
-    this.ring = w3.addBillboard(RING, 0, { flat: true, flatY: POOL_SURFACE + 0.018, depthWrite: false, alphaTest: 0.01, renderOrder: WATER_LAYER.ring })
+    this.ring = w3.objects.addBillboard(RING, 0, { flat: true, flatY: POOL_SURFACE + 0.018, depthWrite: false, alphaTest: 0.01, renderOrder: WATER_LAYER.ring })
       .setTint(TINT)
       .setAlpha(0);
     for (let i = 0; i < KOI_COUNT; i += 1) {
@@ -297,7 +297,7 @@ export class KoiPond {
         if (swimmable(tx, ty)) { x = tx; y = ty; break; }
       }
       const k: Koi = {
-        bb: w3.addBillboard(koiKey(b, 0, 0), 0, { flat: true, flatY: POOL_SURFACE + 0.008, depthWrite: false, alphaTest: 0.2, renderOrder: WATER_LAYER.koi })
+        bb: w3.objects.addBillboard(koiKey(b, 0, 0), 0, { flat: true, flatY: POOL_SURFACE + 0.008, depthWrite: false, alphaTest: 0.2, renderOrder: WATER_LAYER.koi })
           .setDisplaySize(KOI_PX / 16, KOI_PX / 16)
           .setTint(TINT)
           .setAlpha(0.92),

@@ -23,10 +23,10 @@ export default {
       const s = window.__scene;
       for (let y = 40; y < 58; y += 1) {
         for (let x = 20; x < 40; x += 1) {
-          if ([[0, 0], [0, 1], [1, 0], [-1, 0], [0, -1]].every(([dx, dy]) => !s.isSolidForEntities(x + dx, y + dy))
-            && !s.itemManager.hasItemAt(x, y + 1) && !s.handVerbAt(x, y + 1)) {
+          if ([[0, 0], [0, 1], [1, 0], [-1, 0], [0, -1]].every(([dx, dy]) => !s.query.isSolidForEntities(x + dx, y + dy))
+            && !s.itemManager.hasItemAt(x, y + 1) && !s.verbs.handVerbAt(x, y + 1)) {
             s.playerWorld.worldX = x; s.playerWorld.worldY = y; s.movementController.interruptMovement(x, y); s.movementController.faceTo(0, 1);
-            s.catCare.ensure(false);
+            s.camp.catCare.ensure(false);
             return { x, y };
           }
         }

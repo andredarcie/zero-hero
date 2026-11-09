@@ -100,7 +100,7 @@ export class FishJumps implements NatureSystem {
       const j = this.jump;
       j.t += f.dt / JUMP_S;
       const k = Math.min(1, j.t);
-      if (!this.fish) this.fish = world3d().addBillboard(RISE, 0, { centered: true }).setDisplaySize(8 / 16, 5 / 16).setTint(PROP_TINT);
+      if (!this.fish) this.fish = world3d().objects.addBillboard(RISE, 0, { centered: true }).setDisplaySize(8 / 16, 5 / 16).setTint(PROP_TINT);
       this.fish
         .setTexture(k < 0.38 ? RISE : k < 0.62 ? TOP : DIVE)
         .setFlipX(j.dir < 0)
@@ -109,7 +109,7 @@ export class FishJumps implements NatureSystem {
         .setVisible(true);
       if (k >= 1) {
         this.splash(j.x + j.dir * 0.8, j.y, 6);
-        getSoundManager().playFishSplash();
+        getSoundManager().nature.playFishSplash();
         this.fish.setVisible(false);
         this.jump = null;
       }
@@ -119,11 +119,11 @@ export class FishJumps implements NatureSystem {
 
   private splash(x: number, y: number, n: number): void {
     const w3 = world3d();
-    this.rings.push({ bb: w3.addBillboard(RING, 0, { flat: true, flatY: SURFACE, depthWrite: false, alphaTest: 0.01 }).setPosition(x, y), t: 0 });
+    this.rings.push({ bb: w3.objects.addBillboard(RING, 0, { flat: true, flatY: SURFACE, depthWrite: false, alphaTest: 0.01 }).setPosition(x, y), t: 0 });
     for (let i = 0; i < n; i += 1) {
       const a = (i / n) * Math.PI * 2 + this.rand();
       this.drops.push({
-        bb: w3.addBillboard(DROP, 0, { centered: true, depthWrite: false, alphaTest: 0.01 }).setDisplaySize(1 / 16, 1 / 16),
+        bb: w3.objects.addBillboard(DROP, 0, { centered: true, depthWrite: false, alphaTest: 0.01 }).setDisplaySize(1 / 16, 1 / 16),
         x, y, z: SURFACE + 0.02, vx: Math.cos(a) * 0.6, vy: Math.sin(a) * 0.35, vz: 1.3 + this.rand() * 0.7,
       });
     }

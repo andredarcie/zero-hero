@@ -214,7 +214,7 @@ export class LumberYard {
       const v = kind === 'woodpile' ? Math.floor(hash(x, y, 68) * 2) : 0;
       const { w, h } = SIZES[kind];
       this.bodies.push(
-        w3.addBillboard(key(kind, v), 0, { groundShadow: { rx: kind === 'yardSign' ? 0.16 : 0.42, rz: 0.14, alpha: 0.28 } })
+        w3.objects.addBillboard(key(kind, v), 0, { groundShadow: { rx: kind === 'yardSign' ? 0.16 : 0.42, rz: 0.14, alpha: 0.28 } })
           .setDisplaySize(w / 16, h / 16)
           .setPosition(x, y)
           // Espelhado num lugar e não no outro: duas peças iguais vizinhas não ficam gêmeas.
@@ -223,7 +223,7 @@ export class LumberYard {
       );
       if (CHIPPY.has(kind)) {
         this.bodies.push(
-          w3.addBillboard(`yard-chips-${Math.floor(hash(x, y, 70) * 2)}`, 0, { flat: true, flatY: 0.013, depthWrite: false, alphaTest: 0.05, depthLayer: 'ground' })
+          w3.objects.addBillboard(`yard-chips-${Math.floor(hash(x, y, 70) * 2)}`, 0, { flat: true, flatY: 0.013, depthWrite: false, alphaTest: 0.05, depthLayer: 'ground' })
             .setDisplaySize(1.5, 1)
             .setPosition(x, y + 0.15)
             .setTint(PROP_TINT),

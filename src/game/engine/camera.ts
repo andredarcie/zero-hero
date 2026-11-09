@@ -225,7 +225,47 @@ class ShakeEffect {
   }
 }
 
-export class Camera extends EventEmitter {
+/**
+ * O PONTO DO MUNDO debaixo de um ponto da tela: a inversa da matriz da câmera, mais a rolagem girada e escalada pelo
+ * zoom. Matriz sem inversa (zoom zero) devolve o ponto como veio. Conta fixa: é a do getWorldPoint de sempre.
+ */
+const worldPointOf = (
+  m: ArrayLike<number>, rotation: number, scrollX: number, scrollY: number, zoomX: number, zoomY: number,
+  x: number, y: number, output: { x: number; y: number },
+): { x: number; y: number } => {
+  const mva = m[0];
+  const mvb = m[1];
+  const mvc = m[2];
+  const mvd = m[3];
+  const mve = m[4];
+  const mvf = m[5];
+  let determinant = (mva * mvd) - (mvb * mvc);
+  if (!determinant) {
+    output.x = x;
+    output.y = y;
+    return output;
+  }
+  determinant = 1 / determinant;
+  const ima = mvd * determinant;
+  const imb = -mvb * determinant;
+  const imc = -mvc * determinant;
+  const imd = mva * determinant;
+  const ime = (mvc * mvf - mvd * mve) * determinant;
+  const imf = (mvb * mve - mva * mvf) * determinant;
+  const c = Math.cos(rotation);
+  const s = Math.sin(rotation);
+  const sx = x + ((scrollX * c - scrollY * s) * zoomX);
+  const sy = y + ((scrollX * s + scrollY * c) * zoomY);
+  output.x = (sx * ima + sy * imc) + ime;
+  output.y = (sx * imb + sy * imd) + imf;
+  return output;
+};
+
+/**
+ * A CÂMERA SEM OS EFEITOS (a BaseCamera): a janela na tela, a rolagem e o zoom, os limites, o centrar, o ponto do
+ * mundo sob um ponto da tela, e o preRender que monta a matriz. Os efeitos (fade, flash, tremor) são da Camera.
+ */
+export class BaseCamera extends EventEmitter {
   public scene!: Scene;
   private sceneManager: { customViewports: number } | null = null;
   private scaleManager: { width: number; height: number } | null = null;
@@ -248,9 +288,6 @@ export class Camera extends EventEmitter {
   public backgroundColor: Color = ValueToColor('rgba(0,0,0,0)');
   public transparent = true;
   public renderList: GameObject[] = [];
-  public readonly fadeEffect = new FadeEffect(this);
-  public readonly flashEffect = new FlashEffect(this);
-  public readonly shakeEffect = new ShakeEffect(this);
   private _x: number;
   private _y: number;
   private _width: number;
@@ -463,34 +500,9 @@ export class Camera extends EventEmitter {
     return y;
   }
 
+  /** O ponto do mundo debaixo do ponto (x, y) da tela (ver worldPointOf). */
   public getWorldPoint(x: number, y: number, output: { x: number; y: number } = { x: 0, y: 0 }): { x: number; y: number } {
-    const m = this.matrix.matrix;
-    const mva = m[0];
-    const mvb = m[1];
-    const mvc = m[2];
-    const mvd = m[3];
-    const mve = m[4];
-    const mvf = m[5];
-    let determinant = (mva * mvd) - (mvb * mvc);
-    if (!determinant) {
-      output.x = x;
-      output.y = y;
-      return output;
-    }
-    determinant = 1 / determinant;
-    const ima = mvd * determinant;
-    const imb = -mvb * determinant;
-    const imc = -mvc * determinant;
-    const imd = mva * determinant;
-    const ime = (mvc * mvf - mvd * mve) * determinant;
-    const imf = (mvb * mve - mva * mvf) * determinant;
-    const c = Math.cos(this.rotation);
-    const s = Math.sin(this.rotation);
-    const sx = x + ((this.scrollX * c - this.scrollY * s) * this.zoomX);
-    const sy = y + ((this.scrollX * s + this.scrollY * c) * this.zoomY);
-    output.x = (sx * ima + sy * imc) + ime;
-    output.y = (sx * imb + sy * imd) + imf;
-    return output;
+    return worldPointOf(this.matrix.matrix, this.rotation, this.scrollX, this.scrollY, this.zoomX, this.zoomY, x, y, output);
   }
 
   public addToRenderList(child: GameObject): void {
@@ -533,6 +545,27 @@ export class Camera extends EventEmitter {
     this.worldView.height = displayHeight;
     this.matrix.applyITRS(Math.floor(this.x + originX + 0.5), Math.floor(this.y + originY + 0.5), this.rotation, zoomX, zoomY);
     this.matrix.translate(-originX, -originY);
+  }
+
+  public destroy(): void {
+    this.emit(CameraEvents.DESTROY, this);
+    this.removeAllListeners();
+    if (this._customViewport && this.sceneManager) this.sceneManager.customViewports--;
+    this.renderList = [];
+    this.sceneManager = null;
+    this.scaleManager = null;
+  }
+}
+
+/** A CÂMERA COM OS EFEITOS: o fade, o flash e o tremor, e o passo deles a cada quadro. */
+export class Camera extends BaseCamera {
+  public readonly fadeEffect = new FadeEffect(this);
+  public readonly flashEffect = new FlashEffect(this);
+  public readonly shakeEffect = new ShakeEffect(this);
+
+  /** O preRender da base, e então o tremor (ele mexe na matriz que a base acabou de montar). */
+  public override preRender(): void {
+    super.preRender();
     this.shakeEffect.preRender();
   }
 
@@ -567,14 +600,9 @@ export class Camera extends EventEmitter {
     return this;
   }
 
-  public destroy(): void {
+  public override destroy(): void {
     this.resetFX();
-    this.emit(CameraEvents.DESTROY, this);
-    this.removeAllListeners();
-    if (this._customViewport && this.sceneManager) this.sceneManager.customViewports--;
-    this.renderList = [];
-    this.sceneManager = null;
-    this.scaleManager = null;
+    super.destroy();
   }
 }
 

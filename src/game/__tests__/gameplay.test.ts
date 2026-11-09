@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { beforeAll, describe, expect, it } from 'vitest';
 
+import type { GameScene } from '@/game/scenes/GameScene';
 import { bootGame, type BootedGame } from '@/test-support/game';
 import type { TestPage } from '@/test-support/nodeHost';
 
@@ -10,19 +11,10 @@ import type { TestPage } from '@/test-support/nodeHost';
 
 const KEY = { Z: 90, X: 88, ESC: 27, LEFT: 37, UP: 38, RIGHT: 39, DOWN: 40 } as const;
 
-interface GameInternals {
-  playerWorld: { worldX: number; worldY: number };
-  movementController: { interruptMovement(x: number, y: number): void };
-  isSolidForEntities(x: number, y: number): boolean;
-  handVerbAt(x: number, y: number): string | null;
-  useVerbAt(x: number, y: number): string | null;
-  resting: boolean;
-  camShifting: boolean;
-}
-
 let booted: BootedGame;
 let page: TestPage;
-const scene = (): GameInternals => booted.scene('game') as unknown as GameInternals;
+// O tipo de verdade (e não um retrato à mão): um membro que mudar de lugar quebra a compilação, não só o teste.
+const scene = (): GameScene => booted.scene<GameScene>('game');
 const state = () => window.gameDebug!.getState();
 const press = (code: number): void => {
   page.key('keydown', code);
@@ -40,7 +32,7 @@ const teleport = (x: number, y: number): void => {
   const s = scene();
   s.playerWorld.worldX = x;
   s.playerWorld.worldY = y;
-  s.movementController.interruptMovement(x, y);
+  s.movementController!.interruptMovement(x, y);
   booted.tick(2);
 };
 /** Um tile livre com o vizinho da direita livre, perto do começo. */
@@ -52,7 +44,7 @@ const freeRow = (): { x: number; y: number } => {
       for (let dx = -r; dx <= r; dx++) {
         const x = worldX + dx;
         const y = worldY + dy;
-        if (!s.isSolidForEntities(x, y) && !s.isSolidForEntities(x + 1, y) && !s.isSolidForEntities(x + 2, y)) return { x, y };
+        if (!s.query.isSolidForEntities(x, y) && !s.query.isSolidForEntities(x + 1, y) && !s.query.isSolidForEntities(x + 2, y)) return { x, y };
       }
     }
   }
@@ -95,7 +87,7 @@ describe('andar', () => {
       for (let dx = -r; dx <= r && !spot; dx++) {
         const x = worldX + dx;
         const y = worldY + r;
-        if (!s.isSolidForEntities(x, y) && s.isSolidForEntities(x + 1, y)) spot = { x, y };
+        if (!s.query.isSolidForEntities(x, y) && s.query.isSolidForEntities(x + 1, y)) spot = { x, y };
       }
     }
     expect(spot).not.toBeNull();
@@ -138,7 +130,7 @@ describe('conversar', () => {
 describe('a pausa', () => {
   it('ESC abre o menu (em DOM) e fecha de novo — mas nunca por cima de outra tela, nem com a câmera andando', async () => {
     // A câmera volta do diálogo devagar; a pausa espera (ver GameScene.openPauseMenu).
-    await booted.until(() => !scene().camShifting && !state().dialogOpen && !state().cutsceneActive, 600);
+    await booted.until(() => !scene().dialogCam.camShifting && !state().dialogOpen && !state().cutsceneActive, 600);
     press(KEY.ESC);
     booted.tick(3);
     const scrim = document.querySelector('.zh-pause-scrim');
@@ -177,8 +169,8 @@ describe('o tempo e as tarefas', () => {
     let verbs = 0;
     for (let dy = -6; dy <= 6; dy++) {
       for (let dx = -6; dx <= 6; dx++) {
-        if (s.handVerbAt(worldX + dx, worldY + dy)) verbs++;
-        if (s.useVerbAt(worldX + dx, worldY + dy)) verbs++;
+        if (s.verbs.handVerbAt(worldX + dx, worldY + dy)) verbs++;
+        if (s.verbs.useVerbAt(worldX + dx, worldY + dy)) verbs++;
       }
     }
     expect(verbs).toBeGreaterThanOrEqual(0);

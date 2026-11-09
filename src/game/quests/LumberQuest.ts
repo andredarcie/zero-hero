@@ -1,19 +1,16 @@
 import type * as Engine from '@/game/engine';
 
-import { getSoundManager } from '@/game/audio/SoundManager';
-import { ASSET_KEYS } from '@/game/constants';
 import type { DialogScript } from '@/game/dialogs/NpcDialogs';
 import type { HeldItemKind } from '@/game/entities/ItemPickup';
-import { t, tLines, type I18nLine } from '@/game/i18n/i18n';
-import { isLastQuest } from '@/game/runtime/QuestLog';
+import { tLines, type I18nLine } from '@/game/i18n/i18n';
+
 import type { CampfireObject } from '@/game/objects/CampfireObject';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
-import {
-  CHOP_BLOCK_TEXTURE, FIRE_PIT_TEXTURE, woodSprite,
-} from '@/game/render3d/woodTextures';
+import { CHOP_BLOCK_TEXTURE, FIRE_PIT_TEXTURE } from '@/game/render3d/woodTextures';
 import { world3d } from '@/game/render3d/World3D';
 import { adventureState, type LumberQuestSave } from '@/game/runtime/adventureState';
-import { FireLightOverlay, LOGS_TO_SPLIT, SplitOverlay } from '@/game/runtime/WoodcraftOverlays';
+
+import { LumberWork, STICKS } from './LumberWork';
 
 /**
  * A QUEST DO MARCO: uma fogueira e uma noite. Não há fogueira nenhuma ao lado dele, só a terra
@@ -61,40 +58,26 @@ export interface LumberHost {
   }, onDone: () => void) => void;
 }
 
-const STICKS = LOGS_TO_SPLIT;
 const SIZE_BLOCK = 0.9;
-const SIZE_STICK = 1.05;
 const SIZE_PIT = 1.7;
-/** A altura do galho no colo e a do meio dele, em pé no cepo. */
-const LAP_ELEVATION = 0.36;
-const STANDING_MIDDLE = 0.9;
-/** O galho assenta, e o minijogo já vem. */
-const SPLIT_PAUSE_MS = 380;
-/** Onde cada galho pousa na terra, e a inclinação: quatro varas encostadas, formando a tenda. */
-const SLOTS: ReadonlyArray<{ x: number; y: number; angle: number }> = [
-  { x: -0.26, y: 0.04, angle: 30 },
-  { x: 0.26, y: 0.04, angle: -30 },
-  { x: -0.12, y: -0.1, angle: 13 },
-  { x: 0.12, y: -0.1, angle: -13 },
-];
 
 export class LumberQuest {
-  private readonly save: LumberQuestSave;
+  public readonly save: LumberQuestSave;
   private block?: Billboard3D;
-  private standingStick?: Billboard3D;
+  public standingStick?: Billboard3D;
   private pit?: Billboard3D;
-  private readonly laidSticks: Billboard3D[] = [];
-  private blockTile?: { x: number; y: number };
-  private pitTile?: { x: number; y: number };
-  private seatTile?: { x: number; y: number };
-  private npc?: { worldX: number; worldY: number };
-  private fire?: CampfireObject;
-  private overlay?: { destroy: () => void };
-  private busy = false;
-  private missedThisStick = false;
-  private dialogBase: () => DialogScript = () => ({ npcName: '', npcColorHex: '#ffffff', npcAssetKey: '', lines: [] });
+  public readonly laidSticks: Billboard3D[] = [];
+  public blockTile?: { x: number; y: number };
+  public pitTile?: { x: number; y: number };
+  public seatTile?: { x: number; y: number };
+  public npc?: { worldX: number; worldY: number };
+  public fire?: CampfireObject;
+  public overlay?: { destroy: () => void };
+  public dialogBase: () => DialogScript = () => ({ npcName: '', npcColorHex: '#ffffff', npcAssetKey: '', lines: [] });
+  /** O galho, o cepo, a fogueira e a noite. (ver LumberWork) */
+  private readonly work = new LumberWork(this);
 
-  public constructor(private readonly host: LumberHost) {
+  public constructor(public readonly host: LumberHost) {
     this.save = adventureState().lumberQuest;
     const progress = adventureState().questProgress;
     // Saves das versões anteriores da quest: ninguém perde o que já fez.
@@ -137,20 +120,20 @@ export class LumberQuest {
     }
     const w3 = world3d();
     if (this.blockTile) {
-      this.block = w3.addBillboard(CHOP_BLOCK_TEXTURE, 0, { groundShadow: { rx: 0.34, rz: 0.2, alpha: 0.28 } })
+      this.block = w3.objects.addBillboard(CHOP_BLOCK_TEXTURE, 0, { groundShadow: { rx: 0.34, rz: 0.2, alpha: 0.28 } })
         .setPosition(this.blockTile.x, this.blockTile.y)
         .setDisplaySize(SIZE_BLOCK, SIZE_BLOCK);
-      if (this.save.standing) this.showStanding();
+      if (this.save.standing) this.work.showStanding();
     }
     if (this.pitTile) {
-      this.pit = w3.addBillboard(FIRE_PIT_TEXTURE, 0, { flat: true, flatY: 0.016 })
+      this.pit = w3.objects.addBillboard(FIRE_PIT_TEXTURE, 0, { flat: true, flatY: 0.016 })
         .setPosition(this.pitTile.x, this.pitTile.y)
         .setDisplaySize(SIZE_PIT, SIZE_PIT);
       if (this.isDone) {
         this.fire = this.host.addFire(this.pitTile.x, this.pitTile.y);
         this.fire.setHeldCold(true);
       } else {
-        for (let i = 0; i < this.save.laid; i += 1) this.laidSticks.push(this.stickAt(i));
+        for (let i = 0; i < this.save.laid; i += 1) this.laidSticks.push(this.work.stickAt(i));
       }
     }
   }
@@ -172,24 +155,6 @@ export class LumberQuest {
 
   public get isDone(): boolean {
     return this.save.stage === 'done';
-  }
-
-  private stickAt(index: number): Billboard3D {
-    const slot = SLOTS[index];
-    const tile = this.pitTile ?? { x: 0, y: 0 };
-    return world3d().addBillboard(ASSET_KEYS.woodIcon, 0, { groundShadow: { rx: 0.14, rz: 0.08, alpha: 0.22 } })
-      .setPosition(tile.x + slot.x, tile.y + slot.y)
-      .setDisplaySize(SIZE_STICK, SIZE_STICK)
-      .setAngle(slot.angle);
-  }
-
-  private showStanding(): void {
-    const tile = this.blockTile;
-    if (!tile) return;
-    this.standingStick = world3d().addBillboard(ASSET_KEYS.woodIcon, 0, {})
-      .setPosition(tile.x, tile.y + 0.02)
-      .setElevation(0.38)
-      .setDisplaySize(SIZE_STICK, SIZE_STICK);
   }
 
   public talkKey(): string {
@@ -246,8 +211,8 @@ export class LumberQuest {
   // ── os gestos no mundo ──────────────────────────────────────────────────────────────────────────
 
   public interactAt(x: number, y: number): boolean {
-    if (this.blockTile?.x === x && this.blockTile.y === y) return this.useBlock();
-    if (this.pitTile?.x === x && this.pitTile.y === y && !this.isDone) return this.usePit();
+    if (this.blockTile?.x === x && this.blockTile.y === y) return this.work.useBlock();
+    if (this.pitTile?.x === x && this.pitTile.y === y && !this.isDone) return this.work.usePit();
     return false;
   }
 
@@ -274,230 +239,6 @@ export class LumberQuest {
     return stage === 'gather' && held === 'splitWood' ? 'stack' : null;
   }
 
-  private useBlock(): boolean {
-    if (this.save.stage !== 'gather' || this.busy) return true;
-    // Quem saiu do minijogo no meio volta direto: o machado não é pedido.
-    if (this.save.standing) {
-      this.openSplit();
-      return true;
-    }
-    if (this.host.held() === 'wood') this.standStick();
-    return true;
-  }
-
-  /** O galho sai do colo e fica em pé no cepo: sobe, gira um quarto de volta e assenta com um baque. */
-  private standStick(): void {
-    const tile = this.blockTile;
-    if (!tile) return;
-    const hero = this.host.hero();
-    this.host.removeFromHand('wood', 1);
-    this.busy = true;
-    this.host.freeze(true);
-    const { scene } = this.host;
-    const ghost = world3d().addBillboard(ASSET_KEYS.woodIcon, 0, { centered: true })
-      .setPosition(hero.x, hero.y)
-      .setElevation(LAP_ELEVATION)
-      .setAngle(90)
-      .setDisplaySize(SIZE_STICK, SIZE_STICK);
-    const k = { t: 0 };
-    scene.tweens.add({
-      targets: k,
-      t: 1,
-      duration: 420,
-      ease: 'Sine.easeInOut',
-      onUpdate: () => {
-        ghost.setPosition(hero.x + (tile.x - hero.x) * k.t, hero.y + (tile.y - hero.y) * k.t);
-        ghost.setElevation(LAP_ELEVATION + (STANDING_MIDDLE - LAP_ELEVATION) * k.t + Math.sin(k.t * Math.PI) * 0.3);
-        ghost.setAngle((1 - k.t) * 90);
-      },
-      onComplete: () => {
-        ghost.destroy();
-        this.showStanding();
-        this.save.standing = true;
-        this.host.persist();
-        scene.time.delayedCall(SPLIT_PAUSE_MS, () => {
-          this.busy = false;
-          this.openSplit();
-        });
-        getSoundManager().playBridgePlank();
-        this.host.dust(tile.x, tile.y);
-        const stick = this.standingStick;
-        if (!stick) return;
-        // O baque: amassa e volta, como quem acertou o centro do cepo.
-        stick.setDisplaySize(SIZE_STICK * 1.14, SIZE_STICK * 0.82);
-        scene.tweens.add({ targets: stick, displayWidth: SIZE_STICK, displayHeight: SIZE_STICK, duration: 220, ease: 'Back.easeOut' });
-      },
-    });
-  }
-
-  private openUi(): boolean {
-    if (this.overlay) return false;
-    this.host.freeze(true);
-    this.host.showButtons(false);
-    return true;
-  }
-
-  private closeUi(): void {
-    this.overlay?.destroy();
-    this.overlay = undefined;
-    this.host.freeze(false);
-    this.host.showButtons(true);
-  }
-
-  private openSplit(): void {
-    if (!this.openUi()) return;
-    const sound = getSoundManager();
-    this.overlay = new SplitOverlay({
-      onHit: () => { this.missedThisStick = true; sound.playWoodChop(); },
-      onMiss: () => { this.missedThisStick = true; sound.playItemBonk(); },
-      onClean: () => { sound.playWoodChop(); sound.playBridgePlank(); },
-      // Sair e voltar não apaga o golpe errado: limpo é de primeira, no galho, não na tela.
-      onSplit: (clean) => {
-        if (clean && !this.missedThisStick) this.save.clean += 1;
-        this.missedThisStick = false;
-      },
-      onLeave: () => this.closeUi(),
-      onDone: () => {
-        this.closeUi();
-        this.finishSplit();
-      },
-    }, this.save.laid);
-  }
-
-  /** As duas metades pulam do cepo para as costas, e o machado fica à esquerda do herói. */
-  private finishSplit(): void {
-    const tile = this.blockTile;
-    const hero = this.host.hero();
-    this.standingStick?.destroy();
-    this.standingStick = undefined;
-    this.save.standing = false;
-    if (this.host.held() === 'axe') this.host.removeFromHand('axe', 1);
-    else this.host.takeFromGround('axe');
-    this.host.dropAt('axe', hero.x - 1, hero.y);
-    this.host.sparkle(hero.x - 1, hero.y);
-    if (tile) this.host.fling('splitWood', tile.x, tile.y, hero.x, hero.y);
-    this.host.takeIntoHand('splitWood', 1);
-    this.host.itemGet('splitWood', () => {});
-    this.host.persist();
-  }
-
-  private usePit(): boolean {
-    if (this.busy) return true;
-    if (this.save.stage === 'light') {
-      this.openFire();
-      return true;
-    }
-    if (this.save.stage !== 'gather' || this.host.held() !== 'splitWood' || this.save.laid >= STICKS) return true;
-    this.throwOnPit();
-    return true;
-  }
-
-  /** O GESTO DA QUEST: o herói atira o galho, ele gira no ar, cai, quica e fica na tenda. */
-  private throwOnPit(): void {
-    const tile = this.pitTile;
-    if (!tile) return;
-    const slot = SLOTS[this.save.laid];
-    const hero = this.host.hero();
-    const { scene } = this.host;
-    this.host.removeFromHand('splitWood', 1);
-    this.busy = true;
-    this.save.laid += 1;
-    getSoundManager().playSwordSlash();
-    const stick = world3d().addBillboard(ASSET_KEYS.woodIcon, 0, { groundShadow: { rx: 0.14, rz: 0.08, alpha: 0.22 } })
-      .setPosition(hero.x, hero.y)
-      .setElevation(0.55)
-      .setDisplaySize(SIZE_STICK, SIZE_STICK);
-    this.laidSticks.push(stick);
-    const to = { x: tile.x + slot.x, y: tile.y + slot.y };
-    const k = { t: 0 };
-    scene.tweens.add({
-      targets: k,
-      t: 1,
-      duration: 460,
-      ease: 'Quad.easeIn',
-      onUpdate: () => {
-        stick.setPosition(hero.x + (to.x - hero.x) * k.t, hero.y + (to.y - hero.y) * k.t);
-        stick.setElevation(0.55 * (1 - k.t) + Math.sin(k.t * Math.PI) * 1.1);
-        stick.setAngle(slot.angle + (1 - k.t) * 720);
-      },
-      onComplete: () => this.landStick(stick, slot, tile),
-    });
-  }
-
-  private landStick(stick: Billboard3D, slot: { angle: number }, tile: { x: number; y: number }): void {
-    const { scene } = this.host;
-    stick.setElevation(0).setAngle(slot.angle);
-    getSoundManager().playBridgePlank();
-    getSoundManager().playFootstep();
-    this.host.dust(tile.x, tile.y);
-    this.host.shake();
-    // O quique: sobe um fio e assenta, e o galho amassa ao tocar o chão.
-    stick.setDisplaySize(SIZE_STICK * 1.2, SIZE_STICK * 0.78);
-    scene.tweens.add({ targets: stick, displayWidth: SIZE_STICK, displayHeight: SIZE_STICK, duration: 260, ease: 'Back.easeOut' });
-    scene.tweens.add({
-      targets: stick,
-      elevation: 0.12,
-      duration: 110,
-      yoyo: true,
-      ease: 'Sine.easeOut',
-      onComplete: () => {
-        this.busy = false;
-        this.host.sparkle(tile.x, tile.y);
-        if (this.save.laid >= STICKS) {
-          this.save.stage = 'ready';
-          getSoundManager().playCozyChime();
-        }
-        this.host.persist();
-      },
-    });
-  }
-
   // ── o fogo e a noite ────────────────────────────────────────────────────────────────────────────
 
-  private openFire(): void {
-    if (!this.openUi()) return;
-    const sound = getSoundManager();
-    this.overlay = new FireLightOverlay({
-      onStrike: () => sound.playHammer(),
-      onBlow: () => sound.playFurnaceBreath(),
-      onFail: () => sound.playItemBonk(),
-      onCatch: () => sound.playIgnite(),
-      onLeave: () => this.closeUi(),
-      onDone: (attempts) => this.startNight(attempts),
-    }, woodSprite(this.host.scene));
-  }
-
-  private startNight(attempts: number): void {
-    this.overlay?.destroy();
-    this.overlay = undefined;
-    this.save.attempts = attempts;
-    const pit = this.pitTile;
-    const seat = this.seatTile;
-    const { npc } = this;
-    if (!pit || !seat || !npc) return;
-    for (const stick of this.laidSticks) stick.destroy();
-    this.laidSticks.length = 0;
-    const fire = this.host.addFire(pit.x, pit.y);
-    this.fire = fire;
-    const base = { ...this.dialogBase(), calm: true };
-    const open: I18nLine[] = [
-      { speaker: 'npc', text: t(`npc.businessManNight.split.${this.save.clean >= 3 ? 'clean' : 'rough'}`) },
-      { speaker: 'npc', text: t(`npc.businessManNight.fire.${attempts === 0 ? 'first' : 'worked'}`) },
-    ];
-    this.host.playNight({
-      fire,
-      pit,
-      seat,
-      npc,
-      story: { ...base, lines: (() => { const [sit, ...rest] = tLines('npc.businessManNight.story'); return [sit, ...open, ...rest]; })() },
-      // Se este é o último pedido do vale, a despedida dele termina com a chave do jardim alto.
-      farewell: { ...base, lines: [...tLines('npc.businessManNight.farewell'), ...(isLastQuest('businessMan') ? tLines('garden.key') : [])] },
-    }, () => {
-      fire.setHeldCold(true);
-      this.save.stage = 'done';
-      this.host.persist();
-      this.host.closeQuest();
-      this.host.markHeard();
-    });
-  }
 }

@@ -50,7 +50,7 @@ export default {
       await sleep(200);
       const st = await state();
       if (!st.dialogOpen) break;
-      const now = await page.evaluate(() => ({ cx: window.__scene.camera.screenCenterX, line: window.__scene.dialogOverlay.lineIndex, text: window.__scene.dialogOverlay.script?.lines[window.__scene.dialogOverlay.lineIndex]?.text }));
+      const now = await page.evaluate(() => ({ cx: window.__scene.camera.screenCenterX, line: window.__scene.dialog.dialogOverlay.writer.lineIndex, text: window.__scene.dialog.dialogOverlay.script?.lines[window.__scene.dialog.dialogOverlay.writer.lineIndex]?.text }));
       if (now.text !== hintText) {
         if (rest === null && i > 3) rest = now.cx;
         if (i % 4 === 3) await page.keyboard.press('z');
@@ -70,10 +70,10 @@ export default {
     const point = await page.evaluate(() => {
       const s = window.__scene;
       const home = (kind) => s.npcManager.getActiveWorldPositions().find((n) => n.kind === kind) ?? null;
-      const axe = s.uniqueItemSource('axe');
-      const shovel = s.uniqueItemSource('shovel');
-      const scythe = s.uniqueItemSource('scythe');
-      const wood = s.uniqueItemSource('wood');
+      const axe = s.bumps.uniqueItemSource('axe');
+      const shovel = s.bumps.uniqueItemSource('shovel');
+      const scythe = s.bumps.uniqueItemSource('scythe');
+      const wood = s.bumps.uniqueItemSource('wood');
       s.itemManager.dropAt?.('scythe', 30, 50);
       return { axe, shovel, scythe, wood, marco: home('businessMan'), sisi: home('painter') };
     });
@@ -86,7 +86,7 @@ export default {
     // O balão na tela, apontando: o herói diante de uma árvore seca, sem machado.
     const shown = await page.evaluate(() => {
       const s = window.__scene; window.gameTime.set(0.45);
-      const t = s.dryTrees[0];
+      const t = s.props.dryTrees[0];
       s.playerWorld.worldX = t.worldX; s.playerWorld.worldY = t.worldY + 1;
       s.movementController.interruptMovement(t.worldX, t.worldY + 1); s.movementController.faceTo(0, -1); s.streamChunks(true);
       return [t.worldX, t.worldY];
@@ -94,8 +94,8 @@ export default {
     await sleep(600);
     const balloon = await page.evaluate(([x, y]) => {
       const s = window.__scene;
-      s.thinkOfNeed(x, y, true);
-      return { icon: s.heroThought.visibleIcon, to: s.heroThought.pointing };
+      s.bumps.thinkOfNeed(x, y, true);
+      return { icon: s.bumps.heroThought.visibleIcon, to: s.bumps.heroThought.pointing };
     }, shown);
     await sleep(250);
     await shot('02-pontinha', { note: 'O balão do machado, com a pontinha virada para o Marco' });
@@ -103,7 +103,7 @@ export default {
 
     // ── 3. OS COGUMELINHOS-FILHOS ─────────────────────────────────────────────────────────────
     const kinds = ['porcini', 'morel', 'puffball', 'inkCap', 'chanterelle', 'flyAgaric'];
-    const kin = await page.evaluate((ks) => Object.fromEntries(ks.map((k) => [k, window.__scene.mushroomKin?.count(k) ?? 0])), kinds);
+    const kin = await page.evaluate((ks) => Object.fromEntries(ks.map((k) => [k, window.__scene.forage.mushroomKin?.count(k) ?? 0])), kinds);
     log(`  filhos: ${JSON.stringify(kin)}`);
     assert('Cada cogumelo tem cogumelinhos-filhos em volta (a trilha que leva a ele)', kinds.every((k) => kin[k] >= 2), JSON.stringify(kin));
     await page.evaluate(() => {
@@ -112,9 +112,9 @@ export default {
     });
     await sleep(900);
     await shot('03-filhos', { note: 'Os cogumelinhos-filhos em volta do porcini' });
-    await page.evaluate(() => window.__scene.basketMushroom('porcini', 2, 40));
+    await page.evaluate(() => window.__scene.forage.basketMushroom('porcini', 2, 40));
     await sleep(2500);
-    const after = await page.evaluate(() => window.__scene.mushroomKin?.count('porcini') ?? 0);
+    const after = await page.evaluate(() => window.__scene.forage.mushroomKin?.count('porcini') ?? 0);
     assert('Colhido o porcini, os filhos dele somem', after === 0, String(after));
   },
 };

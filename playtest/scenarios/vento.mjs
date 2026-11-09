@@ -114,7 +114,7 @@ export default {
       const CUBES = [45, 46, 47, 39, 40]; // alvenaria e montanha saem da malha de quads
       const upright = {};
       const uprightAttr = w3.solidGeo.attributes.aWind;
-      w3.solidTiles.filter((t) => !CUBES.includes(t.frame)).forEach((tile, i) => {
+      w3.tiles.solidTiles.filter((t) => !CUBES.includes(t.frame)).forEach((tile, i) => {
         upright[tile.frame] = upright[tile.frame] ?? { on: 0, off: 0 };
         upright[tile.frame][uprightAttr.getX(i * 4) > 0.5 ? 'on' : 'off'] += 1;
       });
@@ -122,9 +122,9 @@ export default {
       // o frame de cada tile vem do ARQUIVO — a carta do cemitério, posta no chunk (0,-1).
       const file = await (await fetch(`${document.baseURI}world.json`)).json();
       const card = file.chunks.find((chunk) => chunk.catalog?.id === 'sunken-graveyard');
-      const decorAttr = w3.decorGeo.attributes.aWind;
+      const decorAttr = w3.tiles.decorGeo.attributes.aWind;
       const decor = {};
-      for (const [key, start] of w3.decorQuads) {
+      for (const [key, start] of w3.tiles.decorQuads) {
         const [wx, wz] = key.split(',').map(Number);
         const lx = wx;
         const ly = wz + 12; // o chunk comprado ao norte: world y -12..-1 → local 0..11

@@ -251,21 +251,21 @@ export class ItemPickup {
     // makes every collectible in the game safe, not each item kind remembering on its own.
     this.sprite = world3d()
       // O que enfeita é móvel, não coisa a pegar: tamanho de um tile, sem brilho nem aro (só a lanterna acende).
-      .addBillboard(visual.texture, visual.frame, { emissive: !isDecorKind(kind) || kind === 'lantern', depthLayer: 'ground' })
+      .objects.addBillboard(visual.texture, visual.frame, { emissive: !isDecorKind(kind) || kind === 'lantern', depthLayer: 'ground' })
       .setPosition(tileX, tileY)
       .setDisplaySize(isDecorKind(kind) ? 1 : GROUND_SIZE, isDecorKind(kind) ? 1 : GROUND_SIZE);
 
     // Emissive like the item itself, so the line survives the dark. Alpha/elevation are mirrored from the
     // sprite every render (fade-in + bob).
     this.outline = UNINKED_KINDS.has(kind) ? OUTLINE_DIRS.map(([ox]) => world3d()
-      .addBillboard(visual.texture, visual.frame, { emissive: true, depthLayer: 'ground' })
+      .objects.addBillboard(visual.texture, visual.frame, { emissive: true, depthLayer: 'ground' })
       .setTintFill(OUTLINE_COLOR)
       .setPosition(tileX + ox * OUTLINE_OFFSET_TILES, tileY - OUTLINE_BEHIND_TILES)
       .setDisplaySize(GROUND_SIZE, GROUND_SIZE)
       .setAlpha(0)) : [];
     if (!isDecorKind(kind) && !isMushroomKind(kind)) {
       this.glint = world3d()
-        .addBillboard(GLINT_TEXTURE, 0, { centered: true, emissive: true, fog: false, depthWrite: false })
+        .objects.addBillboard(GLINT_TEXTURE, 0, { centered: true, emissive: true, fog: false, depthWrite: false })
         .setPosition(tileX + 0.18, tileY - 0.04)
         .setDisplaySize(GLINT_SIZE, GLINT_SIZE)
         .setAlpha(0);
@@ -288,7 +288,7 @@ export class ItemPickup {
     if (fire && kind === 'wood' && fire.fuelMs > 0) {
       this.fireState = { fuelMs: fire.fuelMs };
       this.flame = world3d()
-        .addBillboard(FLAME_KEYS[0], 0, { emissive: true, emissiveBoost: 4 })
+        .objects.addBillboard(FLAME_KEYS[0], 0, { emissive: true, emissiveBoost: 4 })
         .setPosition(tileX, tileY - 0.02)
         .setDisplaySize(0.3, 0.42);
     }
@@ -308,7 +308,7 @@ export class ItemPickup {
     // uma forja.
     if (kind === 'bloom') {
       this.heatGlow = world3d()
-        .addBillboard(FX_DOT_TEXTURE, 0, {
+        .objects.addBillboard(FX_DOT_TEXTURE, 0, {
           centered: true, additive: true, fog: false, depthWrite: false,
         })
         .setTint(BLOOM_HEAT)

@@ -1,18 +1,9 @@
 import type * as Engine from '@/game/engine';
-import { bosqueIconKey } from '@/game/objects/BigTrees';
-import { fenceIconKey } from '@/game/objects/WoodFence';
-import { yardIconKey } from '@/game/objects/LumberYard';
-import { forgeIconKey } from '@/game/objects/OldForge';
-import { crashIconKey } from '@/game/objects/CrashSite';
 
-import {
-  ASSET_KEYS, CHUNK_COLUMNS, CHUNK_ROWS, KEY_FRAMES,
-  MOONFLOWER_FRAMES, NPC_VISUALS, SEA_TILE_FRAME, SOLID_GROUND_FRAMES,
-  SOLID_UPPER_FRAMES, TOOLBOX_FRAMES,
-} from '@/game/constants';
-import type { EditorStore, TileLayerId } from '@/game/editor/EditorStore';
-import { fungusTextureKey } from '@/game/fungi/fungi';
-import type { NpcKind, PickupKind } from '@/game/world/ScreenContent';
+import { CHUNK_COLUMNS, CHUNK_ROWS } from '@/game/constants';
+import type { EditorStore } from '@/game/editor/EditorStore';
+
+import type { NpcKind } from '@/game/world/ScreenContent';
 import type {
   PropDir, PropKind, WorldDialog,
 } from '@/game/world/worldSchema';
@@ -20,53 +11,24 @@ import {
   worldFilePath,
   type WorldFileId,
 } from '@/game/worldApi';
-import { biomeTintAt, decorFrameAt } from '@/game/world/biomes';
+
 import { createCanvas } from '@/game/platform/platform';
+import { EditorModals, NPC_KINDS } from './EditorModals';
+import { EditorMinimap, PANEL_WIDTH, type EntitySelection } from './EditorMinimap';
+import { EditorPanels, PICKUP_DEFS, PROP_DEFS } from './EditorPanels';
+import { EditorKeys, type PaletteTab, type UiState } from './EditorKeys';
+import { EditorToolbar, TOOL_DEFS } from './EditorToolbar';
+export { isDirectionalProp } from './EditorKeys';
+export type { ToolId, PaletteTab, UiState } from './EditorKeys';
+export type { CollisionPaintMode, ReliefPaintMode, ViewMode } from './EditorPanels';
+export { PANEL_WIDTH } from './EditorMinimap';
+export type { EntitySelection } from './EditorMinimap';
+export { NPC_KINDS } from './EditorModals';
 
 // The editor shell is plain DOM layered over the 2D canvas: the canvas renders the
 // world viewport, this module renders everything else (tools, palettes, minimap, modals).
 // DOM gives us scrolling, text inputs and tooltips that canvas UI can't do well — and the
 // editor is dev-only, so there is no shipping cost.
-
-export const PANEL_WIDTH = 320;
-
-export type ToolId = 'brush' | 'eraser' | 'rect' | 'fill' | 'picker' | 'collision' | 'relief' | 'entity' | 'spawn';
-export type CollisionPaintMode = 'keep' | 'set' | 'clear';
-// O que a ferramenta Serra pinta: o planalto, ou a escada (que aponta sozinha para o planalto).
-export type ReliefPaintMode = 'high' | 'peak' | 'stair';
-export type PaletteTab = 'tiles' | 'npcs' | 'pickups' | 'props';
-
-export type EntitySelection =
-  | { list: 'npcs'; type: NpcKind }
-  | { list: 'pickups'; type: PickupKind }
-  | { list: 'props'; type: PropKind };
-
-export type ViewMode = 'world' | 'chunk';
-
-export type UiState = {
-  tool: ToolId;
-  layer: TileLayerId;
-  tile: number | null;
-  brushSize: 1 | 2 | 3;
-  collisionMode: CollisionPaintMode;
-  reliefMode: ReliefPaintMode;
-  tab: PaletteTab;
-  entity: EntitySelection;
-  showGrid: boolean;
-  showCollisions: boolean;
-  showRelief: boolean;
-  showEntities: boolean;
-  /** As peças que o JOGO monta por código em lugar fixo (cachoeira, bosque, acampamento...): ver EditorFixtures. */
-  showFixtures: boolean;
-  // A direcao com que o proximo prop direcional sera colocado.
-  // Vive no estado da UI, e nao na selecao da paleta, porque e uma preferencia do PINCEL —
-  // igual ao tamanho do brush: escolhe-se uma vez e vale pras proximas colocadas.
-  propDir: PropDir;
-  // Chunk view: camera locked and fitted to one chunk, edits confined to it.
-  viewMode: ViewMode;
-  chunkX: number;
-  chunkY: number;
-};
 
 export type StatusInfo = {
   tileX: number;
@@ -95,288 +57,20 @@ export type EditorUiCallbacks = {
   worldFile: WorldFileId;
 };
 
-export const NPC_KINDS: readonly NpcKind[] = [
-  'blackCat', 'mimic', 'astronaut', 'businessMan', 'radiationSuit', 'painter', 'salesman', 'poet', 'wizard', 'death',
-];
-
-const NPC_LABELS: Record<NpcKind, string> = {
-  blackCat: 'Gato Preto',
-  mimic: 'Mimico',
-  astronaut: 'Astronauta',
-  businessMan: 'Empresario',
-  radiationSuit: 'Operario',
-  painter: 'Pintor',
-  salesman: 'Vendedor',
-  poet: 'Poeta',
-  wizard: 'Mago',
-  death: 'Morte',
-};
-
-// A ESPADA NAO ESTA AQUI, e a ausencia e a regra: ela deixou de ser item (o heroi nasce com a
-// dele — ver GameScene.swordEquipped) e nao nasce mais no chao nem se apanha. Oferece-la na
-// paleta seria autorar um objeto que o mundo carrega e nenhum botao usa.
-const PICKUP_DEFS: ReadonlyArray<{ type: PickupKind; label: string; key: string; frame?: number }> = [
-  { type: 'key', label: 'Chave', key: ASSET_KEYS.keyItem, frame: KEY_FRAMES.pickup },
-  { type: 'axe', label: 'Machado', key: ASSET_KEYS.axeIcon },
-  { type: 'pickaxe', label: 'Picareta', key: ASSET_KEYS.pickaxeIcon },
-  { type: 'scythe', label: 'Foice', key: ASSET_KEYS.scytheIcon },
-  { type: 'shovel', label: 'Pa — cava buraco de plantio na terra', key: ASSET_KEYS.shovelIcon },
-  { type: 'wood', label: 'Graveto', key: ASSET_KEYS.woodIcon },
-  { type: 'stone', label: 'Pedra', key: ASSET_KEYS.rock },
-  { type: 'iron', label: 'Bloco de Ferro', key: ASSET_KEYS.ironItem },
-  { type: 'bucket', label: 'Balde', key: 'bucket-icon' }, // arte gerada no boot (registerBucketTextures)
-  // Os seis fungos (arte gerada no boot, registerFungiTextures): nascem no chao, a faca solta.
-  { type: 'puffball', label: 'Bufa-de-lobo (Lycoperdon perlatum)', key: fungusTextureKey('puffball') },
-  { type: 'inkCap', label: 'Coprino-cabeludo (Coprinus comatus)', key: fungusTextureKey('inkCap') },
-  { type: 'morel', label: 'Morel (Morchella esculenta)', key: fungusTextureKey('morel') },
-  { type: 'chanterelle', label: 'Cantarelo (Cantharellus cibarius)', key: fungusTextureKey('chanterelle') },
-  { type: 'flyAgaric', label: 'Mata-moscas (Amanita muscaria)', key: fungusTextureKey('flyAgaric') },
-  { type: 'porcini', label: 'Porcini (Boletus edulis)', key: fungusTextureKey('porcini') },
-];
-
-const PROP_DEFS: ReadonlyArray<{ type: PropKind; label: string; key: string; frame?: number }> = [
-  { type: 'campfire', label: 'Fogueira', key: ASSET_KEYS.campfireFrame1 },
-  { type: 'dryBush', label: 'Mato Seco', key: ASSET_KEYS.dryBush },
-  { type: 'lockedDoor', label: 'Porta', key: ASSET_KEYS.lookedDoorObject },
-  { type: 'swingGate', label: 'Portao de Bater', key: ASSET_KEYS.swingGateObject },
-  { type: 'dryTree', label: 'Arvore Seca', key: ASSET_KEYS.dryTree, frame: 0 },
-  { type: 'dryShrub', label: 'Arbusto Seco', key: ASSET_KEYS.dryShrub },
-  { type: 'rock', label: 'Pedra', key: ASSET_KEYS.rock },
-  { type: 'ironRock', label: 'Pedra de Ferro', key: ASSET_KEYS.ironRock, frame: 0 },
-  { type: 'coalRock', label: 'Pedra de Carvão', key: ASSET_KEYS.coalRock, frame: 0 },
-  { type: 'tallGrass', label: 'Mato Alto', key: ASSET_KEYS.tallGrassUp, frame: 0 },
-  { type: 'water', label: 'Rio (agua)', key: ASSET_KEYS.water },
-  { type: 'lava', label: 'Lava (a pedra afunda e vira chao)', key: ASSET_KEYS.lavaFloor },
-  { type: 'bridgeSpot', label: 'Ponto de Ponte', key: ASSET_KEYS.bridge },
-  // A paleta mostra a flor ABERTA: e a pose que diz o que a peca faz (uma ponte de petalas), e o
-  // botao fechado, sozinho num icone, so diria "tem uma planta aqui".
-  { type: 'moonflower', label: 'Flor da Lua', key: ASSET_KEYS.moonflower, frame: MOONFLOWER_FRAMES.lying[3] },
-  { type: 'plantSpot', label: 'Buraco de Plantio', key: ASSET_KEYS.plantHole, frame: 0 },
-  { type: 'toolbox', label: 'Caixa de Ferramentas (G gira)', key: ASSET_KEYS.toolbox, frame: TOOLBOX_FRAMES.closed },
-  { type: 'furnace', label: 'Forno manual (G gira) — abra o catalogo para fundir', key: ASSET_KEYS.furnace, frame: 1 },
-  // O ALTAR nao gira e nao tem energia: e um movel. Z poe o item selecionado na laje, e bater
-  // nele (Z de espada, ou o X com o que estiver na mao) malha a ESPONJA em ferro.
-  { type: 'altar', label: 'Altar — laje onde se POE uma peca e se MALHA (Z poe, bater transforma)', key: ASSET_KEYS.altar, frame: 0 },
-  // O FIM DO JOGO: a fogueira que so o heroi acende, e o portao que so abre quando o ultimo
-  // pedido dos vizinhos fecha. Um de cada, no centro do vale.
-  { type: 'hearth', label: 'Fogueira do Fim — o heroi acende e assa o cogumelo', key: ASSET_KEYS.campfireFrame1 },
-  { type: 'gardenGate', label: 'Portao do Jardim — abre quando todos os pedidos fecham', key: ASSET_KEYS.lookedDoorObject },
-  // O BOSQUE (objects/BigTrees): bloqueiam pelo proprio prop; o tronco caido deita em dois tiles (o posto e o da direita).
-  { type: 'oakTree', label: 'Carvalho velho (bosque)', key: bosqueIconKey('oak') },
-  { type: 'birchTree', label: 'Betula (bosque)', key: bosqueIconKey('birch') },
-  { type: 'youngOak', label: 'Carvalhinho (bosque)', key: bosqueIconKey('sapling') },
-  { type: 'fallenLog', label: 'Tronco caido (bosque) — ocupa este tile e o da direita', key: bosqueIconKey('log') },
-  // Liga sozinha nos vizinhos; a ponta (um vizinho so) vira pilar de portao.
-  { type: 'woodFence', label: 'Cerca de madeira — liga nos vizinhos; a ponta vira pilar de portao', key: fenceIconKey },
-  // O quintal do lenhador (objects/LumberYard).
-  { type: 'woodpile', label: 'Pilha de lenha', key: yardIconKey('woodpile') },
-  { type: 'sawhorse', label: 'Cavalete com serra', key: yardIconKey('sawhorse') },
-  { type: 'stump', label: 'Toco', key: yardIconKey('stump') },
-  { type: 'axeStump', label: 'Toco com machado cravado', key: yardIconKey('axeStump') },
-  { type: 'wheelbarrow', label: 'Carrinho de mao com lenha', key: yardIconKey('wheelbarrow') },
-  { type: 'yardSign', label: 'Placa do lenhador', key: yardIconKey('yardSign') },
-  // A forja velha (objects/OldForge): perto de um forno, ele ganha o piso de lajes da oficina.
-  { type: 'forgeRubble', label: 'Chamine caida (forja velha)', key: forgeIconKey('forgeRubble') },
-  { type: 'forgeRack', label: 'Suporte de ferramentas velhas (forja velha)', key: forgeIconKey('forgeRack') },
-  // A cratera da nave da Thea (objects/CrashSite).
-  { type: 'crashCrater', label: 'Cratera da nave (o buraco; o centro e solido)', key: crashIconKey('crashCrater') },
-  { type: 'shipHull', label: 'Chapa do casco da nave', key: crashIconKey('shipHull') },
-  { type: 'shipThruster', label: 'Propulsor da nave (solta fumaca)', key: crashIconKey('shipThruster') },
-  { type: 'shipFin', label: 'Aleta da nave', key: crashIconKey('shipFin') },
-];
-
-// Props que carregam orientacao. E um conjunto, e nao um booleano no braco, porque a pergunta
-// que o editor faz e "esta peca gira?" — e quando existir a segunda peca giratoria, ela entra
-// aqui e ganha o G de graca. (Aconteceu: a caixa de ferramentas.)
-const DIRECTIONAL_PROPS: ReadonlySet<PropKind> = new Set<PropKind>(['toolbox', 'furnace']);
-
 // …e destes, quais tem a ARTE dividida em um frame por direcao. Sao duas perguntas diferentes e
 // junta-las quebrou a caixa de ferramentas na primeira tentativa: os frames dela sao as poses da
 // tampa, entao desenhar `frame = dir` no tabuleiro punha a caixa aberta e forjando num mapa
 // parado. Quem nao tem frames de direcao ganha uma marca de proa no chip (ver EditorScene).
 const DIR_FRAME_PROPS: ReadonlySet<PropKind> = new Set<PropKind>();
 
-export const isDirectionalProp = (type: PropKind): boolean => DIRECTIONAL_PROPS.has(type);
 export const hasDirectionFrames = (type: PropKind): boolean => DIR_FRAME_PROPS.has(type);
 
 /** O nome da direcao, pro editor poder dizer pra onde a peca esta virada. */
 export const PROP_DIR_LABEL: Record<PropDir, string> = { 0: 'Norte', 1: 'Leste', 2: 'Sul', 3: 'Oeste' };
 
-// The tiles palette used to be an anonymous grid of "Tile 23" cells, so a whole cemetery sitting
-// in the bottom rows of forest_tile_set.png was invisible to whoever was building the map. Tiles
-// are grouped and named here instead. Any frame missing from this table still shows up, under
-// "Outros" — the palette enumerates the tileset, so a new row of art is never hidden by omission.
-//
-// `layer` is the layer the tile is DRAWN for, and picking it switches the active layer. That is
-// not a convenience: the ground mesh ignores alpha (MeshLambertMaterial, no alphaTest), so a tile
-// with transparent pixels — the bones, the skull — painted onto the ground reads as a black
-// square, while an opaque floor tile on the upper layer hides the ground it should be part of.
-type TileDef = { frame: number; label: string; layer: TileLayerId };
-
-const TILE_GROUPS: ReadonlyArray<{
-  title: string;
-  tiles: readonly TileDef[];
-  /** Grupo do ANDAR DE BAIXO: no subterrâneo a paleta mostra só estes (ver renderPalette). */
-  dungeon?: boolean;
-}> = [
-  {
-    title: 'Chao',
-    tiles: [
-      { frame: 5, label: 'Terra', layer: 'ground' },
-      { frame: 6, label: 'Terra 2', layer: 'ground' },
-      // O mar bloqueia por si so (SOLID_GROUND_FRAMES), sem colisao pintada — e a fronteira
-      // do mundo, e nenhum item do jogo abre agua. Fica no chao porque E chao, nao um prop.
-      { frame: SEA_TILE_FRAME, label: 'Mar', layer: 'ground' },
-    ],
-  },
-  {
-    title: 'Floresta',
-    tiles: [
-      { frame: 4, label: 'Pinheiro', layer: 'upper' },
-      { frame: 14, label: 'Pinheiro 2', layer: 'upper' },
-      { frame: 15, label: 'Pinheiro com Frutos', layer: 'upper' },
-      { frame: 16, label: 'Pinheiro com Flores', layer: 'upper' },
-      { frame: 17, label: 'Pinheiro 3', layer: 'upper' },
-      { frame: 18, label: 'Pinheiro 4', layer: 'upper' },
-      { frame: 3, label: 'Arvore Seca', layer: 'upper' },
-      { frame: 21, label: 'Arvore Seca 2', layer: 'upper' },
-      { frame: 1, label: 'Arbusto Florido', layer: 'upper' },
-      { frame: 12, label: 'Pedregulho', layer: 'upper' },
-      { frame: 13, label: 'Pedras', layer: 'upper' },
-      { frame: 10, label: 'Cogumelos Vermelhos', layer: 'upper' },
-      { frame: 11, label: 'Cogumelos Roxos', layer: 'upper' },
-      { frame: 0, label: 'Folhagem', layer: 'upper' },
-      { frame: 7, label: 'Folhagem 2', layer: 'upper' },
-      { frame: 8, label: 'Folhagem 3', layer: 'upper' },
-      { frame: 19, label: 'Folhagem 4', layer: 'upper' },
-      { frame: 20, label: 'Folhagem 5', layer: 'upper' },
-      { frame: 9, label: 'Gravetos', layer: 'upper' },
-      { frame: 2, label: 'Graveto Solto', layer: 'upper' },
-    ],
-  },
-  {
-    // A FLORA DOS BIOMAS (spritefactory/sprites/biome-decor.mjs, world/biomes.ts). O bioma já veste a
-    // decoração genérica com elas sozinho; aqui é para pôr uma de propósito. Sem este grupo os frames
-    // cairiam em "Outros", sem camada, e pintar com o "Chão" ligado poria a planta no lugar do piso.
-    title: 'Flora dos Biomas',
-    tiles: [
-      { frame: 63, label: 'Samambaia', layer: 'upper' },
-      { frame: 64, label: 'Musgo Florido', layer: 'upper' },
-      { frame: 65, label: 'Trigo', layer: 'upper' },
-      { frame: 66, label: 'Margaridas', layer: 'upper' },
-      { frame: 67, label: 'Papoulas', layer: 'upper' },
-      { frame: 68, label: 'Campânulas', layer: 'upper' },
-      { frame: 69, label: 'Cristais', layer: 'upper' },
-      { frame: 70, label: 'Brasas', layer: 'upper' },
-      { frame: 71, label: 'Folhas e Pinha', layer: 'upper' },
-      { frame: 72, label: 'Trevos', layer: 'upper' },
-    ],
-  },
-  {
-    // A MATA ANTIGA DO JARDIM ALTO (spritefactory/sprites/ancient-grove.mjs). As árvores bloqueiam sozinhas
-    // (SOLID_UPPER_FRAMES), como o pinheiro.
-    title: 'Mata Antiga',
-    tiles: [
-      { frame: 73, label: 'Árvore Anciã', layer: 'upper' },
-      { frame: 74, label: 'Árvore Anciã (torta)', layer: 'upper' },
-      { frame: 75, label: 'Moita Velha', layer: 'upper' },
-      { frame: 76, label: 'Capim Antigo', layer: 'upper' },
-    ],
-  },
-  {
-    // A montanha (CLIFF_WALL_FRAMES). E a MESMA pintura do "Chao de Pedra" do cemiterio, so que
-    // em pe: no chao ela e patio, na camada de cima ela e montanha — e o World3D a assa em CUBO,
-    // com topo de planalto e lateral sombreada. Bloqueia sozinha (SOLID_UPPER_FRAMES), como o
-    // pinheiro. Nao precisa alternar as duas: o volume do cubo ja quebra a repeticao.
-    title: 'Montanha',
-    tiles: [
-      { frame: 39, label: 'Rocha', layer: 'upper' },
-      { frame: 40, label: 'Rocha com Musgo', layer: 'upper' },
-    ],
-  },
-  {
-    // A ALVENARIA DE DUNGEON (DUNGEON_TILES). Ela existia no atlas desde sempre e NAO estava aqui:
-    // os dez frames caiam em "Outros", sem nome e — o que doi — sem CAMADA. Sem `TileDef` o clique
-    // nao troca a camada ativa, entao pintar um muro com o "Chao" ligado punha a parede no piso, e
-    // pintar um piso com "Superior" ligado tapava o chao. Sao exatamente as duas falhas que o
-    // comentario do topo desta tabela descreve, e o subterraneo ficou editavel a um clique
-    // (a chave Overworld/Underworld do painel) sem que houvesse onde desenhar as paredes dele.
-    //
-    // A divisao é a mesma da montanha e pelo mesmo motivo: PISO e chao, MURO fica em pe. O muro
-    // bloqueia sozinho (DUNGEON_WALL_FRAMES esta em SOLID_UPPER_FRAMES, e o editor mostra essa
-    // colisao implicita em ambar), e o World3D o assa em CUBO com o topo PRETO PURO — o escuro
-    // entre uma sala e a outra. Nada disso precisa de colisao pintada.
-    title: 'Dungeon',
-    dungeon: true,
-    tiles: [
-      { frame: 42, label: 'Piso', layer: 'ground' },
-      { frame: 43, label: 'Piso 2', layer: 'ground' },
-      { frame: 44, label: 'Piso 3', layer: 'ground' },
-      { frame: 51, label: 'Piso Rachado', layer: 'ground' },
-      { frame: 45, label: 'Muro', layer: 'upper' },
-      { frame: 46, label: 'Muro 2', layer: 'upper' },
-      { frame: 47, label: 'Muro 3', layer: 'upper' },
-      { frame: 49, label: 'Muro com Musgo', layer: 'upper' },
-      { frame: 48, label: 'Muro com Tocha', layer: 'upper' },
-      // A pista da parede bombardeavel — a legenda que o Zelda 1 nunca deu. Fica por ultimo
-      // porque ela nao e decoracao: ela PROMETE uma passagem.
-      { frame: 50, label: 'Muro Rachado', layer: 'upper' },
-    ],
-  },
-  {
-    // The cemetery. Ground first, then the things that stand on it, then the litter.
-    title: 'Cemiterio',
-    tiles: [
-      { frame: 23, label: 'Chao de Pedra', layer: 'ground' },
-      { frame: 24, label: 'Chao de Pedra com Musgo', layer: 'ground' },
-      { frame: 29, label: 'Laje Rachada', layer: 'ground' },
-      { frame: 30, label: 'Laje Rachada 2', layer: 'ground' },
-      { frame: 32, label: 'Laje com Musgo', layer: 'ground' },
-      { frame: 31, label: 'Cova Aberta', layer: 'ground' },
-      { frame: 25, label: 'Tumulo', layer: 'upper' },
-      { frame: 22, label: 'Cabeca na Estaca', layer: 'upper' },
-      { frame: 27, label: 'Caveira e Ossos', layer: 'upper' },
-      { frame: 28, label: 'Ossos', layer: 'upper' },
-    ],
-  },
-];
-
-const TILE_DEFS: ReadonlyMap<number, TileDef> = new Map(
-  TILE_GROUPS.flatMap((group) => group.tiles).map((tile) => [tile.frame, tile]),
-);
-
-const TOOL_DEFS: ReadonlyArray<{ id: ToolId; label: string; kbd: string; hint: string }> = [
-  { id: 'brush', label: 'Pincel', kbd: 'B', hint: 'Pinta tiles na camada ativa' },
-  { id: 'eraser', label: 'Borracha', kbd: 'E', hint: 'Limpa camada superior, colisao e entidades' },
-  { id: 'rect', label: 'Retangulo', kbd: 'R', hint: 'Arraste para preencher uma area' },
-  { id: 'fill', label: 'Balde', kbd: 'F', hint: 'Preenche a regiao contigua com o tile' },
-  { id: 'picker', label: 'Conta-gotas', kbd: 'I', hint: 'Copia o tile sob o cursor' },
-  { id: 'collision', label: 'Colisao', kbd: 'C', hint: 'Pinta colisao (botao direito limpa)' },
-  { id: 'relief', label: 'Serra', kbd: 'A', hint: 'Planalto um nivel acima, ou escada para subir (botao direito volta ao chao)' },
-  { id: 'entity', label: 'Entidade', kbd: '2-5', hint: 'Coloca a entidade escolhida na paleta' },
-  { id: 'spawn', label: 'Ponto Inicial', kbd: 'S', hint: 'Obrigatorio: clique onde o jogador deve comecar' },
-];
-
 const RELIEF_LABEL: Readonly<Record<number, string>> = {
   1: 'planalto', 2: 'escada sobe N', 3: 'escada sobe L', 4: 'escada sobe S', 5: 'escada sobe O',
 };
-
-const TAB_DEFS: ReadonlyArray<{ id: PaletteTab; label: string; kbd: string }> = [
-  { id: 'tiles', label: 'Tiles', kbd: '1' },
-  { id: 'npcs', label: 'NPCs', kbd: '2' },
-  { id: 'pickups', label: 'Itens', kbd: '3' },
-  { id: 'props', label: 'Props', kbd: '4' },
-];
-
-// O mesmo vermelho do chip no tabuleiro (CHIP_COLOR em EditorScene) e do ponto no minimapa: as
-// tres pinturas da mesma entidade nao podem discordar de cor.
-const ENTITY_DOT_COLOR: Record<EntitySelection['list'], string> = {
-  npcs: '#4488ff',
-  pickups: '#33cc77',
-  props: '#ffaa33',
-};
-
-const WAVE_OPTIONS: OscillatorType[] = ['sine', 'square', 'triangle', 'sawtooth'];
 
 const STYLE_ID = 'zh-editor-style';
 
@@ -484,43 +178,44 @@ const CSS = `
 
 export class EditorDomUi {
   private readonly root: HTMLDivElement;
-  private readonly panel: HTMLDivElement;
+  public readonly panel: HTMLDivElement;
   private readonly toasts: HTMLDivElement;
-  private readonly modalRoot: HTMLDivElement;
+  public readonly modalRoot: HTMLDivElement;
   private readonly loading: HTMLDivElement;
   private readonly statusEl: HTMLDivElement;
-  private readonly dirtyEl: HTMLSpanElement;
-  private readonly subtitleEl: HTMLDivElement;
-  private readonly undoBtn: HTMLButtonElement;
-  private readonly redoBtn: HTMLButtonElement;
-  private readonly toolButtons = new Map<ToolId, HTMLButtonElement>();
-  private readonly tabButtons = new Map<PaletteTab, HTMLButtonElement>();
-  private readonly paletteEl: HTMLDivElement;
-  private optionsEl: HTMLDivElement;
+  /** O título, as ações, as ferramentas e as abas (ver EditorToolbar). */
+  private readonly toolbar: EditorToolbar;
+  public readonly paletteEl: HTMLDivElement;
+  public optionsEl: HTMLDivElement;
 
-  private readonly minimapCanvas: HTMLCanvasElement;
-  private minimapBase: HTMLCanvasElement;
-  private minimapScale = 2;
-  private minimapRedrawQueued = false;
-  private viewportRect: { x: number; y: number; w: number; h: number } | null = null;
+  public readonly minimapCanvas: HTMLCanvasElement;
+  public minimapBase: HTMLCanvasElement;
 
   private readonly iconCache = new Map<string, string>();
-  private suspended = false;
+  public suspended = false;
   private lastStatus: StatusInfo | null = null;
 
   public spaceHeld = false;
 
-  private readonly handleKeyDown = (event: KeyboardEvent): void => this.onKeyDown(event);
-  private readonly handleKeyUp = (event: KeyboardEvent): void => this.onKeyUp(event);
+  private readonly handleKeyDown = (event: KeyboardEvent): void => this.keys.onKeyDown(event);
+  private readonly handleKeyUp = (event: KeyboardEvent): void => this.keys.onKeyUp(event);
   private readonly handleBeforeUnload = (event: BeforeUnloadEvent): void => {
     if (this.store.dirty) event.preventDefault();
   };
+  /** As janelas: mundo, falas e ajuda. (ver EditorModals) */
+  public readonly modals = new EditorModals(this);
+  /** O minimapa. (ver EditorMinimap) */
+  public readonly minimap: EditorMinimap = new EditorMinimap(this);
+  /** Os painéis de vista, opções e paleta. (ver EditorPanels) */
+  private readonly panels = new EditorPanels(this);
+  /** Os atalhos. (ver EditorKeys) */
+  private readonly keys = new EditorKeys(this);
 
   public constructor(
-    private readonly scene: Engine.Scene,
-    private readonly store: EditorStore,
-    private readonly state: UiState,
-    private readonly cb: EditorUiCallbacks,
+    public readonly scene: Engine.Scene,
+    public readonly store: EditorStore,
+    public readonly state: UiState,
+    public readonly cb: EditorUiCallbacks,
   ) {
     if (!document.getElementById(STYLE_ID)) {
       const style = document.createElement('style');
@@ -536,62 +231,8 @@ export class EditorDomUi {
     this.panel.className = 'zh-panel';
     this.root.appendChild(this.panel);
 
-    const header = document.createElement('div');
-    header.className = 'zh-header';
-    const title = document.createElement('div');
-    title.className = 'zh-title';
-    title.textContent = 'ZERO ENGINE';
-    this.dirtyEl = document.createElement('span');
-    this.dirtyEl.className = 'zh-dirty';
-    this.dirtyEl.title = 'Alteracoes nao salvas';
-    title.appendChild(this.dirtyEl);
-    this.subtitleEl = document.createElement('div');
-    this.subtitleEl.className = 'zh-subtitle';
-    header.append(title, this.subtitleEl);
-    this.panel.appendChild(header);
-
-    // OS DOIS ANDARES, e por que eles ficam ANTES do Salvar: o botão mais perigoso do painel
-    // escreve num arquivo, e o autor precisa ler de cima para baixo "estou no subterrâneo → salvo
-    // no subterrâneo". Embaixo, a chave viraria uma descoberta depois do estrago.
-
-    // Primary actions
-    const actions = document.createElement('div');
-    actions.className = 'zh-actions';
-    actions.append(
-      this.button('Salvar', `Salvar em ${this.saveTargetPath()} (Ctrl+S)`, () => this.cb.onSave(), 'primary'),
-      this.button('&#9654; Testar', 'Joga o mundo em edicao sem salvar (P) — ESC volta', () => this.cb.onPlaytest()),
-      this.button('Recarregar', `Descarta e recarrega de ${this.saveTargetPath()}`, () => this.cb.onReload()),
-    );
-    actions.append(
-      this.button('Mundo&#8230;', 'Nome, tamanho e validacao do mundo', () => this.openWorldModal()),
-      this.button('Dialogos&#8230;', 'Editor de dialogos dos NPCs', () => this.openDialogModal()),
-      this.button('Ajuda (?)', 'Atalhos e controles', () => this.openHelpModal()),
-    );
-    this.undoBtn = this.button('&#8630; Desfazer', 'Ctrl+Z', () => this.cb.onUndo());
-    this.redoBtn = this.button('&#8631; Refazer', 'Ctrl+Y', () => this.cb.onRedo());
-    actions.append(this.undoBtn, this.redoBtn, this.button('Enquadrar', 'Centraliza o mundo na tela (0)', () => this.cb.onFitView()));
-    this.panel.appendChild(actions);
-
-    // Tools
-    const toolSection = document.createElement('div');
-    toolSection.className = 'zh-section';
-    toolSection.appendChild(this.sectionLabel('Ferramentas'));
-    const tools = document.createElement('div');
-    tools.className = 'zh-tools';
-    TOOL_DEFS.forEach((def) => {
-      const btn = this.button(def.label, `${def.hint}`, () => {
-        this.state.tool = def.id;
-        this.changed();
-      });
-      const kbd = document.createElement('span');
-      kbd.className = 'zh-kbd';
-      kbd.textContent = def.kbd;
-      btn.appendChild(kbd);
-      this.toolButtons.set(def.id, btn);
-      tools.appendChild(btn);
-    });
-    toolSection.appendChild(tools);
-    this.panel.appendChild(toolSection);
+    this.toolbar = new EditorToolbar(this);
+    this.panel.append(this.toolbar.header, this.toolbar.actions, this.toolbar.tools);
 
     // Contextual options (rebuilt on sync)
     this.optionsEl = document.createElement('div');
@@ -599,16 +240,7 @@ export class EditorDomUi {
     this.panel.appendChild(this.optionsEl);
 
     // Palette tabs + grid
-    const tabs = document.createElement('div');
-    tabs.className = 'zh-tabs';
-    TAB_DEFS.forEach((def) => {
-      const btn = this.button(def.label, `Paleta de ${def.label.toLowerCase()} (${def.kbd})`, () => {
-        this.selectTab(def.id);
-      });
-      this.tabButtons.set(def.id, btn);
-      tabs.appendChild(btn);
-    });
-    this.panel.appendChild(tabs);
+    this.panel.appendChild(this.toolbar.tabs);
 
     this.paletteEl = document.createElement('div');
     this.paletteEl.className = 'zh-palette';
@@ -621,7 +253,7 @@ export class EditorDomUi {
     minimapWrap.appendChild(this.minimapCanvas);
     this.panel.appendChild(minimapWrap);
     this.minimapBase = createCanvas();
-    this.bindMinimapInput();
+    this.minimap.bindMinimapInput();
 
     // Status
     this.statusEl = document.createElement('div');
@@ -646,7 +278,7 @@ export class EditorDomUi {
 
     this.syncFromState();
     this.refreshHeader();
-    this.requestMinimapRedraw();
+    this.minimap.requestMinimapRedraw();
   }
 
   public destroy(): void {
@@ -673,7 +305,7 @@ export class EditorDomUi {
 
   // ── Small builders ──────────────────────────────────────────────────────
 
-  private button(html: string, tooltip: string, onClick: () => void, extraClass = ''): HTMLButtonElement {
+  public button(html: string, tooltip: string, onClick: () => void, extraClass = ''): HTMLButtonElement {
     const btn = document.createElement('button');
     btn.className = `zh-btn ${extraClass}`.trim();
     btn.innerHTML = html;
@@ -682,19 +314,19 @@ export class EditorDomUi {
     return btn;
   }
 
-  private sectionLabel(text: string): HTMLDivElement {
+  public sectionLabel(text: string): HTMLDivElement {
     const label = document.createElement('div');
     label.className = 'zh-label';
     label.textContent = text;
     return label;
   }
 
-  private changed(): void {
+  public changed(): void {
     this.cb.onStateChange();
     this.syncFromState();
   }
 
-  private selectTab(tab: PaletteTab): void {
+  public selectTab(tab: PaletteTab): void {
     this.state.tab = tab;
     if (tab !== 'tiles') {
       this.state.tool = 'entity';
@@ -713,7 +345,7 @@ export class EditorDomUi {
     return null;
   }
 
-  private icon(key: string, frame?: number): string {
+  public icon(key: string, frame?: number): string {
     const cacheKey = `${key}#${frame ?? ''}`;
     let url = this.iconCache.get(cacheKey);
     if (!url) {
@@ -730,298 +362,31 @@ export class EditorDomUi {
   // ── State sync ──────────────────────────────────────────────────────────
 
   public syncFromState(): void {
-    this.toolButtons.forEach((btn, id) => btn.classList.toggle('active', this.state.tool === id));
-    this.tabButtons.forEach((btn, id) => btn.classList.toggle('active', this.state.tab === id));
-    this.renderOptions();
-    this.renderPalette();
+    this.toolbar.toolButtons.forEach((btn, id) => btn.classList.toggle('active', this.state.tool === id));
+    this.toolbar.tabButtons.forEach((btn, id) => btn.classList.toggle('active', this.state.tab === id));
+    this.panels.renderOptions();
+    this.panels.renderPalette();
     this.renderStatus();
   }
 
   /** O arquivo que o Salvar vai escrever — o mesmo que o toast anuncia depois. */
-  private saveTargetPath(): string {
+  public saveTargetPath(): string {
     return worldFilePath(this.cb.worldFile);
   }
 
   public refreshHeader(): void {
     const meta = this.store.world.meta;
-    this.subtitleEl.textContent = `${meta.name} — ${meta.worldChunksX}x${meta.worldChunksY} chunks (${this.store.tilesX}x${this.store.tilesY} tiles)`;
-    this.dirtyEl.classList.toggle('on', this.store.dirty);
-    this.undoBtn.disabled = !this.store.canUndo;
-    this.redoBtn.disabled = !this.store.canRedo;
+    this.toolbar.subtitleEl.textContent = `${meta.name} — ${meta.worldChunksX}x${meta.worldChunksY} chunks (${this.store.tilesX}x${this.store.tilesY} tiles)`;
+    this.toolbar.dirtyEl.classList.toggle('on', this.store.dirty);
+    this.toolbar.undoBtn.disabled = !this.store.canUndo;
+    this.toolbar.redoBtn.disabled = !this.store.canRedo;
   }
 
-  private navChunk(dx: number, dy: number): void {
+  public navChunk(dx: number, dy: number): void {
     const meta = this.store.world.meta;
     this.state.chunkX = Math.max(0, Math.min(meta.worldChunksX - 1, this.state.chunkX + dx));
     this.state.chunkY = Math.max(0, Math.min(meta.worldChunksY - 1, this.state.chunkY + dy));
     this.changed();
-  }
-
-  private renderViewControls(): void {
-    this.optionsEl.appendChild(this.sectionLabel('Visao'));
-    const seg = document.createElement('div');
-    seg.className = 'zh-seg';
-    const modes: Array<{ id: ViewMode; label: string; hint: string }> = [
-      { id: 'world', label: 'Mundo', hint: 'Mundo inteiro com pan e zoom livres (M alterna)' },
-      { id: 'chunk', label: 'Chunk', hint: 'Foca e edita um chunk por vez (M alterna, setas navegam)' },
-    ];
-    modes.forEach((mode) => {
-      const btn = this.button(mode.label, mode.hint, () => {
-        this.state.viewMode = mode.id;
-        this.changed();
-      });
-      btn.classList.toggle('active', this.state.viewMode === mode.id);
-      seg.appendChild(btn);
-    });
-    this.optionsEl.appendChild(seg);
-
-    if (this.state.viewMode === 'chunk') {
-      const nav = document.createElement('div');
-      nav.className = 'zh-seg';
-      nav.style.marginTop = '4px';
-      const label = document.createElement('span');
-      label.style.cssText = 'flex:1;display:flex;align-items:center;justify-content:center;font-size:11px;color:#a9c6cc;white-space:nowrap;';
-      label.textContent = `Chunk (${this.state.chunkX}, ${this.state.chunkY})`;
-      const arrow = (html: string, hint: string, dx: number, dy: number): HTMLButtonElement => {
-        const btn = this.button(html, hint, () => this.navChunk(dx, dy));
-        btn.style.flex = '0 0 40px';
-        return btn;
-      };
-      nav.append(
-        arrow('&#9664;', 'Chunk a esquerda (seta)', -1, 0),
-        arrow('&#9650;', 'Chunk acima (seta)', 0, -1),
-        arrow('&#9660;', 'Chunk abaixo (seta)', 0, 1),
-        arrow('&#9654;', 'Chunk a direita (seta)', 1, 0),
-        label,
-      );
-      this.optionsEl.appendChild(nav);
-    }
-  }
-
-  private renderOptions(): void {
-    this.optionsEl.innerHTML = '';
-    this.renderViewControls();
-    this.optionsEl.appendChild(this.sectionLabel('Opcoes'));
-
-    const isTileTool = this.state.tool === 'brush' || this.state.tool === 'rect' || this.state.tool === 'fill' || this.state.tool === 'picker';
-    if (isTileTool) {
-      const layerSeg = document.createElement('div');
-      layerSeg.className = 'zh-seg';
-      (['ground', 'upper'] as const).forEach((layer) => {
-        const btn = this.button(layer === 'ground' ? 'Chao' : 'Superior', 'Camada ativa (Tab alterna)', () => {
-          this.state.layer = layer;
-          this.changed();
-        });
-        btn.classList.toggle('active', this.state.layer === layer);
-        layerSeg.appendChild(btn);
-      });
-      this.optionsEl.appendChild(layerSeg);
-
-      const collSeg = document.createElement('div');
-      collSeg.className = 'zh-seg';
-      collSeg.style.marginTop = '4px';
-      const modes: Array<{ id: CollisionPaintMode; label: string; hint: string }> = [
-        { id: 'keep', label: 'Colisao: manter', hint: 'Pintar tiles nao mexe na colisao' },
-        { id: 'set', label: 'marcar', hint: 'Cada tile pintado vira colisao' },
-        { id: 'clear', label: 'limpar', hint: 'Cada tile pintado remove colisao' },
-      ];
-      modes.forEach((mode) => {
-        const btn = this.button(mode.label, mode.hint, () => {
-          this.state.collisionMode = mode.id;
-          this.changed();
-        });
-        btn.classList.toggle('active', this.state.collisionMode === mode.id);
-        collSeg.appendChild(btn);
-      });
-      this.optionsEl.appendChild(collSeg);
-    }
-
-    if (this.state.tool === 'spawn') {
-      const start = this.store.spawn;
-      const hint = document.createElement('div');
-      hint.style.cssText = 'font-size:10px;color:#66d9ef;margin:4px 0 6px;line-height:1.55;';
-      hint.innerHTML = `<b>Ponto Inicial obrigatorio</b><br>Atual: (${start.worldX}, ${start.worldY}). Clique em um tile livre para mover. Existe exatamente um por level.`;
-      this.optionsEl.appendChild(hint);
-    }
-
-    if (this.state.tool === 'relief') {
-      const reliefSeg = document.createElement('div');
-      reliefSeg.className = 'zh-seg';
-      const modes: Array<{ id: ReliefPaintMode; label: string; hint: string }> = [
-        { id: 'high', label: 'Planalto', hint: 'Bloco um nivel acima do chao' },
-        { id: 'peak', label: 'Cume', hint: 'O segundo andar: dois niveis acima do chao, em cima do planalto' },
-        { id: 'stair', label: 'Escada', hint: 'Encosta num planalto (ou num cume); clicar de novo gira' },
-      ];
-      modes.forEach((mode) => {
-        const btn = this.button(mode.label, mode.hint, () => {
-          this.state.reliefMode = mode.id;
-          this.changed();
-        });
-        btn.classList.toggle('active', this.state.reliefMode === mode.id);
-        reliefSeg.appendChild(btn);
-      });
-      this.optionsEl.appendChild(reliefSeg);
-      const hint = document.createElement('div');
-      hint.style.cssText = 'font-size:10px;color:#d9a55a;margin:4px 0 6px;line-height:1.55;';
-      hint.textContent = this.state.reliefMode === 'high'
-        ? 'Pinte o planalto; a borda escura e o paredao. So se sobe por escada. Botao direito volta ao chao.'
-        : this.state.reliefMode === 'peak'
-          ? 'Pinte o cume, o segundo andar, cercado de planalto. Do planalto ao cume, so por escada. Botao direito volta ao chao.'
-          : 'Clique num tile de chao encostado no planalto (ou de planalto encostado no cume): a seta aponta para onde a escada sobe. Clique de novo para girar.';
-      this.optionsEl.appendChild(hint);
-    }
-
-    if (this.state.tool === 'brush' || this.state.tool === 'eraser' || this.state.tool === 'collision'
-      || (this.state.tool === 'relief' && this.state.reliefMode !== 'stair')) {
-      const brushSeg = document.createElement('div');
-      brushSeg.className = 'zh-seg';
-      brushSeg.style.marginTop = '4px';
-      ([1, 2, 3] as const).forEach((size) => {
-        const btn = this.button(`${size}x${size}`, 'Tamanho do pincel ( [ e ] )', () => {
-          this.state.brushSize = size;
-          this.changed();
-        });
-        btn.classList.toggle('active', this.state.brushSize === size);
-        brushSeg.appendChild(btn);
-      });
-      this.optionsEl.appendChild(brushSeg);
-    }
-
-    const checks = document.createElement('div');
-    checks.className = 'zh-checks';
-    checks.style.marginTop = '6px';
-    const toggles: Array<{ label: string; key: 'showGrid' | 'showCollisions' | 'showRelief' | 'showEntities' | 'showFixtures'; kbd: string }> = [
-      { label: 'Grade', key: 'showGrid', kbd: 'G' },
-      { label: 'Colisoes', key: 'showCollisions', kbd: 'V' },
-      { label: 'Serras', key: 'showRelief', kbd: 'L' },
-      { label: 'Entidades', key: 'showEntities', kbd: 'T' },
-      { label: 'Pecas do jogo', key: 'showFixtures', kbd: 'O' },
-    ];
-    toggles.forEach((toggle) => {
-      const label = document.createElement('label');
-      label.title = `Atalho: ${toggle.kbd}`;
-      const input = document.createElement('input');
-      input.type = 'checkbox';
-      input.checked = this.state[toggle.key];
-      input.addEventListener('change', () => {
-        this.state[toggle.key] = input.checked;
-        this.changed();
-      });
-      label.append(input, document.createTextNode(toggle.label));
-      checks.appendChild(label);
-    });
-    this.optionsEl.appendChild(checks);
-  }
-
-  private renderPalette(): void {
-    this.paletteEl.innerHTML = '';
-    const tab = this.state.tab;
-
-    if (tab === 'tiles') {
-      const texture = this.scene.textures.get(ASSET_KEYS.forestTileset);
-      const frameCount = Math.max(1, texture.frameTotal - 1);
-      this.paletteEl.appendChild(this.tileCell(null));
-
-      const shown = new Set<number>();
-      for (const group of TILE_GROUPS) {
-        if (group.dungeon === true) continue; // a alvenaria de dungeon nao tem mais onde existir
-        const tiles = group.tiles.filter((tile) => tile.frame < frameCount);
-        if (tiles.length === 0) continue;
-        this.paletteEl.appendChild(this.groupHeader(group.title));
-        for (const tile of tiles) {
-          shown.add(tile.frame);
-          this.paletteEl.appendChild(this.tileCell(tile.frame));
-        }
-      }
-
-      // Whatever the table doesn't name — a blank frame, or a row of art added after this was
-      // written. The tileset is the source of truth; this list only orders and names it.
-      // …e nada disso no subterrâneo: "Outros" é o resto do atlas (mar, estágios de corte, frames
-      // vazios), que é exatamente o que a filtragem acima existe para tirar da frente lá embaixo.
-      const rest: number[] = [];
-      for (let frame = 0; frame < frameCount; frame += 1) if (!shown.has(frame)) rest.push(frame);
-      if (rest.length > 0) {
-        this.paletteEl.appendChild(this.groupHeader('Outros'));
-        for (const frame of rest) this.paletteEl.appendChild(this.tileCell(frame));
-      }
-      return;
-    }
-
-    const addEntityCell = (sel: EntitySelection, label: string, key: string, frame?: number): void => {
-      const cell = document.createElement('button');
-      cell.className = 'zh-cell';
-      cell.title = label;
-      const selected = this.state.tool === 'entity'
-        && this.state.entity.list === sel.list && this.state.entity.type === sel.type;
-      cell.classList.toggle('selected', selected);
-      const img = document.createElement('img');
-      img.src = this.icon(key, frame);
-      img.alt = label;
-      const dot = document.createElement('span');
-      dot.className = 'zh-dot';
-      dot.style.background = ENTITY_DOT_COLOR[sel.list];
-      cell.append(img, dot);
-      cell.addEventListener('click', () => {
-        this.state.entity = sel;
-        this.state.tool = 'entity';
-        this.changed();
-      });
-      this.paletteEl.appendChild(cell);
-    };
-
-    if (tab === 'npcs') {
-      NPC_KINDS.forEach((kind) => {
-        const visual = NPC_VISUALS[kind];
-        addEntityCell({ list: 'npcs', type: kind }, NPC_LABELS[kind], visual.key, visual.frame);
-      });
-    } else if (tab === 'pickups') {
-      PICKUP_DEFS.forEach((def) => addEntityCell({ list: 'pickups', type: def.type }, def.label, def.key, def.frame));
-    } else {
-      PROP_DEFS.forEach((def) => addEntityCell({ list: 'props', type: def.type }, def.label, def.key, def.frame));
-    }
-  }
-
-  private groupHeader(title: string): HTMLDivElement {
-    const header = document.createElement('div');
-    header.className = 'zh-group';
-    header.textContent = title;
-    return header;
-  }
-
-  private tileCell(frame: number | null): HTMLButtonElement {
-    const cell = document.createElement('button');
-    cell.className = 'zh-cell';
-    cell.title = frame === null ? 'Limpar (camada superior)' : this.tileTooltip(frame);
-    cell.classList.toggle('selected', this.state.tile === frame);
-    if (frame === null) {
-      const x = document.createElement('span');
-      x.className = 'zh-x';
-      x.textContent = 'X';
-      cell.appendChild(x);
-    } else {
-      const img = document.createElement('img');
-      img.src = this.icon(ASSET_KEYS.forestTileset, frame);
-      img.alt = `tile ${frame}`;
-      cell.appendChild(img);
-    }
-    cell.addEventListener('click', () => {
-      this.state.tile = frame;
-      if (this.state.tool !== 'brush' && this.state.tool !== 'rect' && this.state.tool !== 'fill') this.state.tool = 'brush';
-      // Named tiles carry the layer they were drawn for — see TileDef. Painting the tomb onto the
-      // ground, or the bones onto a layer that ignores their alpha, is never what was meant.
-      const def = frame === null ? undefined : TILE_DEFS.get(frame);
-      if (def) this.state.layer = def.layer;
-      this.changed();
-    });
-    return cell;
-  }
-
-  private tileTooltip(frame: number): string {
-    const def = TILE_DEFS.get(frame);
-    if (!def) return `Tile ${frame}`;
-    const layer = def.layer === 'ground' ? 'chao' : 'superior';
-    const solid = SOLID_UPPER_FRAMES.has(frame) || SOLID_GROUND_FRAMES.has(frame) ? ', bloqueia' : '';
-    return `${def.label} — tile ${frame} (camada ${layer}${solid})`;
   }
 
   // ── Status bar ──────────────────────────────────────────────────────────
@@ -1073,486 +438,8 @@ export class EditorDomUi {
 
   // ── Minimap ─────────────────────────────────────────────────────────────
 
-  public requestMinimapRedraw(): void {
-    if (this.minimapRedrawQueued) return;
-    this.minimapRedrawQueued = true;
-    window.requestAnimationFrame(() => {
-      this.minimapRedrawQueued = false;
-      this.redrawMinimapBase();
-      this.compositeMinimap();
-    });
-  }
-
-  public updateMinimapViewport(rect: { x: number; y: number; w: number; h: number }): void {
-    this.viewportRect = rect;
-    this.compositeMinimap();
-  }
-
-  private redrawMinimapBase(): void {
-    const tilesX = this.store.tilesX;
-    const tilesY = this.store.tilesY;
-    this.minimapScale = Math.max(1, Math.min(4, Math.floor((PANEL_WIDTH - 26) / tilesX)));
-    const scale = this.minimapScale;
-    this.minimapBase.width = tilesX * scale;
-    this.minimapBase.height = tilesY * scale;
-    const ctx = this.minimapBase.getContext('2d');
-    if (!ctx) return;
-    ctx.imageSmoothingEnabled = false;
-    ctx.fillStyle = '#05090b';
-    ctx.fillRect(0, 0, this.minimapBase.width, this.minimapBase.height);
-
-    const texture = this.scene.textures.get(ASSET_KEYS.forestTileset);
-    const source = texture.getSourceImage() as CanvasImageSource;
-
-    for (let wy = 0; wy < tilesY; wy += 1) {
-      for (let wx = 0; wx < tilesX; wx += 1) {
-        const ground = this.store.readCell('ground', wx, wy) as number;
-        const groundFrame = texture.get(ground);
-        ctx.drawImage(source, groundFrame.cutX, groundFrame.cutY, groundFrame.width, groundFrame.height, wx * scale, wy * scale, scale, scale);
-        const upper = this.store.readCell('upper', wx, wy) as number | null;
-        if (upper !== null) {
-          const upperFrame = texture.get(decorFrameAt(upper, wx, wy));
-          ctx.drawImage(source, upperFrame.cutX, upperFrame.cutY, upperFrame.width, upperFrame.height, wx * scale, wy * scale, scale, scale);
-        }
-        // a cor do bioma por cima (multiplicar), como o tabuleiro e o jogo mostram (world/biomes.ts)
-        const [r, g, b] = biomeTintAt(wx, wy);
-        const k = 255 / Math.max(r, g, b, 1);
-        ctx.globalCompositeOperation = 'multiply';
-        ctx.fillStyle = `rgb(${Math.round(r * k)}, ${Math.round(g * k)}, ${Math.round(b * k)})`;
-        ctx.fillRect(wx * scale, wy * scale, scale, scale);
-        ctx.globalCompositeOperation = 'source-over';
-      }
-    }
-
-    // Chunk seams, entity dots and the player spawn read better than raw terrain alone.
-    ctx.strokeStyle = 'rgba(255,255,255,0.10)';
-    ctx.lineWidth = 1;
-    for (let cx = 1; cx < this.store.world.meta.worldChunksX; cx += 1) {
-      ctx.beginPath();
-      ctx.moveTo(cx * CHUNK_COLUMNS * scale + 0.5, 0);
-      ctx.lineTo(cx * CHUNK_COLUMNS * scale + 0.5, this.minimapBase.height);
-      ctx.stroke();
-    }
-    for (let cy = 1; cy < this.store.world.meta.worldChunksY; cy += 1) {
-      ctx.beginPath();
-      ctx.moveTo(0, cy * CHUNK_ROWS * scale + 0.5);
-      ctx.lineTo(this.minimapBase.width, cy * CHUNK_ROWS * scale + 0.5);
-      ctx.stroke();
-    }
-
-    const dot = Math.max(2, scale);
-    this.store.allEntities().forEach((entity) => {
-      ctx.fillStyle = ENTITY_DOT_COLOR[entity.list];
-      ctx.fillRect(entity.worldX * scale, entity.worldY * scale, dot, dot);
-    });
-    const spawn = this.store.spawn;
-    ctx.fillStyle = '#00e0ff';
-    ctx.fillRect(spawn.worldX * scale - 1, spawn.worldY * scale - 1, dot + 2, dot + 2);
-  }
-
-  private compositeMinimap(): void {
-    this.minimapCanvas.width = this.minimapBase.width;
-    this.minimapCanvas.height = this.minimapBase.height;
-    const ctx = this.minimapCanvas.getContext('2d');
-    if (!ctx || this.minimapBase.width === 0) return;
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(this.minimapBase, 0, 0);
-    if (this.viewportRect) {
-      const scale = this.minimapScale;
-      ctx.strokeStyle = '#f4a261';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(
-        this.viewportRect.x * scale + 1,
-        this.viewportRect.y * scale + 1,
-        this.viewportRect.w * scale - 2,
-        this.viewportRect.h * scale - 2,
-      );
-    }
-  }
-
-  private bindMinimapInput(): void {
-    let dragging = false;
-    const navigate = (event: MouseEvent): void => {
-      const bounds = this.minimapCanvas.getBoundingClientRect();
-      const scaleX = this.minimapCanvas.width / bounds.width;
-      const scaleY = this.minimapCanvas.height / bounds.height;
-      const tileX = Math.floor(((event.clientX - bounds.left) * scaleX) / this.minimapScale);
-      const tileY = Math.floor(((event.clientY - bounds.top) * scaleY) / this.minimapScale);
-      this.cb.onNavigate(tileX, tileY);
-    };
-    this.minimapCanvas.addEventListener('mousedown', (event) => {
-      dragging = true;
-      navigate(event);
-    });
-    window.addEventListener('mousemove', (event) => {
-      if (dragging) navigate(event);
-    });
-    window.addEventListener('mouseup', () => {
-      dragging = false;
-    });
-  }
-
   // ── Keyboard ────────────────────────────────────────────────────────────
-
-  private isTypingTarget(event: KeyboardEvent): boolean {
-    const target = event.target as HTMLElement | null;
-    if (!target) return false;
-    const tag = target.tagName;
-    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable;
-  }
-
-  private onKeyDown(event: KeyboardEvent): void {
-    if (this.suspended) return;
-
-    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
-      event.preventDefault();
-      this.cb.onSave();
-      return;
-    }
-    if (this.isTypingTarget(event)) return;
-
-    if (event.key === 'Escape' && this.isModalOpen()) {
-      this.closeModal();
-      return;
-    }
-    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
-      event.preventDefault();
-      if (event.shiftKey) this.cb.onRedo();
-      else this.cb.onUndo();
-      return;
-    }
-    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') {
-      event.preventDefault();
-      this.cb.onRedo();
-      return;
-    }
-    if (event.ctrlKey || event.metaKey || event.altKey || this.isModalOpen()) return;
-
-    if (event.code === 'Space') {
-      this.spaceHeld = true;
-      event.preventDefault();
-      return;
-    }
-
-    const key = event.key.toLowerCase();
-    const toolByKey: Record<string, ToolId> = { b: 'brush', e: 'eraser', r: 'rect', f: 'fill', i: 'picker', c: 'collision', a: 'relief', s: 'spawn' };
-    if (toolByKey[key]) {
-      this.state.tool = toolByKey[key];
-      this.changed();
-      return;
-    }
-    // G de GIRAR. Nao e R porque aqui R ja e a ferramenta retangulo, e
-    // roubar um atalho de ferramenta pra girar um unico prop seria um mau negocio.
-    if (key === 'g' && this.state.entity.list === 'props' && isDirectionalProp(this.state.entity.type)) {
-      this.state.propDir = (((this.state.propDir ?? 1) + 1) % 4) as PropDir;
-      this.changed();
-      return;
-    }
-    const tabByKey: Record<string, PaletteTab> = { 1: 'tiles', 2: 'npcs', 3: 'pickups', 4: 'props' };
-    if (tabByKey[key]) {
-      this.selectTab(tabByKey[key]);
-      return;
-    }
-    if (key === 'm') {
-      this.state.viewMode = this.state.viewMode === 'world' ? 'chunk' : 'world';
-      this.changed();
-      return;
-    }
-    if (this.state.viewMode === 'chunk' && key.startsWith('arrow')) {
-      event.preventDefault();
-      if (key === 'arrowleft') this.navChunk(-1, 0);
-      else if (key === 'arrowright') this.navChunk(1, 0);
-      else if (key === 'arrowup') this.navChunk(0, -1);
-      else this.navChunk(0, 1);
-      return;
-    }
-    if (key === 'g') { this.state.showGrid = !this.state.showGrid; this.changed(); return; }
-    if (key === 'v') { this.state.showCollisions = !this.state.showCollisions; this.changed(); return; }
-    if (key === 'l') { this.state.showRelief = !this.state.showRelief; this.changed(); return; }
-    if (key === 't') { this.state.showEntities = !this.state.showEntities; this.changed(); return; }
-    if (key === 'o') { this.state.showFixtures = !this.state.showFixtures; this.changed(); return; }
-    if (key === 'p') { this.cb.onPlaytest(); return; }
-    if (key === '0') { this.cb.onFitView(); return; }
-    if (key === 'tab') {
-      event.preventDefault();
-      this.state.layer = this.state.layer === 'ground' ? 'upper' : 'ground';
-      this.changed();
-      return;
-    }
-    if (key === '[') {
-      this.state.brushSize = Math.max(1, this.state.brushSize - 1) as UiState['brushSize'];
-      this.changed();
-      return;
-    }
-    if (key === ']') {
-      this.state.brushSize = Math.min(3, this.state.brushSize + 1) as UiState['brushSize'];
-      this.changed();
-    }
-  }
-
-  private onKeyUp(event: KeyboardEvent): void {
-    if (event.code === 'Space') this.spaceHeld = false;
-  }
 
   // ── Modals ──────────────────────────────────────────────────────────────
 
-  private closeModal(): void {
-    this.modalRoot.innerHTML = '';
-  }
-
-  private modalShell(titleText: string): { body: HTMLDivElement; foot: HTMLDivElement } {
-    this.closeModal();
-    const backdrop = document.createElement('div');
-    backdrop.className = 'zh-modal-backdrop';
-    backdrop.addEventListener('mousedown', (event) => {
-      if (event.target === backdrop) this.closeModal();
-    });
-    const modal = document.createElement('div');
-    modal.className = 'zh-modal';
-    const head = document.createElement('div');
-    head.className = 'zh-modal-head';
-    const title = document.createElement('h2');
-    title.textContent = titleText;
-    const close = this.button('&#10005;', 'Fechar (ESC)', () => this.closeModal());
-    head.append(title, close);
-    const body = document.createElement('div');
-    body.className = 'zh-modal-body';
-    const foot = document.createElement('div');
-    foot.className = 'zh-modal-foot';
-    modal.append(head, body, foot);
-    backdrop.appendChild(modal);
-    this.modalRoot.appendChild(backdrop);
-    return { body, foot };
-  }
-
-  private field(labelText: string, input: HTMLElement): HTMLDivElement {
-    const row = document.createElement('div');
-    row.className = 'zh-field';
-    const span = document.createElement('span');
-    span.textContent = labelText;
-    row.append(span, input);
-    return row;
-  }
-
-
-  /**
-   * O BARALHO: quais cartas o jogador pode comprar.
-   *
-   * Ele mora no topo da biblioteca de chunks e não numa tela própria porque a pergunta "que
-   * cartas existem?" e a pergunta "esta carta está no jogo?" são sobre o mesmo objeto — separá-las
-   * em dois lugares faria o autor editar uma carta aqui e procurar o interruptor dela ali.
-   *
-   * A lista é a ÚNICA escrita de `enabled` (o formulário de metadados só carrega o valor adiante),
-   * e ela se recusa a esvaziar o baralho: sem carta nenhuma o portão não tem o que oferecer, e um
-   * mundo que não cresce mais é indistinguível de um bug.
-   */
-  public openWorldModal(): void {
-    const { body, foot } = this.modalShell('Mundo');
-    const meta = this.store.world.meta;
-
-    const nameInput = document.createElement('input');
-    nameInput.type = 'text';
-    nameInput.value = meta.name;
-    const dimensions = document.createElement('p');
-    dimensions.textContent = 'Mundo aberto fixo: 5 x 5 chunks.';
-    body.append(this.field('Nome', nameInput), dimensions);
-
-    const stats = this.store.stats();
-    const statsEl = document.createElement('p');
-    statsEl.innerHTML = `Cada chunk tem ${CHUNK_COLUMNS}x${CHUNK_ROWS} tiles.<br>`
-      + `NPCs: <b>${stats.npcs}</b> — Itens: <b>${stats.pickups}</b> — Props: <b>${stats.props}</b>`;
-    body.appendChild(statsEl);
-
-    const warnings = this.store.validate();
-    if (warnings.length > 0) {
-      const warnEl = document.createElement('p');
-      warnEl.style.color = '#ffb057';
-      warnEl.innerHTML = `&#9888; ${warnings.join('<br>&#9888; ')}`;
-      body.appendChild(warnEl);
-    }
-
-    foot.append(
-      this.button('Cancelar', '', () => this.closeModal()),
-      this.button('Aplicar', '', () => {
-        this.cb.onWorldApply({
-          name: nameInput.value,
-          chunksX: 5,
-          chunksY: 5,
-        });
-        this.closeModal();
-      }, 'primary'),
-    );
-  }
-
-  public openDialogModal(initialKind: NpcKind = NPC_KINDS[0]): void {
-    const { body, foot } = this.modalShell('Dialogos dos NPCs');
-    let currentKind = initialKind;
-    let working: WorldDialog = this.store.getDialog(currentKind);
-
-    const grid = document.createElement('div');
-    grid.className = 'zh-dialog-grid';
-    const listEl = document.createElement('div');
-    listEl.className = 'zh-npc-list';
-    const formEl = document.createElement('div');
-    grid.append(listEl, formEl);
-    body.appendChild(grid);
-
-    const renderList = (): void => {
-      listEl.innerHTML = '';
-      NPC_KINDS.forEach((kind) => {
-        const visual = NPC_VISUALS[kind];
-        const btn = this.button('', NPC_LABELS[kind], () => {
-          currentKind = kind;
-          working = this.store.getDialog(kind);
-          renderList();
-          renderForm();
-        });
-        btn.classList.toggle('active', kind === currentKind);
-        const img = document.createElement('img');
-        img.src = this.icon(visual.key, visual.frame);
-        const span = document.createElement('span');
-        span.textContent = NPC_LABELS[kind];
-        btn.append(img, span);
-        listEl.appendChild(btn);
-      });
-    };
-
-    const renderForm = (): void => {
-      formEl.innerHTML = '';
-
-      const nameInput = document.createElement('input');
-      nameInput.type = 'text';
-      nameInput.value = working.npcName;
-      nameInput.addEventListener('input', () => { working.npcName = nameInput.value; });
-
-      const colorInput = document.createElement('input');
-      colorInput.type = 'color';
-      colorInput.value = working.npcColorHex;
-      colorInput.addEventListener('input', () => { working.npcColorHex = colorInput.value; });
-
-      const freqInput = document.createElement('input');
-      freqInput.type = 'number';
-      freqInput.min = '60';
-      freqInput.max = '2000';
-      freqInput.value = String(working.voice.freq);
-      freqInput.addEventListener('input', () => { working.voice.freq = Number(freqInput.value) || working.voice.freq; });
-
-      const waveSelect = document.createElement('select');
-      WAVE_OPTIONS.forEach((wave) => {
-        const option = document.createElement('option');
-        option.value = wave;
-        option.textContent = wave;
-        option.selected = working.voice.wave === wave;
-        waveSelect.appendChild(option);
-      });
-      waveSelect.addEventListener('change', () => { working.voice.wave = waveSelect.value as OscillatorType; });
-
-      formEl.append(
-        this.field('Nome exibido', nameInput),
-        this.field('Cor do nome', colorInput),
-        this.field('Voz (freq Hz)', freqInput),
-        this.field('Voz (onda)', waveSelect),
-        this.sectionLabel('Falas (npc fala, narrador descreve)'),
-      );
-
-      const linesEl = document.createElement('div');
-      formEl.appendChild(linesEl);
-
-      const renderLines = (): void => {
-        linesEl.innerHTML = '';
-        working.lines.forEach((line, index) => {
-          const row = document.createElement('div');
-          row.className = 'zh-line-row';
-
-          const speakerSelect = document.createElement('select');
-          (['npc', 'narrator'] as const).forEach((speaker) => {
-            const option = document.createElement('option');
-            option.value = speaker;
-            option.textContent = speaker === 'npc' ? 'NPC' : 'Narrador';
-            option.selected = line.speaker === speaker;
-            speakerSelect.appendChild(option);
-          });
-          speakerSelect.addEventListener('change', () => { line.speaker = speakerSelect.value as 'npc' | 'narrator'; });
-
-          const textInput = document.createElement('input');
-          textInput.type = 'text';
-          textInput.value = line.text;
-          textInput.addEventListener('input', () => { line.text = textInput.value; });
-
-          const up = this.button('&#8593;', 'Mover para cima', () => {
-            if (index === 0) return;
-            [working.lines[index - 1], working.lines[index]] = [working.lines[index], working.lines[index - 1]];
-            renderLines();
-          });
-          const down = this.button('&#8595;', 'Mover para baixo', () => {
-            if (index >= working.lines.length - 1) return;
-            [working.lines[index + 1], working.lines[index]] = [working.lines[index], working.lines[index + 1]];
-            renderLines();
-          });
-          const del = this.button('&#10005;', 'Remover fala', () => {
-            working.lines.splice(index, 1);
-            renderLines();
-          });
-
-          row.append(speakerSelect, textInput, up, down, del);
-          linesEl.appendChild(row);
-        });
-
-        const add = this.button('+ Adicionar fala', '', () => {
-          working.lines.push({ speaker: 'npc', text: '' });
-          renderLines();
-        });
-        add.style.marginTop = '4px';
-        linesEl.appendChild(add);
-      };
-      renderLines();
-    };
-
-    renderList();
-    renderForm();
-
-    foot.append(
-      this.button('Fechar', '', () => this.closeModal()),
-      this.button('Aplicar neste NPC', 'Grava as falas editadas no mundo (salve depois com Ctrl+S)', () => {
-        working.lines = working.lines.filter((line) => line.text.trim().length > 0);
-        this.cb.onDialogApply(currentKind, working);
-        working = this.store.getDialog(currentKind);
-        this.toast(`Dialogo de ${NPC_LABELS[currentKind]} aplicado`);
-      }, 'primary'),
-    );
-  }
-
-  public openHelpModal(): void {
-    const { body, foot } = this.modalShell('Ajuda — controles');
-    const rows: Array<[string, string]> = [
-      ['Botao esquerdo', 'Usa a ferramenta ativa'],
-      ['Botao direito', 'Apaga (entidades, tile superior e colisao; na ferramenta Colisao, so colisao)'],
-      ['Botao do meio / Espaco + arrastar', 'Move a camera'],
-      ['Roda do mouse', 'Zoom no cursor'],
-      ['B / E / R / F / I / C / S', 'Pincel, Borracha, Retangulo, Balde, Conta-gotas, Colisao, Ponto Inicial'],
-      ['1..4', 'Abas: Tiles, NPCs, Itens, Props'],
-      ['Tab', 'Alterna camada chao/superior'],
-      ['[ e ]', 'Tamanho do pincel'],
-      ['M', 'Alterna visao mundo / chunk'],
-      ['Setas', 'Na visao chunk: muda o chunk selecionado'],
-      ['G / V / T / O', 'Mostrar grade / colisoes / entidades / pecas do jogo'],
-      ['Ctrl+Z / Ctrl+Y', 'Desfazer / refazer'],
-      ['Ctrl+S', 'Salvar world.json'],
-      ['P', 'Testar o mundo em edicao (ESC volta ao editor)'],
-      ['0', 'Enquadrar o mundo na tela'],
-    ];
-    const table = document.createElement('table');
-    table.className = 'zh-help-table';
-    rows.forEach(([keys, description]) => {
-      const tr = document.createElement('tr');
-      const td1 = document.createElement('td');
-      td1.textContent = keys;
-      const td2 = document.createElement('td');
-      td2.textContent = description;
-      tr.append(td1, td2);
-      table.appendChild(tr);
-    });
-    body.appendChild(table);
-    foot.appendChild(this.button('Fechar', '', () => this.closeModal(), 'primary'));
-  }
 }

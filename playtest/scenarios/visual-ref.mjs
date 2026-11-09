@@ -57,7 +57,7 @@ const SETTLE = `async (tileX, tileY, steps) => {
   s.movementController.syncPlayerToWorld(tileX, tileY, s.tileSize);
 
   w3.elapsed = 0;
-  w3.shakeMs = 0;
+  w3.cam.shakeMs = 0;
   // Pin each flame's SEED too, not just its accumulators.
   //
   // The seed is drawn from Math.random() when the fire is built — and so is every three.js object's
@@ -68,8 +68,8 @@ const SETTLE = `async (tileX, tileY, steps) => {
   // renderers would then "fail" the diff for a reason that has nothing to do with rendering.
   // A lista numa ordem fixa (pela posicao): o tremor de cada fogo sorteia na ordem da lista, e um fogo aceso durante
   // o boot entra nela numa ordem que varia entre rodadas — os sorteios de um iam parar no outro.
-  w3.fires.sort((a, b) => a.worldX - b.worldX || a.worldY - b.worldY);
-  w3.fires.forEach((f) => {
+  w3.lights.fires.sort((a, b) => a.worldX - b.worldX || a.worldY - b.worldY);
+  w3.lights.fires.forEach((f) => {
     // Pela POSICAO do fogo, e nao pelo lugar dele na lista: um fogo aceso durante o boot entra na lista numa ordem
     // que varia entre rodadas (o vizinho que acende a fogueira ao anoitecer), e a semente de um ia parar no outro.
     f.seed = (f.worldX * 7.31 + f.worldY * 1.7) % 50;
@@ -94,19 +94,19 @@ const SETTLE = `async (tileX, tileY, steps) => {
   // a different phase between runs (two shots of the SAME build differed by ~0.3% of the frame,
   // all of it around the hero — the state dump's scaleX/scaleY caught it). So for the reference
   // shots the breathing is stubbed out entirely: the hero holds scale 1, deterministically.
-  s.stopBreathing();
-  s.startBreathing = () => {};
+  s.steps.stopBreathing();
+  s.steps.startBreathing = () => {};
   s.hero.scaleX = 1;
   s.hero.scaleY = 1;
-  s.lastStepTime = 0;
+  s.frame.lastStepTime = 0;
 
   // SHADOWS-ONLY mode (VISUAL_ISOLATE=shadows): strip the frame back to the ground and the solid
   // cast shadows, with no post chain to smear a local difference across the whole image. This is
   // what tells you whether a change to the shadows changed the SHADOWS, rather than something the
   // bloom then spread over half the frame.
   if (window.__isolateShadows) {
-    const field = w3.solidCastField ? w3.solidCastField.mesh : null;
-    const moonField = w3.moonCastField ? w3.moonCastField.mesh : null;
+    const field = w3.tiles.solidCastField ? w3.tiles.solidCastField.mesh : null;
+    const moonField = w3.tiles.moonCastField ? w3.tiles.moonCastField.mesh : null;
     const pool = w3.solidCastPool ?? [];
     const keep = new Set([field, moonField, ...pool].filter(Boolean));
     w3.scene.traverse((o) => {
@@ -115,14 +115,14 @@ const SETTLE = `async (tileX, tileY, steps) => {
       const isGround = o.geometry?.type === 'BufferGeometry' && o.material?.type === 'MeshLambertMaterial';
       if (!isGround) o.layers.set(31);
     });
-    w3.composer.passes = [w3.composer.passes[0]];
-    w3.composer.passes[0].renderToScreen = true;
+    w3.screen.composer.passes = [w3.screen.composer.passes[0]];
+    w3.screen.composer.passes[0].renderToScreen = true;
   }
 
   // The flame billboards flip through their frames on an engine timer whose phase was set during
   // boot — the same class of drift. Freeze them on frame 0; the fire's LIGHT (which is what a
   // renderer change could plausibly move) is pinned above and still very much live.
-  for (const cf of (s.campfires ?? [])) {
+  for (const cf of (s.props.campfires ?? [])) {
     cf.animTimer?.remove(false);
     cf.animTimer = undefined;
     // A fogueira que o vizinho acende ao anoitecer cresce por um tween que começou no boot: chama inteira já.
@@ -159,11 +159,11 @@ const SETTLE = `async (tileX, tileY, steps) => {
   // chegava à foto num instante diferente. Então cada sistema nasce de novo aqui, de uma semente fixada só para ele
   // (o número de sorteios de um não mexe no do outro), e anda os mesmos passos que o resto.
   const rebuild = (field, make) => {
-    const o = s[field];
+    const o = s.valley[field];
     if (!o) return;
     o.destroy();
     window.__reseed();
-    s[field] = make(o);
+    s.valley[field] = make(o);
   };
   rebuild('bigTrees', (o) => new o.constructor(s, o.heroAt));
   rebuild('koiPond', (o) => new o.constructor(s, o.heroAt));
@@ -171,13 +171,13 @@ const SETTLE = `async (tileX, tileY, steps) => {
   rebuild('crashSite', (o) => new o.constructor(s));
   rebuild('birdLife', (o) => new o.constructor(s, o.host));
   rebuild('nature', (o) => new o.constructor(s, o.world));
-  if (s.gardenMist) s.gardenMist.clock = 0;
-  for (const list of [s.fireflies, s.butterflies, s.leaves]) {
+  if (s.valley.gardenMist) s.valley.gardenMist.clock = 0;
+  for (const list of [s.life.fireflies, s.life.butterflies, s.life.leaves]) {
     for (const it of list ?? []) it.bb?.destroy();
     if (list) list.length = 0;
   }
-  s.fireflyLevel = 0;
-  s.daylifeLevel = 0;
+  s.life.fireflyLevel = 0;
+  s.life.daylifeLevel = 0;
 
   window.__reseed();            // last, so the sequence the steps consume is identical
 

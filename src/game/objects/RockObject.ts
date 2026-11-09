@@ -82,7 +82,7 @@ export class RockObject implements WorldProp {
     const look = LOOK[kind];
     this.look = look;
     this.sprite = world3d()
-      .addBillboard(look.intact[0], look.intact[1], { groundShadow: true })
+      .objects.addBillboard(look.intact[0], look.intact[1], { groundShadow: true })
       .setPosition(worldX, worldY)
       .setDisplaySize(SIZE, SIZE)
       // The rock art is near-white, and a white sprite under the night ambient blows out

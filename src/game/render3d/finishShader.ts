@@ -1,4 +1,4 @@
-﻿// O ACABAMENTO DO QUADRO: o último passo da cadeia de pós (ver World3D.initPostProcessing).
+// O ACABAMENTO DO QUADRO: o último passo da cadeia de pós (ver World3D.initPostProcessing).
 
 import * as THREE from 'three';
 

@@ -107,7 +107,7 @@ export class Puddles implements NatureSystem {
         keep.add(key);
         if (this.puddles.has(key)) continue;
         const shape = Math.floor(hash(x, y, 112) * 3);
-        const bb = world3d().addBillboard(SHAPES[shape][0], 0, { flat: true, flatY: 0.02, depthWrite: false, alphaTest: 0.01, depthLayer: 'ground' })
+        const bb = world3d().objects.addBillboard(SHAPES[shape][0], 0, { flat: true, flatY: 0.02, depthWrite: false, alphaTest: 0.01, depthLayer: 'ground' })
           .setTint(PROP_TINT).setPosition(x + (hash(x, y, 113) - 0.5) * 0.3, y + (hash(y, x, 114) - 0.5) * 0.3).setVisible(false);
         this.puddles.set(key, { bb, x, y, shape, size: 0.6 + hash(x, y, 115) * 0.4 });
       }
@@ -128,13 +128,13 @@ export class Puddles implements NatureSystem {
     if (Math.hypot(f.hero.x - p.bb.x, f.hero.y - p.bb.y) > 0.45) return;
     this.lastSplashTile = key;
     this.splashes += 1;
-    getSoundManager().playPuddleSplash();
+    getSoundManager().nature.playPuddleSplash();
     const w3 = world3d();
-    this.rings.push({ bb: w3.addBillboard(RING, 0, { flat: true, flatY: 0.025, depthWrite: false, alphaTest: 0.01, depthLayer: 'ground' }).setPosition(f.hero.x, f.hero.y + 0.1), t: 0 });
+    this.rings.push({ bb: w3.objects.addBillboard(RING, 0, { flat: true, flatY: 0.025, depthWrite: false, alphaTest: 0.01, depthLayer: 'ground' }).setPosition(f.hero.x, f.hero.y + 0.1), t: 0 });
     for (let i = 0; i < 9; i += 1) {
       const a = (i / 9) * Math.PI * 2 + this.rand();
       this.drops.push({
-        bb: w3.addBillboard(DROP, 0, { centered: true, depthWrite: false, alphaTest: 0.01 }).setDisplaySize(1 / 16, 1 / 16),
+        bb: w3.objects.addBillboard(DROP, 0, { centered: true, depthWrite: false, alphaTest: 0.01 }).setDisplaySize(1 / 16, 1 / 16),
         x: f.hero.x, y: f.hero.y + 0.1, z: 0.05, vx: Math.cos(a) * (0.6 + this.rand() * 0.5), vy: Math.sin(a) * 0.35, vz: 1 + this.rand() * 0.8,
       });
     }

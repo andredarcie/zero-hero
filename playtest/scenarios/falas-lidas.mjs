@@ -11,10 +11,10 @@ export default {
     const state = () => page.evaluate(() => window.gameDebug?.getState() ?? null);
     /** A linha na caixa agora: o texto, se ainda está sendo datilografada, e quantas letras já apareceram. */
     const line = () => page.evaluate(() => {
-      const o = window.__scene.dialogOverlay;
+      const o = window.__scene.dialog.dialogOverlay;
       if (!o) return null;
-      const letters = o.letters.filter(Boolean);
-      return { text: o.currentText, typing: o.isTyping, shown: letters.filter((l) => l.classList.contains('zh-on')).length, total: letters.length };
+      const letters = o.writer.letters.filter(Boolean);
+      return { text: o.writer.currentText, typing: o.isTyping, shown: letters.filter((l) => l.classList.contains('zh-on')).length, total: letters.length };
     });
     const closeAll = async () => {
       for (let i = 0; i < 40; i += 1) {

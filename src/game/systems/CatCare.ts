@@ -130,9 +130,9 @@ export class CatCare {
     this.host.hearts(cat.position.x, cat.position.y);
     // A voz do gato é a mesma do roteiro dele (NpcDialogs): aguda e redonda, um miado de duas notas.
     const voice = this.host.voice();
-    getSoundManager().playDialogBlip(voice?.freq ?? 540, voice?.wave ?? 'triangle');
+    getSoundManager().ui.playDialogBlip(voice?.freq ?? 540, voice?.wave ?? 'triangle');
     const time = this.host.scene.time;
-    time.delayedCall(120, () => getSoundManager().playDialogBlip((voice?.freq ?? 540) * 0.8, voice?.wave ?? 'triangle'));
+    time.delayedCall(120, () => getSoundManager().ui.playDialogBlip((voice?.freq ?? 540) * 0.8, voice?.wave ?? 'triangle'));
     // E RESPONDE COM UMA LIÇÃO (pedido do autor): o gato é Diógenes, o cínico.
     time.delayedCall(450, () => this.talk());
     return true;

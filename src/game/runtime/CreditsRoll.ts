@@ -56,7 +56,7 @@ export class CreditsRoll {
     requestAnimationFrame(() => { root.style.opacity = '1'; });
 
     window.addEventListener('keydown', this.onKey, true);
-    this.later(THE_END_AT_MS, () => { end.style.opacity = '1'; getSoundManager().startMusic('menu', 3000); });
+    this.later(THE_END_AT_MS, () => { end.style.opacity = '1'; getSoundManager().music.startMusic('menu', 3000); });
     this.later(ROLL_AT_MS, () => {
       end.style.opacity = '0';
       this.skippable = true;
@@ -83,8 +83,8 @@ export class CreditsRoll {
     this.went = true;
     window.removeEventListener('keydown', this.onKey, true);
     this.root.style.opacity = '0';
-    getSoundManager().stopMusic();
-    getSoundManager().stopAmbience();
+    getSoundManager().music.stopMusic();
+    getSoundManager().ambience.stopAmbience();
     this.later(FADE_OUT_MS, () => {
       this.root.remove();
       this.onDone();

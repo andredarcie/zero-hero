@@ -13,6 +13,8 @@ import type { Scene } from '../scene';
 import type { Camera } from '../camera';
 import type { Renderer } from '../renderer';
 import type { TransformMatrix } from '../matrix';
+import { TextLayout, type TextMetrics } from './TextLayout';
+export type { TextMetrics } from './TextLayout';
 
 /** O UUID da textura (31 sorteios). */
 export const UUID = (): string => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -105,8 +107,6 @@ const PROPERTY_MAP: Array<[keyof TextStyle, string, unknown]> = [
   ['wordWrapCallbackScope', 'wordWrap.callbackScope', null],
   ['wordWrapUseAdvanced', 'wordWrap.useAdvancedWrap', false],
 ];
-
-export interface TextMetrics { ascent: number; descent: number; fontSize: number }
 
 /** O MeasureText (o caminho moderno, com actualBoundingBox*; o de pixels fica para navegador antigo). */
 const measureText = (style: TextStyle, antialias: boolean): TextMetrics => {
@@ -389,6 +389,8 @@ export class Text extends QuadGameObject {
   private readonly _textureKey: string;
   public readonly antialias: boolean;
   private readonly renderer: Renderer | null;
+  /** A quebra de linha e a medida. (ver TextLayout) */
+  private readonly layout = new TextLayout(this);
 
   public constructor(scene: Scene, x = 0, y = 0, text: string | string[] = '', style?: TextStyleConfig) {
     super(scene, 'Text');
@@ -406,7 +408,7 @@ export class Text extends QuadGameObject {
     this.context = this.texture.context;
     this.frame = this.texture.get();
     // O texto sobe a textura dele em `updateText` (sem repetição); a criada pelo `addCanvas` sai.
-    this.renderer?.deleteTexture(this.frame.source.glTexture);
+    this.renderer?.glTextures.deleteTexture(this.frame.source.glTexture);
     this.frame.source.glTexture = null;
     this.canvas.dir = 'ltr';
     this.context.direction = 'ltr';
@@ -437,106 +439,9 @@ export class Text extends QuadGameObject {
   public get text(): string { return this._text ?? ''; }
   public set text(value: string) { this.setText(value); }
 
-  private runWordWrap(text: string): string {
-    const style = this.style;
-    if (style.wordWrapCallback) {
-      const wrapped = style.wordWrapCallback.call(style.wordWrapCallbackScope, text, this);
-      return Array.isArray(wrapped) ? wrapped.join('\n') : wrapped;
-    }
-    if (style.wordWrapWidth) {
-      return style.wordWrapUseAdvanced
-        ? this.advancedWordWrap(text, this.context, style.wordWrapWidth)
-        : this.basicWordWrap(text, this.context, style.wordWrapWidth);
-    }
-    return text;
-  }
-
-  private advancedWordWrap(text: string, context: CanvasRenderingContext2D, wordWrapWidth: number): string {
-    let output = '';
-    const lines = text.replace(/ +/gi, ' ').split(this.splitRegExp);
-    let linesCount = lines.length;
-    for (let i = 0; i < linesCount; i++) {
-      let line = lines[i];
-      let out = '';
-      line = line.replace(/^ *|\s*$/gi, '');
-      const lineLetterSpacingWidth = line.length * this.letterSpacing;
-      const lineWidth = context.measureText(line).width + lineLetterSpacingWidth;
-      if (lineWidth < wordWrapWidth) {
-        output += `${line}\n`;
-        continue;
-      }
-      let currentLineWidth = wordWrapWidth;
-      const words = line.split(' ');
-      for (let j = 0; j < words.length; j++) {
-        const word = words[j];
-        const wordWithSpace = `${word} `;
-        const letterSpacingWidth = wordWithSpace.length * this.letterSpacing;
-        let wordWidth = context.measureText(wordWithSpace).width + letterSpacingWidth;
-        if (wordWidth > currentLineWidth) {
-          if (j === 0) {
-            let newWord = wordWithSpace;
-            while (newWord.length) {
-              newWord = newWord.slice(0, -1);
-              const newLetterSpacingWidth = newWord.length * this.letterSpacing;
-              wordWidth = context.measureText(newWord).width + newLetterSpacingWidth;
-              if (wordWidth <= currentLineWidth) break;
-            }
-            if (!newWord.length) throw new Error('wordWrapWidth < a single character');
-            words[j] = word.substr(newWord.length);
-            out += newWord;
-          }
-          const offset = words[j].length ? j : j + 1;
-          const remainder = words.slice(offset).join(' ').replace(/[ \n]*$/gi, '');
-          lines.splice(i + 1, 0, remainder);
-          linesCount = lines.length;
-          break;
-        } else {
-          out += wordWithSpace;
-          currentLineWidth -= wordWidth;
-        }
-      }
-      output += `${out.replace(/[ \n]*$/gi, '')}\n`;
-    }
-    return output.replace(/[\s|\n]*$/gi, '');
-  }
-
-  private basicWordWrap(text: string, context: CanvasRenderingContext2D, wordWrapWidth: number): string {
-    let result = '';
-    const lines = text.split(this.splitRegExp);
-    const lastLineIndex = lines.length - 1;
-    const whiteSpaceWidth = context.measureText(' ').width;
-    for (let i = 0; i <= lastLineIndex; i++) {
-      let spaceLeft = wordWrapWidth;
-      const words = lines[i].split(' ');
-      const lastWordIndex = words.length - 1;
-      for (let j = 0; j <= lastWordIndex; j++) {
-        const word = words[j];
-        const letterSpacingWidth = word.length * this.letterSpacing;
-        const wordWidth = context.measureText(word).width + letterSpacingWidth;
-        let wordWidthWithSpace = wordWidth;
-        if (j < lastWordIndex) wordWidthWithSpace += whiteSpaceWidth;
-        if (wordWidthWithSpace > spaceLeft) {
-          if (j > 0) {
-            result += '\n';
-            spaceLeft = wordWrapWidth;
-          }
-        }
-        result += word;
-        if (j < lastWordIndex) {
-          result += ' ';
-          spaceLeft -= wordWidthWithSpace;
-        } else {
-          spaceLeft -= wordWidth;
-        }
-      }
-      if (i < lastLineIndex) result += '\n';
-    }
-    return result;
-  }
-
   public getWrappedText(text: string = this._text ?? ''): string[] {
     this.style.syncFont(this.canvas, this.context);
-    return this.runWordWrap(text).split(this.splitRegExp);
+    return this.layout.runWordWrap(text).split(this.splitRegExp);
   }
 
   public setText(value: string | number | string[] | null | undefined): this {
@@ -611,35 +516,6 @@ export class Text extends QuadGameObject {
     return this.updateText();
   }
 
-  private getTextSize(size: TextMetrics, lines: string[]): { width: number; height: number; lines: number; lineWidths: number[]; lineSpacing: number; lineHeight: number } {
-    const context = this.context;
-    const style = this.style;
-    const lineWidths: number[] = [];
-    let maxLineWidth = 0;
-    let drawnLines = lines.length;
-    if (style.maxLines > 0 && style.maxLines < lines.length) drawnLines = style.maxLines;
-    style.syncFont(this.canvas, context);
-    const letterSpacing = this.letterSpacing;
-    for (let i = 0; i < drawnLines; i++) {
-      let lineWidth = style.strokeThickness;
-      if (letterSpacing === 0) {
-        lineWidth += context.measureText(lines[i]).width;
-      } else {
-        const line = lines[i];
-        for (let j = 0; j < line.length; j++) lineWidth += context.measureText(line[j]).width;
-        if (line.length > 1) lineWidth += letterSpacing * (line.length - 1);
-      }
-      if (style.wordWrap) lineWidth -= context.measureText(' ').width;
-      lineWidths[i] = Math.ceil(lineWidth);
-      maxLineWidth = Math.max(maxLineWidth, lineWidths[i]);
-    }
-    const lineHeight = size.fontSize + style.strokeThickness;
-    let height = lineHeight * drawnLines;
-    const lineSpacing = this.lineSpacing;
-    if (drawnLines > 1) height += lineSpacing * (drawnLines - 1);
-    return { width: maxLineWidth, height, lines: drawnLines, lineWidths, lineSpacing, lineHeight };
-  }
-
   public updateText(): this {
     const canvas = this.canvas;
     const context = this.context;
@@ -648,9 +524,9 @@ export class Text extends QuadGameObject {
     const size = style.metrics;
     style.syncFont(canvas, context);
     let outputText = this._text ?? '';
-    if (style.wordWrapWidth || style.wordWrapCallback) outputText = this.runWordWrap(outputText);
+    if (style.wordWrapWidth || style.wordWrapCallback) outputText = this.layout.runWordWrap(outputText);
     const lines = outputText.split(this.splitRegExp);
-    const textSize = this.getTextSize(size, lines);
+    const textSize = this.layout.getTextSize(size, lines);
     const padding = this.padding;
     let textWidth: number;
     if (style.fixedWidth === 0) {
@@ -741,7 +617,7 @@ export class Text extends QuadGameObject {
       }
     }
     context.restore();
-    if (this.renderer) this.frame.source.glTexture = this.renderer.canvasToTexture(canvas, this.frame.source.glTexture, true);
+    if (this.renderer) this.frame.source.glTexture = this.renderer.glTextures.canvasToTexture(canvas, this.frame.source.glTexture, true);
     const input = this.input;
     if (input && !input.customHitArea && input.hitArea) {
       input.hitArea.width = this.width;
@@ -765,7 +641,7 @@ export class Text extends QuadGameObject {
     const width = frame.width;
     const height = frame.height;
     const res = this.style.resolution;
-    renderer.batchTexture(
+    renderer.batch.batchTexture(
       this, frame.glTexture, width, height, this.x, this.y, width / res, height / res, this.scaleX, this.scaleY, this.rotation,
       this.flipX, this.flipY, this.scrollFactorX, this.scrollFactorY, this.displayOriginX, this.displayOriginY,
       0, 0, width, height,

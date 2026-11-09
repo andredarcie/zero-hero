@@ -512,35 +512,35 @@ export class Waterfall {
     const { x, y } = WATERFALL_SPRING;
     // A peça grande: em pé, um palmo à frente da parede (a borda do tile fica em +0,5), já sobre o poço; o pé na
     // superfície da água, a beira na beira do planalto, o rochedo acima dela.
-    this.cascade = w3.addBillboard(key('cascade', 0), 0, { depthWrite: false })
+    this.cascade = w3.objects.addBillboard(key('cascade', 0), 0, { depthWrite: false })
       .setDisplaySize(CW / 16, CH / 16)
       .setTint(TINT)
       .setPosition(x + (CW / 2 - FALL_C) / 16, y + 0.72)
       .setElevation(POOL_SURFACE - 0.02);
     // O pé: na frente da margem de terra do poço, que esconderia o fim da queda.
-    this.foot = w3.addBillboard(key('foot', 0), 0, { depthWrite: false })
+    this.foot = w3.objects.addBillboard(key('foot', 0), 0, { depthWrite: false })
       .setDisplaySize(FOOT_W / 16, FOOT_H / 16)
       .setTint(TINT)
       .setPosition(x, y + 1.04)
       .setElevation(POOL_SURFACE - 0.04);
     // O riacho do alto, deitado no planalto (2×2 tiles, de (51,5; 53,5) a (53,5; 55,5)).
-    this.stream = w3.addBillboard(key('stream', 0), 0, { flat: true, flatY: 0.015, depthWrite: false, alphaTest: 0.01 })
+    this.stream = w3.objects.addBillboard(key('stream', 0), 0, { flat: true, flatY: 0.015, depthWrite: false, alphaTest: 0.01 })
       .setDisplaySize(STREAM / 16, STREAM / 16)
       .setTint(TINT)
       .setPosition(52.5, 54.5);
     // A espuma levada pela corrente, deitada no poço inteiro (os dois tiles de água).
-    this.pool = w3.addBillboard(key('pool', 0), 0, { flat: true, flatY: POOL_SURFACE + 0.012, depthWrite: false, alphaTest: 0.01, renderOrder: WATER_LAYER.foam })
+    this.pool = w3.objects.addBillboard(key('pool', 0), 0, { flat: true, flatY: POOL_SURFACE + 0.012, depthWrite: false, alphaTest: 0.01, renderOrder: WATER_LAYER.foam })
       .setDisplaySize(POOL_W / 16, POOL_H / 16)
       .setTint(TINT)
       .setPosition(WATERFALL_POOL.x, WATERFALL_POOL.y + 0.8);
     for (let i = 0; i < 7; i += 1) {
-      const bb = w3.addBillboard(MIST, 0, { centered: true, depthWrite: false, alphaTest: 0.01, fog: false })
+      const bb = w3.objects.addBillboard(MIST, 0, { centered: true, depthWrite: false, alphaTest: 0.01, fog: false })
         .setTint(0xdfe8ea)
         .setDisplaySize(0.9, 0.6);
       this.puffs.push({ bb, t: i / 7, speed: 0.22 + hash(i, 1, 9) * 0.1, dx: (hash(i, 2, 9) - 0.3) * 0.9 });
     }
     for (let i = 0; i < 12; i += 1) {
-      const bb = w3.addBillboard(DROP, 0, { centered: true, depthWrite: false, alphaTest: 0.01 })
+      const bb = w3.objects.addBillboard(DROP, 0, { centered: true, depthWrite: false, alphaTest: 0.01 })
         .setTint(TINT)
         .setDisplaySize(1 / 16, 1 / 16);
       const d: Drop = { bb, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0 };
@@ -549,7 +549,7 @@ export class Waterfall {
       this.flyDrop(d, hash(i, 3, 9) * 0.5);
       this.drops.push(d);
     }
-    this.rainbow = w3.addBillboard(RAINBOW, 0, { centered: true, additive: true, alphaTest: 0.01 })
+    this.rainbow = w3.objects.addBillboard(RAINBOW, 0, { centered: true, additive: true, alphaTest: 0.01 })
       .setDisplaySize(3.4, 1.7)
       .setPosition(WATERFALL_POOL.x + 0.3, WATERFALL_POOL.y + 0.4)
       .setElevation(1.25)

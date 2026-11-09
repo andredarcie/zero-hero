@@ -97,23 +97,23 @@ export class HeroCamp {
     registerTextures();
     const w3 = world3d();
     // A clareira de terra batida: pintura no chão, por baixo das sombras (como a estrada antiga).
-    this.bodies.push(w3.addBillboard(CLEARING_TEXTURE, 0, { flat: true, flatY: 0.011, depthWrite: false, renderOrder: 1 })
+    this.bodies.push(w3.objects.addBillboard(CLEARING_TEXTURE, 0, { flat: true, flatY: 0.011, depthWrite: false, renderOrder: 1 })
       .setDisplaySize(CLEARING.w, CLEARING.h)
       .setTint(0xd6d2ca)
       .setPosition(CLEARING.x, CLEARING.y));
     // O colchão: o mesmo que o herói joga no chão nas fogueiras dos vizinhos, aqui deitado para ficar.
-    this.bodies.push(w3.addBillboard(BED_TEXTURE, 0, { flat: true, flatY: BED_Y })
+    this.bodies.push(w3.objects.addBillboard(BED_TEXTURE, 0, { flat: true, flatY: BED_Y })
       .setTint(WHITE_SAFE_TINT)
       .setDisplaySize(BED_SIZE, BED_SIZE)
       .setPosition(CAMP_BED.x, CAMP_BED.y));
     // O fogo com o tripé e a panela: deitado no colchão, o herói fica um pouco atrás da panela, e isso é de
     // propósito (pedido do autor: dá a imersão de estar dormindo ao pé do fogo).
-    this.bodies.push(w3.addBillboard(texture('ring'), 0, {})
+    this.bodies.push(w3.objects.addBillboard(texture('ring'), 0, {})
       .setDisplaySize(1, 1)
       .setTint(CAMP_TINT)
       .setPosition(CAMP_RING.x, CAMP_RING.y));
     // O tronco: um nada atrás do tile, como os bancos — quem senta fica na frente dele.
-    this.bodies.push(w3.addBillboard(texture('log'), 0, { groundShadow: { rx: 0.42, rz: 0.16, alpha: 0.28 } })
+    this.bodies.push(w3.objects.addBillboard(texture('log'), 0, { groundShadow: { rx: 0.42, rz: 0.16, alpha: 0.28 } })
       .setDisplaySize(1, 1)
       .setTint(CAMP_TINT)
       .setPosition(CAMP_LOG.x, CAMP_LOG.y - 0.05));
@@ -124,7 +124,7 @@ export class HeroCamp {
   public refresh(animate: boolean): void {
     for (const m of CAMP_MEMENTOS) {
       if (this.mementos.has(m.quest) || !this.questDone(m.quest)) continue;
-      const body = world3d().addBillboard(texture(m.kind), 0, { groundShadow: SHADOW })
+      const body = world3d().objects.addBillboard(texture(m.kind), 0, { groundShadow: SHADOW })
         .setDisplaySize(1, 1)
         .setTint(CAMP_TINT)
         .setPosition(m.x, m.y);

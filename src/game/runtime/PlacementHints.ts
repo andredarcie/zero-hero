@@ -57,7 +57,7 @@ export class PlacementHints {
 
   private grow(): Billboard3D {
     const mark = world3d()
-      .addBillboard(PLACEMENT_OK_TEXTURE, 0, {
+      .objects.addBillboard(PLACEMENT_OK_TEXTURE, 0, {
         flat: true, flatY: MARK_Y, emissive: true, fog: false, depthWrite: false,
       })
       .setDisplaySize(1, 1)

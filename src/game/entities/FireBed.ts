@@ -49,7 +49,7 @@ export class FireBed {
     this.snore = scene.add.image(0, 0, SLEEP_TEXTURE_KEY).setOrigin(0.5, 1).setVisible(false);
     if (host.fixed) return;
     this.bed = world3d()
-      .addBillboard(BED_TEXTURE, 0, { flat: true, flatY: BED_Y })
+      .objects.addBillboard(BED_TEXTURE, 0, { flat: true, flatY: BED_Y })
       .setTint(WHITE_SAFE_TINT)
       .setDisplaySize(BED_SIZE * 0.5, BED_SIZE * 0.5)
       .setPosition(tile.x, tile.y)
@@ -87,7 +87,7 @@ export class FireBed {
       duration: THROW_MS,
       ease: 'Sine.easeIn',
       onComplete: () => {
-        getSoundManager().playItemBonk();
+        getSoundManager().ui.playItemBonk();
         dirt(tile.x, tile.y, 5);
         scene.tweens.add({ targets: this.bed, displayHeight: BED_SIZE * 0.88, duration: 70, yoyo: true, ease: 'Sine.easeOut' });
         this.lie(180);
@@ -129,7 +129,7 @@ export class FireBed {
       ease: 'Back.easeIn',
       onComplete: () => bed.destroy(),
     });
-    getSoundManager().playItemStash();
+    getSoundManager().ui.playItemStash();
   }
 
   public destroy(): void {

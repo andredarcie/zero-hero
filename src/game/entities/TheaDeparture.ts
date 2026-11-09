@@ -33,7 +33,7 @@ export class TheaDeparture {
     const sound = getSoundManager();
     // Thea levanta, e chama: o sinal do rádio e dois pulinhos.
     await this.to({ targets: thea, displayWidth: 1, displayHeight: 1, duration: 260, ease: 'Back.easeOut' });
-    sound.playShipCall();
+    sound.story.playShipCall();
     await this.hop(thea, 0.32);
     await this.hop(thea, 0.32);
     await this.pause(350);
@@ -58,7 +58,7 @@ export class TheaDeparture {
     this.host.heroLooksUp();
     await this.ship.liftOff();
     this.ship.twinkle();
-    sound.playCozyChime();
+    sound.ui.playCozyChime();
     await this.pause(1100);
     this.ship.destroy();
   }
@@ -97,7 +97,7 @@ export class TheaDeparture {
 
   private enter(): Promise<void> {
     const { thea } = this.host;
-    getSoundManager().playItemStash();
+    getSoundManager().ui.playItemStash();
     return this.to({ targets: thea, displayWidth: 0.45, displayHeight: 0.45, elevation: 0.3, duration: 340, ease: 'Back.easeIn' })
       .then(() => { thea.setVisible(false); });
   }

@@ -3,12 +3,13 @@ import * as Engine from '@/game/engine';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { BRIDGE_GRAVETOS_REQUIRED, SCENE_DEPTHS } from '@/game/constants';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
-import { getStoneTexture } from '@/game/render3d/stoneTexture';
-import { getWoodTexture } from '@/game/render3d/woodTexture';
+
 import { FX_PUFF_TEXTURE, WATER_DEPTH_TILES, world3d, type Box3D } from '@/game/render3d/World3D';
-import { getBridgeSpots, getWaterTiles } from '@/game/world/WorldData';
+
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
 import type { WorldProp } from './WorldProp';
+import { WaterBridge, PLANK_ROWS, SPLASH_TINT, type DeckPart } from './WaterBridge';
+import { WaterFord, BED_Y, WATER_Y } from './WaterFord';
 
 // A river tile. It blocks like lava until the hero builds a bridge over it by depositing two
 // wood sticks ("gravetos"). The river runs in a sunken channel (see WATER_DEPTH_TILES), and
@@ -22,96 +23,43 @@ import type { WorldProp } from './WorldProp';
 // mesma água, a mesma espuma, o mesmo espelho). Este objeto é o dono do TILE — colisão, ponte,
 // vau, balde — e, quando a comporta o esvazia, pede ao World3D que tire a superfície dele.
 
-// The deck is milled into this many boards laid ACROSS the walking direction. The gravetos
-// share them evenly — two gravetos, four boards, two boards per graveto.
-const PLANK_ROWS = 4;
 const PLANKS_PER_GRAVETO = Math.max(1, Math.floor(PLANK_ROWS / BRIDGE_GRAVETOS_REQUIRED));
 
-const PART_DROP_MS = 200; // per-part fall + settle
 const PART_STAGGER_MS = 105; // gap between successive parts nailed in one deposit
-const DROP_FROM_TILES = 0.5; // parts fall in from this high above their rest position
 // First deposit builds the frame (legs + stringers) before its boards; the boards wait this long.
 const FRAME_BEAT_MS = 300;
-
-// The deck's wood is pixel art painted with the game's own wood-sprite palette —
-// see woodTexture.ts. Boards alternate the two plank patterns (staggered butt-joint
-// seams, like bridge.png); the frame below uses the darker stringer/post grain.
-const SAWDUST_TINT = 0xd9b483;
-const SPLASH_TINT = 0x9fb4dd; // a leg landing in the river kicks water, not sawdust
-
-// Deck geometry, all in tiles. The deck rides just above the banks; everything stays
-// inside its own tile (the fundamental sprite rule applies to geometry too).
-const PLANK_H = 0.04;
-const PLANK_ELEV = 0.028; // centre height → top face ~0.048, a shallow step over the ground
-
-// ── The stone ford ───────────────────────────────────────────────────────────
-// A bridge SPANS the channel — its deck rides at ground level on legs. A ford does the
-// opposite: the stones SIT ON THE RIVERBED and break the surface. That distinction is the
-// whole reason the first cut looked wrong. Its boxes were centred at +0.04 (ground level, like
-// the planks), which — with a channel 0.42 tiles deep — left them hovering a third of a tile
-// ABOVE the water: rocks floating in mid-air over the river.
-//
-// So each part is built from where its TOP FACE should land, and grown DOWN to the bed.
-const BED_Y = -WATER_DEPTH_TILES; // the channel floor the stones rest on
-const WATER_Y = -WATER_DEPTH_TILES + 0.03; // the surface they break through
-// Tops. The slab you actually walk on sits a shallow step above the ground, like the deck's
-// planks — but the boulders must crest CLEARLY ABOVE it, or they hide behind the slab and the
-// whole ford flattens into one grey rectangle (which is exactly what the first cut did). Three
-// different heights, so the silhouette is lumpy river rock rather than a paving stone.
-const FORD_TOPS = { slab: 0.05, tall: 0.22, mid: 0.16, low: 0.1 };
-const FORD_DROP_FROM = 0.9;
-const PLANK_W = 0.98; // long axis (across the walk direction)
-const PLANK_D = 0.21; // short axis (four boards + seams fill the tile)
-const STRINGER_H = 0.055;
-const STRINGER_W = 0.075;
-const STRINGER_ELEV = PLANK_ELEV - PLANK_H / 2 - STRINGER_H / 2;
-const STRINGER_OFF = 0.3; // the two beams sit this far either side of centre
-const POST_SIZE = 0.085;
-const POST_H = WATER_DEPTH_TILES + STRINGER_ELEV - STRINGER_H / 2; // riverbed up to the beams
-const POST_ELEV = -WATER_DEPTH_TILES + POST_H / 2;
-const POST_OFF_ALONG = 0.35; // near the tile's entry/exit edges (across = under the stringers)
-
-// Ghost preview (the "you can build here" indicator): the whole structure breathes faintly;
-// the first board stays much more solid — a sample plank on the bank that reads at a glance.
-const SAMPLE_PLANK_ALPHA = 0.62;
-const GHOST_BASE = 0.16;
-const GHOST_WAVE = 0.06;
-const GHOST_HINT_BOOST = 1.7; // ghost brightens while the hero stands beside the spot
-
-interface DeckPart {
-  box: Box3D;
-  restElev: number;
-  laid: boolean;
-  animating: boolean;
-}
 
 export class WaterObject implements WorldProp {
   public readonly worldX: number;
   public readonly worldY: number;
 
-  // Fired once when the bridge finishes building (GameScene uses it for a scene-level flash).
-  public onBuilt?: () => void;
-
-  private readonly scene: Engine.Scene;
-  private readonly pips: Engine.GameObjects.Container;
+  public readonly scene: Engine.Scene;
+  public readonly pips: Engine.GameObjects.Container;
   private readonly pipDots: Engine.GameObjects.Arc[] = [];
-  private planks: DeckPart[] = [];
-  private frame: DeckPart[] = []; // 4 legs + 2 stringers, slammed in by the first deposit
-  private deposited = 0;
-  private forded = false; // stones dropped in the river — walkable, and they never burn
-  private drained = false; // a floodgate opened upstream — the channel emptied, bed walkable
+  public planks: DeckPart[] = [];
+  public frame: DeckPart[] = []; // 4 legs + 2 stringers, slammed in by the first deposit
+  public deposited = 0;
+  public forded = false; // stones dropped in the river — walkable, and they never burn
+  public drained = false; // a floodgate opened upstream — the channel emptied, bed walkable
   // A deck mid-collapse: burn() lit it and the 950ms reset hasn't run yet. During that window
   // `deposited` still reads as a standing bridge, so without this flag a multi-tile bridge
   // double-burns — tile B's spread re-ignites tile A, stacking a SECOND reset that destroys
   // already-destroyed boxes and orphans the rebuilt ghost deck. TallGrass and DryBush refuse
   // re-ignition through their state enums; this is the bridge's equivalent.
-  private burning = false;
-  private fordParts: Array<{ box: Box3D; ox: number; oy: number; rest: number }> = [];
-  private fordFoam: Billboard3D[] = []; // the current tearing white around them
-  private hintOn = false;
-  private dead = false;
+  public burning = false;
+  public fordParts: Array<{ box: Box3D; ox: number; oy: number; rest: number }> = [];
+  public fordFoam: Billboard3D[] = []; // the current tearing white around them
+  public hintOn = false;
+  public dead = false;
   // Only tiles marked with a `bridgeSpot` prop can be bridged; plain river tiles just block.
-  private readonly buildable: boolean;
+  public readonly buildable: boolean;
+  /** A ponte em obra e pronta (ver WaterBridge). */
+  private readonly bridge = new WaterBridge(this);
+  /** O vau de pedras (ver WaterFord). */
+  private readonly ford = new WaterFord(this);
+  /** Quem quer saber quando a ponte fica pronta (a cena acende um clarão manso). */
+  public set onBuilt(fn: (() => void) | undefined) { this.bridge.onBuilt = fn; }
+  public get onBuilt(): (() => void) | undefined { return this.bridge.onBuilt; }
 
   public constructor(scene: Engine.Scene, worldX: number, worldY: number, buildable: boolean) {
     this.scene = scene;
@@ -120,7 +68,7 @@ export class WaterObject implements WorldProp {
     this.buildable = buildable;
 
     // A buildable spot shows its ghost preview from the start.
-    if (buildable) this.ensureDeck();
+    if (buildable) this.bridge.ensureDeck();
 
     // Build-progress pips ("gravetos needed"), floated above the tile only while the hero is beside it.
     this.pips = scene.add.container(0, 0).setDepth(SCENE_DEPTHS.toast).setVisible(false);
@@ -173,160 +121,17 @@ export class WaterObject implements WorldProp {
     const firstDeposit = this.deposited === 0;
     this.deposited += 1;
     const laidAfter = this.isBridge ? PLANK_ROWS : this.deposited * PLANKS_PER_GRAVETO;
-    getSoundManager().playBridgePlank(); // the "graveto set onto the frame" cue
+    getSoundManager().work.playBridgePlank(); // the "graveto set onto the frame" cue
 
     // The first graveto raises the FRAME (legs splash down into the river, beams settle on
     // them), then its boards; later deposits just nail more boards onto the waiting frame.
-    if (firstDeposit) this.slamFrame();
+    if (firstDeposit) this.bridge.slamFrame();
     const boardDelay = firstDeposit ? FRAME_BEAT_MS : 0;
     for (let k = 0; laidBefore + k < laidAfter && laidBefore + k < PLANK_ROWS; k++) {
       const index = laidBefore + k;
-      this.scene.time.delayedCall(boardDelay + k * PART_STAGGER_MS, () => this.dropPlank(index));
+      this.scene.time.delayedCall(boardDelay + k * PART_STAGGER_MS, () => this.bridge.dropPlank(index));
     }
     return this.isBridge;
-  }
-
-  /**
-   * Drop a stone in the river: ONE is enough, and it is done — no carpentry, no second trip.
-   * Cheaper than the two-graveto deck, and it never burns. What it costs you is the fuse: fire
-   * stops dead at a ford (see burn()), so a river crossed in stone is a river fire cannot cross.
-   *
-   * Returns false off a buildable spot, or if something already spans this tile.
-   */
-  public placeStone(): boolean {
-    if (!this.buildable || this.isBridge || this.forded) return false;
-    this.forded = true;
-    this.pips.setVisible(false);
-
-    // The ghost deck (the "you could build here" preview) is not what got built — hide it.
-    for (const part of [...this.frame, ...this.planks]) part.box.setVisible(false);
-
-    // REAL box geometry, like the bridge deck beside it. A camera-facing billboard here was a
-    // sticker of a rock standing upright in the river — the same "sheet of paper" the tall
-    // grass used to be. A ford is a big worn SLAB you step on, with smaller boulders wedged
-    // around it holding it in the current, each one a box with actual thickness sitting IN the
-    // sunken channel (the river bed is WATER_DEPTH_TILES below the ground plane).
-    const w3 = world3d();
-    // Each stone is grown DOWN from the height its crown should reach to the riverbed, so it
-    // stands IN the channel rather than hovering over it. Offsets are deliberately NOT
-    // symmetric: a ford is rubble that fell where it fell, and a tidy cross of stones would
-    // read as masonry.
-    const stand = (
-      kind: 'slab' | 'boulder',
-      sizeX: number,
-      sizeZ: number,
-      top: number,
-      ox: number,
-      oy: number,
-    ): { box: Box3D; ox: number; oy: number; rest: number } => {
-      const height = top - BED_Y;
-      const box = w3.addBox(sizeX, height, sizeZ, getStoneTexture(kind));
-      return { box, ox, oy, rest: BED_Y + height / 2 }; // elevation is the box's CENTRE
-    };
-
-    // The slab is kept well INSIDE the tile so dark water still shows at the corners — a stone
-    // that fills its square edge to edge reads as a paved tile, not as a rock in a river.
-    this.fordParts = [
-      stand('slab', 0.6, 0.52, FORD_TOPS.slab, 0.0, 0.04), // the face you step on
-      stand('boulder', 0.32, 0.28, FORD_TOPS.tall, -0.31, -0.2),
-      stand('boulder', 0.26, 0.24, FORD_TOPS.mid, 0.33, 0.18),
-      stand('boulder', 0.2, 0.18, FORD_TOPS.low, 0.26, -0.3),
-    ];
-
-    // The current breaking on the stones. This is the detail that actually sells a ford: a rock
-    // sitting in still blackness reads as a rock sitting on a floor, but water piling up and
-    // tearing white around its edges reads as a river. Little foam puffs around the rim, each
-    // breathing out of phase with the others so the seam never pulses in lockstep.
-    for (let i = 0; i < 6; i++) {
-      const ang = (i / 6) * Math.PI * 2 + 0.4;
-      const foam = world3d()
-        .addBillboard(FX_PUFF_TEXTURE, 0, { flat: true, fog: false, depthWrite: false, additive: true })
-        .setTint(0xbcd6e2)
-        .setPosition(this.worldX + Math.cos(ang) * 0.42, this.worldY + Math.sin(ang) * 0.36)
-        .setElevation(WATER_Y + 0.012)
-        .setDisplaySize(0.34, 0.3)
-        .setAlpha(0);
-      this.fordFoam.push(foam);
-      this.scene.tweens.add({
-        targets: foam,
-        alpha: { from: 0.1, to: 0.3 },
-        duration: 900 + i * 130,
-        delay: 500 + i * 90, // wait for the stones to land before the water reacts to them
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut',
-      });
-    }
-
-    // The slab lands first and hardest; the boulders tumble in after it, a beat apart.
-    this.fordParts.forEach((part, i) => {
-      part.box
-        .setPosition(this.worldX + part.ox, this.worldY + part.oy)
-        .setElevation(part.rest + FORD_DROP_FROM);
-      this.scene.tweens.add({
-        targets: part.box,
-        elevation: part.rest,
-        duration: 220,
-        delay: i * 110,
-        ease: 'Quad.easeIn',
-        onComplete: () => {
-          getSoundManager().playSplash();
-          this.spawnFordSpray(this.worldX + part.ox, this.worldY + part.oy, i === 0);
-          if (i === 0) getSoundManager().playRockSmash();
-        },
-      });
-    });
-
-    return true;
-  }
-
-  /**
-   * The water's answer to a rock: a ring of white spray thrown up where it broke the surface.
-   * Flat, fogless puffs that expand and die — the same FX family the carpentry's sawdust uses,
-   * tinted to river foam instead of pine.
-   */
-  private spawnFordSpray(x: number, y: number, big: boolean): void {
-    const count = big ? 8 : 4;
-    for (let i = 0; i < count; i++) {
-      const ang = (i / count) * Math.PI * 2 + Math.random() * 0.6;
-      const reach = (big ? 0.42 : 0.26) * (0.6 + Math.random() * 0.6);
-      const drop = world3d()
-        .addBillboard(FX_PUFF_TEXTURE, 0, { centered: true, fog: false, depthWrite: false, emissive: true, alphaTest: 0.02 })
-        .setTint(0xdfeef5) // river foam, not sawdust
-        .setPosition(x, y)
-        .setElevation(WATER_Y) // thrown up FROM the surface the rock just punched through
-        .setDisplaySize(0.12, 0.12);
-      this.scene.tweens.add({
-        targets: drop,
-        x: x + Math.cos(ang) * reach,
-        y: y + Math.sin(ang) * reach * 0.5, // the ground plane is foreshortened
-        elevation: WATER_Y + (big ? 0.34 : 0.2),
-        alpha: 0,
-        duration: 340 + Math.random() * 180,
-        ease: 'Quad.easeOut',
-        onComplete: () => drop.destroy(),
-      });
-    }
-  }
-
-  /** Finish the bridge in one go — a tree felled across the river ("TIMBER!") drops for free.
-   * Works on any river tile, not just buildable spots (that restriction is only for the manual
-   * graveto build via deposit()). The trunk slamming down IS the animation, so the whole deck
-   * snaps straight in rather than running the carpentry build. */
-  public buildBridgeNow(): void {
-    // Ford/drained tiles are no longer water to span, and a deck mid-collapse (burning) still
-    // owns its parts — snapping a fresh deck into any of those would stack two structures on
-    // one tile. tryTimberBridge filters to blocking tiles, but the tree FALLS for ~0.5s and
-    // the world can change under it; this is where that race is caught.
-    if (this.isBridge || this.forded || this.drained || this.burning) return;
-    this.deposited = BRIDGE_GRAVETOS_REQUIRED;
-    this.ensureDeck();
-    for (const part of [...this.frame, ...this.planks]) {
-      part.laid = true;
-      part.animating = false;
-      part.box.setElevation(part.restElev).setAlpha(1);
-    }
-    this.pips.setVisible(false);
   }
 
   /**
@@ -361,13 +166,13 @@ export class WaterObject implements WorldProp {
     }
     this.planks = [];
     this.frame = [];
-    getSoundManager().playSplash();
-    world3d().drainRiverSurface(this.worldX, this.worldY);
+    getSoundManager().nature.playSplash();
+    world3d().terrain.drainRiverSurface(this.worldX, this.worldY);
     // The last of the current tearing white as the tile empties — the ford's foam language.
     for (let i = 0; i < 4; i++) {
       const ang = (i / 4) * Math.PI * 2 + 0.7;
       const foam = world3d()
-        .addBillboard(FX_PUFF_TEXTURE, 0, { flat: true, fog: false, depthWrite: false, additive: true })
+        .objects.addBillboard(FX_PUFF_TEXTURE, 0, { flat: true, fog: false, depthWrite: false, additive: true })
         .setTint(SPLASH_TINT)
         .setPosition(this.worldX + Math.cos(ang) * 0.3, this.worldY + Math.sin(ang) * 0.26)
         .setElevation(WATER_Y + 0.02)
@@ -424,7 +229,7 @@ export class WaterObject implements WorldProp {
       this.planks = [];
       this.frame = [];
       this.deposited = 0;
-      if (this.buildable) this.ensureDeck(); // the ghost preview comes back
+      if (this.buildable) this.bridge.ensureDeck(); // the ghost preview comes back
     });
 
     return true;
@@ -432,144 +237,9 @@ export class WaterObject implements WorldProp {
 
   // ── carpentry ─────────────────────────────────────────────────────────────
 
-  /**
-   * Lazily build the deck parts (once) as ghosts. The deck orients itself to the river:
-   * boards lie ACROSS the walking direction (perpendicular to the crossing), stringers run
-   * along it — inferred from where the neighbouring river tiles are.
-   */
-  private ensureDeck(): void {
-    if (this.planks.length) return;
-
-    // River neighbours E/W → the crossing runs N-S (default layout). Neighbours N/S only →
-    // the river runs N-S, the crossing runs E-W, so the whole layout rotates 90°.
-    const wet = new Set<string>(
-      [...getWaterTiles(), ...getBridgeSpots()].map((p) => `${p.worldX},${p.worldY}`),
-    );
-    const beside = wet.has(`${this.worldX - 1},${this.worldY}`) || wet.has(`${this.worldX + 1},${this.worldY}`);
-    const above = wet.has(`${this.worldX},${this.worldY - 1}`) || wet.has(`${this.worldX},${this.worldY + 1}`);
-    const rotated = above && !beside;
-
-    const w3 = world3d();
-    const px = (along: number, across: number): [number, number] =>
-      (rotated ? [this.worldX + along, this.worldY + across] : [this.worldX + across, this.worldY + along]);
-
-    for (let i = 0; i < PLANK_ROWS; i++) {
-      const along = -0.5 + (i + 0.5) / PLANK_ROWS;
-      const grain = getWoodTexture(i % 2 === 0 ? 'plankA' : 'plankB', rotated);
-      const box = (rotated
-        ? w3.addBox(PLANK_D, PLANK_H, PLANK_W, grain)
-        : w3.addBox(PLANK_W, PLANK_H, PLANK_D, grain))
-        .setPosition(...px(along, 0))
-        .setElevation(PLANK_ELEV);
-      this.planks.push({ box, restElev: PLANK_ELEV, laid: false, animating: false });
-    }
-
-    // Stringers run ALONG the crossing (perpendicular to the boards), so their grain
-    // transposes in the opposite case from the planks'.
-    for (const side of [-STRINGER_OFF, STRINGER_OFF]) {
-      const beam = (rotated
-        ? w3.addBox(1.0, STRINGER_H, STRINGER_W, getWoodTexture('stringer', false))
-        : w3.addBox(STRINGER_W, STRINGER_H, 1.0, getWoodTexture('stringer', true)))
-        .setPosition(...px(0, side))
-        .setElevation(STRINGER_ELEV);
-      this.frame.push({ box: beam, restElev: STRINGER_ELEV, laid: false, animating: false });
-      for (const end of [-POST_OFF_ALONG, POST_OFF_ALONG]) {
-        const post = w3.addBox(POST_SIZE, POST_H, POST_SIZE, getWoodTexture('post'))
-          .setPosition(...px(end, side))
-          .setElevation(POST_ELEV);
-        this.frame.push({ box: post, restElev: POST_ELEV, laid: false, animating: false });
-      }
-    }
-  }
-
-  /** First deposit: the four legs splash down into the river, then the beams settle on them. */
-  private slamFrame(): void {
-    this.ensureDeck();
-    this.frame.forEach((part, i) => {
-      const isPost = part.restElev === POST_ELEV;
-      this.scene.time.delayedCall(i * 45, () => {
-        this.dropPart(part, () => {
-          if (isPost) {
-            // A leg landing in the water kicks up a splash, not sawdust.
-            this.spawnBurst(part.box.x, part.box.y, -WATER_DEPTH_TILES + 0.08, SPLASH_TINT);
-          }
-        });
-      });
-    });
-  }
-
-  private dropPlank(index: number): void {
-    if (this.dead) return;
-    const part = this.planks[index];
-    if (!part || part.laid) return;
-    this.dropPart(part, () => {
-      getSoundManager().playHammer();
-      this.spawnBurst(part.box.x, part.box.y, PLANK_ELEV + 0.06, SAWDUST_TINT);
-      // The final board of the whole crossing finishes the build.
-      if (this.isBridge && index === PLANK_ROWS - 1) this.finishBridge();
-    });
-  }
-
-  // Drop one part in from above: falls to its rest height and settles solid.
-  private dropPart(part: DeckPart, onLanded?: () => void): void {
-    if (this.dead || part.laid) return;
-    part.laid = true;
-    part.animating = true;
-    part.box.setAlpha(0.96).setElevation(part.restElev + DROP_FROM_TILES);
-    this.scene.tweens.add({
-      targets: part.box,
-      elevation: part.restElev,
-      duration: PART_DROP_MS,
-      ease: 'Back.easeOut',
-      onComplete: () => {
-        if (this.dead) return;
-        part.animating = false;
-        part.box.setAlpha(1);
-        onLanded?.();
-      },
-    });
-  }
-
-  private finishBridge(): void {
-    if (this.dead) return;
-    // The last hammer blow lands with a physical thump; GameScene adds its flash via onBuilt.
-    world3d().shake(90, 0.006);
-    getSoundManager().playBridgeBuilt();
-    this.pips.setVisible(false);
-    this.onBuilt?.();
-  }
-
-  // A short burst of motes where a part lands: tan sawdust for boards, cool spray for legs.
-  private spawnBurst(x: number, y: number, elev: number, tint: number): void {
-    for (let i = 0; i < 5; i++) {
-      const puff = world3d()
-        .addBillboard(FX_PUFF_TEXTURE, 0, { centered: true, fog: false, depthWrite: false, emissive: true, alphaTest: 0.02 })
-        .setTint(tint)
-        .setPosition(x + (Math.random() - 0.5) * 0.5, y + (Math.random() - 0.5) * 0.2)
-        .setElevation(elev)
-        .setDisplaySize(0.15, 0.15)
-        .setAlpha(0.85);
-      this.scene.tweens.add({
-        targets: puff,
-        elevation: elev + 0.2 + Math.random() * 0.25,
-        alpha: 0,
-        scaleX: 0.3,
-        scaleY: 0.3,
-        duration: 280 + i * 30,
-        ease: 'Quad.easeOut',
-        onComplete: () => puff.destroy(),
-      });
-    }
-  }
-
-  /** GameScene flags this each frame: true when the hero stands next to a buildable un-bridged tile. */
-  public setBuildHint(on: boolean): void {
-    this.hintOn = on && this.buildable && !this.isBridge && !this.drained;
-  }
-
   public render(tileSize: number, camera: WorldCamera): void {
     // The deck is real world geometry; only the progress pips still live on the 2D overlay.
-    if (this.planks.length) this.updateGhosts();
+    if (this.planks.length) this.bridge.updateGhosts();
 
     if (!this.buildable || this.isBridge) {
       this.pips.setVisible(false);
@@ -593,19 +263,6 @@ export class WaterObject implements WorldProp {
     }
   }
 
-  // Un-laid parts breathe as a faint ghost preview (brighter while the hero stands beside
-  // the spot); parts mid-drop own their own alpha/height until they land.
-  private updateGhosts(): void {
-    const boost = this.hintOn ? GHOST_HINT_BOOST : 1;
-    const pulse = (GHOST_BASE + GHOST_WAVE * Math.sin(this.scene.time.now * 0.005)) * boost;
-    const setGhost = (part: DeckPart, alpha: number): void => {
-      if (part.animating) return;
-      part.box.setAlpha(part.laid ? 1 : Math.min(1, alpha));
-    };
-    this.planks.forEach((part, i) => setGhost(part, i === 0 ? SAMPLE_PLANK_ALPHA : pulse));
-    for (const part of this.frame) setGhost(part, pulse * 0.8);
-  }
-
   public destroy(): void {
     this.dead = true;
     for (const part of [...this.planks, ...this.frame]) {
@@ -625,5 +282,20 @@ export class WaterObject implements WorldProp {
     }
     this.fordFoam = [];
     this.pips.destroy();
+  }
+
+  /** (ver WaterBridge.buildBridgeNow) */
+  public buildBridgeNow(...args: Parameters<WaterBridge['buildBridgeNow']>): ReturnType<WaterBridge['buildBridgeNow']> {
+    return this.bridge.buildBridgeNow(...args);
+  }
+
+  /** (ver WaterBridge.setBuildHint) */
+  public setBuildHint(...args: Parameters<WaterBridge['setBuildHint']>): ReturnType<WaterBridge['setBuildHint']> {
+    return this.bridge.setBuildHint(...args);
+  }
+
+  /** (ver WaterFord.placeStone) */
+  public placeStone(...args: Parameters<WaterFord['placeStone']>): ReturnType<WaterFord['placeStone']> {
+    return this.ford.placeStone(...args);
   }
 }

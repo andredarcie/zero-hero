@@ -143,20 +143,8 @@ export interface Billboard3DOptions {
 export class Billboard3D {
   public readonly mesh: THREE.Mesh;
   private readonly mat: THREE.MeshLambertMaterial | THREE.MeshBasicMaterial;
-  // The 2D grounding blob (soft contact shadow) that follows this sprite's foot.
-  private readonly groundShadow?: THREE.Mesh;
-  /** Forward (+z) nudge of the contact blob, in tiles — the hero's blob peeks past his boots. */
-  private readonly groundShadowZBias: number = 0;
-  /**
-   * A ESCURIDÃO CHEIA do blob de contato — a que ele tem com o corpo inteiro na tela.
-   *
-   * Ela existe porque `setAlpha` tem de valer para os DOIS: um corpo que apaga (a escada, a
-   * morte, um sumiço qualquer) deixava a sombra inteira para trás, plantada no chão, sem dono.
-   * Sombra é consequência de corpo — quem some leva a sua.
-   */
-  private readonly groundShadowAlpha: number = 0;
-  /** A altura do blob sobre o chão — o chão em si vem da serra (`terrainHeightAt`) a cada apply. */
-  private groundShadowBaseY = 0;
+  // The 2D grounding blob (soft contact shadow) that follows this sprite's foot (see ContactBlob).
+  private readonly groundShadow?: ContactBlob;
   /** Ver `alpha` / `setBlinkAlpha`: o quanto o CORPO existe, que nao e o alpha do frame. */
   private bodyAlpha = 1;
   private readonly flat: boolean;
@@ -180,15 +168,10 @@ export class Billboard3D {
   private w = 1;
   private h = 1;
   /**
-   * O espelhamento e ESTADO, e nao um arranhao no `mesh.scale.x`.
-   *
-   * Ele morava direto na escala do mesh, e `apply()` — que reescreve a escala inteira a partir de
-   * `w`, que e sempre positivo — apagava o sinal. Como `apply()` roda em `setPosition`,
-   * `setDisplaySize`, `setElevation` e `setVisible`, e todo ator se reposiciona uma vez por frame,
-   * o `setFlipX` era desfeito no MESMO frame em que era pedido: o bestiario inteiro andava pra
-   * esquerda olhando pra direita, e o zora cuspia pro lado oposto ao que encarava. O heroi
-   * escapava por acidente — ele e o unico que chama `setFlipX` DEPOIS de se posicionar, todo
-   * frame. Guardado aqui, ele sobrevive a `apply()` e a ordem das chamadas para de importar.
+   * O espelhamento e ESTADO, e nao um arranhao no `mesh.scale.x`: `apply()` reescreve a escala inteira a partir de `w`
+   * (sempre positivo) e roda em todo setPosition/setDisplaySize/setElevation/setVisible, entao um sinal guardado na
+   * escala era desfeito no MESMO frame em que o `setFlipX` o pedia. Guardado aqui, ele sobrevive a `apply()` e a ordem
+   * das chamadas para de importar.
    */
   private flipped = false;
   private baseColor = new THREE.Color(1, 1, 1);
@@ -209,50 +192,7 @@ export class Billboard3D {
     this.depthBias = DEPTH_LAYER[opts.depthLayer ?? 'actor'];
     this.texKeyCur = texKey;
     this.frameCur = frame;
-    const tex = getTexture3D(texKey, frame);
-    const unlit = (opts.emissive ?? false) || (opts.additive ?? false);
-
-    if (unlit) {
-      this.mat = new THREE.MeshBasicMaterial({
-        map: tex,
-        transparent: true,
-        alphaTest: opts.alphaTest ?? (opts.additive ? 0.01 : 0.35),
-      });
-      if (opts.additive) {
-        this.mat.blending = THREE.AdditiveBlending;
-        this.mat.depthWrite = false;
-      }
-      patchPixelMaterial(this.mat, {
-        fill: { color: this.uFillColor, mix: this.uFillMix },
-        worldFx: opts.worldFx,
-        mirrorSurface: opts.mirrorSurface,
-      });
-    } else {
-      this.mat = new THREE.MeshLambertMaterial({
-        map: tex,
-        transparent: true,
-        alphaTest: opts.alphaTest ?? 0.5,
-      });
-      patchPixelMaterial(this.mat, {
-        quantize: true,
-        normalUp: !this.flat,
-        footDistance: !this.flat,
-        // A centred quad keeps its origin at its MIDDLE (see the geometry below), so its foot
-        // is half a unit down — without this it lights from its chest. See footAnchorY.
-        footAnchorY: opts.centered ? -0.5 : 0,
-        fill: { color: this.uFillColor, mix: this.uFillMix },
-        worldFx: opts.worldFx,
-        mirrorSurface: opts.mirrorSurface,
-        maskProbe: this.maskProbe,
-      });
-    }
-    if (opts.fog === false) this.mat.fog = false;
-    if (opts.depthWrite === false) this.mat.depthWrite = false;
-    // HDR emissive: push the colour past 1 so the flame/lava blooms. Baked into
-    // baseColor so clearTint() (relighting a fire) keeps it hot.
-    if (unlit && opts.emissiveBoost && opts.emissiveBoost !== 1) {
-      this.mat.color.multiplyScalar(opts.emissiveBoost);
-    }
+    this.mat = makeBillboardMaterial(getTexture3D(texKey, frame), opts, this.flat, { color: this.uFillColor, mix: this.uFillMix }, this.maskProbe);
     this.baseColor.copy(this.mat.color);
 
     // Unit quad; scale carries the display size, position carries the anchor.
@@ -273,12 +213,7 @@ export class Billboard3D {
     // tilt or camera-facing rotation; it just tracks the foot each frame. Built at
     // its base radii and scaled by the sprite's width in apply().
     if (opts.groundShadow && !this.flat) {
-      const cfg = opts.groundShadow === true ? {} : opts.groundShadow;
-      this.groundShadowAlpha = cfg.alpha ?? 0.34;
-      this.groundShadow = makeShadowBlob(cfg.rx ?? 0.44, cfg.rz ?? 0.4, this.groundShadowAlpha);
-      this.groundShadowZBias = cfg.zBias ?? 0;
-      this.groundShadowBaseY = this.groundShadow.position.y;
-      parent.add(this.groundShadow);
+      this.groundShadow = new ContactBlob(parent, opts.groundShadow === true ? {} : opts.groundShadow);
     }
 
     parent.add(this.mesh);
@@ -301,13 +236,7 @@ export class Billboard3D {
       this.flat ? this.h : 1,
     );
     this.mesh.visible = this.visible;
-    if (this.groundShadow) {
-      // Stays pinned to the foot on the ground (ignores the sprite's elevation, so
-      // a bobbing/lifted sprite still throws a steady blob), scaled by its width.
-      this.groundShadow.position.set(this.tileX, this.groundShadowBaseY + ground, z + this.groundShadowZBias);
-      this.groundShadow.scale.set(this.w, 1, this.w);
-      this.groundShadow.visible = this.visible;
-    }
+    this.groundShadow?.place(this.tileX, ground, z, this.w, this.visible);
   }
 
   // ── 2D-sprite-like surface (all chainable) ──────────────────────────────
@@ -466,9 +395,7 @@ export class Billboard3D {
   public set alpha(v: number) {
     this.bodyAlpha = v;
     this.mat.opacity = v;
-    if (this.groundShadow) {
-      (this.groundShadow.material as THREE.Material).opacity = this.groundShadowAlpha * v;
-    }
+    this.groundShadow?.setBodyAlpha(v);
   }
 
   public get scaleX(): number { return this.w; }
@@ -508,10 +435,116 @@ export class Billboard3D {
     this.parent.remove(this.mesh);
     this.mesh.geometry.dispose();
     (this.mesh.material as THREE.Material).dispose();
-    if (this.groundShadow) {
-      this.parent.remove(this.groundShadow);
-      this.groundShadow.geometry.dispose();
-      (this.groundShadow.material as THREE.Material).dispose();
-    }
+    this.groundShadow?.destroy();
   }
 }
+
+/** A forma do blob de contato que o dono pediu (Billboard3DOptions.groundShadow). */
+interface ContactBlobShape { rx?: number; rz?: number; alpha?: number; zBias?: number }
+
+/**
+ * O BLOB DE CONTATO de um billboard em pé: uma malha irmã no chão — NÃO filha do quad em pé, para nunca herdar o
+ * achatamento, a inclinação nem a rotação para a câmera — que só acompanha o pé a cada apply.
+ */
+class ContactBlob {
+  private readonly mesh: THREE.Mesh;
+  /**
+   * A ESCURIDÃO CHEIA do blob — a que ele tem com o corpo inteiro na tela.
+   *
+   * Ela existe porque `setAlpha` tem de valer para os DOIS: um corpo que apaga (a escada, a
+   * morte, um sumiço qualquer) deixava a sombra inteira para trás, plantada no chão, sem dono.
+   * Sombra é consequência de corpo — quem some leva a sua.
+   */
+  private readonly fullAlpha: number;
+  /** Forward (+z) nudge of the contact blob, in tiles — the hero's blob peeks past his boots. */
+  private readonly zBias: number;
+  /** A altura do blob sobre o chão — o chão em si vem da serra (`terrainHeightAt`) a cada place. */
+  private readonly baseY: number;
+
+  public constructor(private readonly parent: THREE.Scene | THREE.Object3D, shape: ContactBlobShape) {
+    this.fullAlpha = shape.alpha ?? 0.34;
+    this.mesh = makeShadowBlob(shape.rx ?? 0.44, shape.rz ?? 0.4, this.fullAlpha);
+    this.zBias = shape.zBias ?? 0;
+    this.baseY = this.mesh.position.y;
+    parent.add(this.mesh);
+  }
+
+  /**
+   * Stays pinned to the foot on the ground (ignores the sprite's elevation, so a bobbing/lifted sprite still throws a
+   * steady blob), scaled by its width.
+   */
+  public place(x: number, ground: number, z: number, width: number, visible: boolean): void {
+    this.mesh.position.set(x, this.baseY + ground, z + this.zBias);
+    this.mesh.scale.set(width, 1, width);
+    this.mesh.visible = visible;
+  }
+
+  /** O corpo apagou (ou voltou): o blob escala pela escuridão CHEIA, nunca sobre o valor atual. */
+  public setBodyAlpha(v: number): void {
+    (this.mesh.material as THREE.Material).opacity = this.fullAlpha * v;
+  }
+
+  public destroy(): void {
+    this.parent.remove(this.mesh);
+    this.mesh.geometry.dispose();
+    (this.mesh.material as THREE.Material).dispose();
+  }
+}
+
+/**
+ * O MATERIAL DE UM BILLBOARD. Sem luz (o que brilha: emissivo ou aditivo) é um MeshBasic; o resto é Lambert, com o
+ * remendo de pixel-art inteiro (quantização, luz pelo pé, a sonda da máscara de sombra). `fill` é o par de uniforms
+ * do setTintFill (pintar o sprite de uma cor sólida mantendo só o alfa da textura).
+ */
+const makeBillboardMaterial = (
+  tex: THREE.Texture,
+  opts: Billboard3DOptions,
+  flat: boolean,
+  fill: { color: THREE.IUniform; mix: THREE.IUniform },
+  maskProbe: THREE.IUniform<THREE.Vector2>,
+): THREE.MeshLambertMaterial | THREE.MeshBasicMaterial => {
+  const unlit = (opts.emissive ?? false) || (opts.additive ?? false);
+  let mat: THREE.MeshLambertMaterial | THREE.MeshBasicMaterial;
+  if (unlit) {
+    mat = new THREE.MeshBasicMaterial({
+      map: tex,
+      transparent: true,
+      alphaTest: opts.alphaTest ?? (opts.additive ? 0.01 : 0.35),
+    });
+    if (opts.additive) {
+      mat.blending = THREE.AdditiveBlending;
+      mat.depthWrite = false;
+    }
+    patchPixelMaterial(mat, {
+      fill,
+      worldFx: opts.worldFx,
+      mirrorSurface: opts.mirrorSurface,
+    });
+  } else {
+    mat = new THREE.MeshLambertMaterial({
+      map: tex,
+      transparent: true,
+      alphaTest: opts.alphaTest ?? 0.5,
+    });
+    patchPixelMaterial(mat, {
+      quantize: true,
+      normalUp: !flat,
+      footDistance: !flat,
+      // A centred quad keeps its origin at its MIDDLE (see the geometry in the constructor), so its foot
+      // is half a unit down — without this it lights from its chest. See footAnchorY.
+      footAnchorY: opts.centered ? -0.5 : 0,
+      fill,
+      worldFx: opts.worldFx,
+      mirrorSurface: opts.mirrorSurface,
+      maskProbe,
+    });
+  }
+  if (opts.fog === false) mat.fog = false;
+  if (opts.depthWrite === false) mat.depthWrite = false;
+  // HDR emissive: push the colour past 1 so the flame/lava blooms. Baked into
+  // baseColor so clearTint() (relighting a fire) keeps it hot.
+  if (unlit && opts.emissiveBoost && opts.emissiveBoost !== 1) {
+    mat.color.multiplyScalar(opts.emissiveBoost);
+  }
+  return mat;
+};

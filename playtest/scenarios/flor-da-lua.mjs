@@ -44,26 +44,26 @@ export default {
       // O level 1 e um puzzle cheio: limpa a area antes ou o teste mede a mobilia do vizinho.
       for (let x = 3; x <= 10; x += 1) {
         for (let y = 2; y <= 8; y += 1) {
-          store.eraseEntitiesAt(x, y);
+          store.entities.eraseEntitiesAt(x, y);
           store.setCell('upper', x, y, null);
           store.setCell('collision', x, y, false);
         }
       }
-      store.setSpawn(hero.x, hero.y);
+      store.meta.setSpawn(hero.x, hero.y);
       // A perto PRIMEIRO: a ordem de colocacao e a ordem em que o runtime as constroi, e o resto do
       // cenario le moonflowers[0] como "a que a fogueira controla".
-      store.placeEntity({ list: 'props', type: 'moonflower', worldX: flower.x, worldY: flower.y });
-      store.placeEntity({ list: 'props', type: 'moonflower', worldX: dark.x, worldY: dark.y });
+      store.entities.placeEntity({ list: 'props', type: 'moonflower', worldX: flower.x, worldY: flower.y });
+      store.entities.placeEntity({ list: 'props', type: 'moonflower', worldX: dark.x, worldY: dark.y });
       // A fogueira e o interruptor da flor. Ela nasce ACESA porque e a mais perto do spawn (a
       // regra do runtime pra qual fogueira comeca viva), e e isso que faz a flor nascer fechada.
-      store.placeEntity({ list: 'props', type: 'campfire', worldX: fire.x, worldY: fire.y });
+      store.entities.placeEntity({ list: 'props', type: 'campfire', worldX: fire.x, worldY: fire.y });
       // A folha tem de existir no lado 2D tambem (paleta e chip do tabuleiro), com os 9 frames
       // fatiados. Um erro de frameWidth no assetManifest nao quebra o jogo — ele so desenha a folha
       // inteira espremida num tile, e ninguem repara ate abrir o editor.
       const tex = window.__scene?.textures?.get('moonflower');
       return {
-        flowers: store.allEntities().filter((e) => e.type === 'moonflower').length,
-        fires: store.allEntities().filter((e) => e.type === 'campfire').length,
+        flowers: store.entities.allEntities().filter((e) => e.type === 'moonflower').length,
+        fires: store.entities.allEntities().filter((e) => e.type === 'campfire').length,
         sheetFrames: tex ? tex.getFrameNames().length : 0,
       };
     }, { flower: FLOWER, fire: FIRE, hero: HERO, dark: DARK_FLOWER });
@@ -118,7 +118,7 @@ export default {
     // Amostra a animacao INTEIRA enquanto ela roda. E a unica forma de provar que existe
     // travessia: um estado final aberto e compativel com um corte seco de um frame.
     const arc = await page.evaluate(async () => {
-      const fires = window.__scene?.campfires ?? [];
+      const fires = window.__scene?.props.campfires ?? [];
       for (const cf of fires) if (cf.isLit) cf.extinguish();
       const seen = [];
       for (let i = 0; i < 120; i += 1) {
@@ -199,8 +199,8 @@ export default {
     await page.evaluate(() => {
       const s = window.__scene;
       s.heldItem = 'wood';
-      s.heldOnFire = true;
-      s.torchFuelMs = 30000; // combustivel de sobra: o teste e sobre a flor, nao sobre a tocha
+      s.torch.heldOnFire = true;
+      s.torch.torchFuelMs = 30000; // combustivel de sobra: o teste e sobre a flor, nao sobre a tocha
     });
     await driver.settle(600);
     const farTorch = await driver.getState();
@@ -238,7 +238,7 @@ export default {
     await shot('flor-fecha-na-tocha');
 
     log('TOCHA APAGADA: mesma posicao, sem chama — a flor reabre');
-    await page.evaluate(() => { window.__scene.heldOnFire = false; });
+    await page.evaluate(() => { window.__scene.torch.heldOnFire = false; });
     await page.waitForFunction(
       () => window.gameDebug?.getState()?.moonflowers?.[0]?.openness === 1,
       null, { timeout: 8000 },
@@ -253,7 +253,7 @@ export default {
     log('LUZ: reacende a fogueira; a flor recolhe as petalas e volta a bloquear');
     await teleport(HERO.x, HERO.y);
     const closeArc = await page.evaluate(async () => {
-      const fires = window.__scene?.campfires ?? [];
+      const fires = window.__scene?.props.campfires ?? [];
       for (const cf of fires) if (!cf.isLit) cf.light();
       const seen = [];
       for (let i = 0; i < 120; i += 1) {
@@ -288,7 +288,7 @@ export default {
     // Melhor-esforco: a animacao nao para pra ser fotografada.
     log('RETRATO: mais uma abertura, fotografada no meio da dissolvencia');
     await page.evaluate(async () => {
-      const fires = window.__scene?.campfires ?? [];
+      const fires = window.__scene?.props.campfires ?? [];
       for (const cf of fires) if (cf.isLit) cf.extinguish();
       for (let i = 0; i < 80; i += 1) {
         const o = window.gameDebug?.getState()?.moonflowers?.[0]?.openness ?? 0;

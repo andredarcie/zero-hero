@@ -49,13 +49,13 @@ export class CampfireObject implements WorldProp {
     this.lit    = lit;
 
     this.logs = world3d()
-      .addBillboard(LOG_PILE_TEXTURE, 0)
+      .objects.addBillboard(LOG_PILE_TEXTURE, 0)
       .setPosition(worldX, worldY + 0.03) // na frente da chama: o fogo sai de dentro dos galhos
       .setDisplaySize(SIZE, SIZE);
 
     // Soft warm glow behind the fire (additive blend). Hidden while unlit.
     this.glow = world3d()
-      .addBillboard(FIRE_TEXTURES[0], 0, { additive: true })
+      .objects.addBillboard(FIRE_TEXTURES[0], 0, { additive: true })
       .setPosition(worldX, worldY + 0.01)
       .setDisplaySize(SIZE * GLOW_SCALE, SIZE * GLOW_SCALE)
       .setTint(GLOW_TINT)
@@ -65,11 +65,11 @@ export class CampfireObject implements WorldProp {
     // Main animated fire sprite — full-bright and HDR so the flame itself glows and
     // blooms (a flame is its own light source), like the 2D game's glowing fire.
     this.sprite = world3d()
-      .addBillboard(FIRE_TEXTURES[0], 0, { emissive: true, emissiveBoost: 4 })
+      .objects.addBillboard(FIRE_TEXTURES[0], 0, { emissive: true, emissiveBoost: 4 })
       .setPosition(worldX, worldY)
       .setDisplaySize(SIZE, SIZE)
       .setVisible(lit);
-    this.fireLight = world3d().addFireLight(worldX, worldY, lit);
+    this.fireLight = world3d().lights.addFireLight(worldX, worldY, lit);
 
     if (lit) this.startAnim();
   }

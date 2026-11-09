@@ -382,6 +382,7 @@ boot muda o ritmo das chamas e o diff "falha" por 40% da tela sem nada de render
 
 ## Outras coisas fáceis de errar
 
+- **Nenhuma classe passa de 300 linhas** (`classSize.test.ts` reprova): a que cresce se divide em peças por assunto, ligadas ao dono por um campo (o molde e as armadilhas estão no `progress.md`).
 - **A GameScene e o World3D não crescem.** Sistema novo (estado + decisões) vai para `src/game/systems/` no molde
   das quests: um `Host` pequeno que a cena implementa e um teste com host falso. Peça de render nova, módulo próprio em `render3d/`.
 - **A interface é MADEIRA, PAPEL ou PIXEL — nunca "interface"** (`runtime/uiStyle.ts`): painel novo

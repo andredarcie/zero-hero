@@ -44,12 +44,12 @@ export default {
       if (!store) throw new Error('sem store no editor');
       for (let x = 2; x <= 11; x += 1) {
         for (let y = 2; y <= 10; y += 1) {
-          store.eraseEntitiesAt(x, y);
+          store.entities.eraseEntitiesAt(x, y);
           store.setCell('upper', x, y, null);
           store.setCell('collision', x, y, false);
         }
       }
-      store.setSpawn(hero.x, hero.y);
+      store.meta.setSpawn(hero.x, hero.y);
     }, { hero: HERO });
 
     log('LAB: P joga o mundo editado');
@@ -133,7 +133,7 @@ export default {
       pos: { ...window.__scene.playerWorld },
       cursor: document.querySelector('#zh-bag-root .zh-bag-slot.zh-at')?.getAttribute('data-kind') ?? null,
       heldItem: window.gameDebug.getState().heldItem,
-      rooted: window.__scene.movementController.isRooted,
+      rooted: window.__scene.movementController.touch.isRooted,
     }));
     assert('o heroi NAO andou com a bolsa aberta',
       browsing.pos.worldX === before.player.worldX && browsing.pos.worldY === before.player.worldY,
@@ -167,7 +167,7 @@ export default {
       JSON.stringify({ ground: equipped.groundItems, inv: equipped.inventory }));
     const walked = await page.evaluate(() => {
       const s = window.__scene;
-      return { rooted: s.movementController.isRooted };
+      return { rooted: s.movementController.touch.isRooted };
     });
     assert('e os pes se soltaram junto com o fechar',
       walked.rooted === false, JSON.stringify(walked));

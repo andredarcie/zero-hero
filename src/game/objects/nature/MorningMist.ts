@@ -58,7 +58,7 @@ export class MorningMist implements NatureSystem {
     if (this.level < 0.01) { this.clear(); return; }
     while (this.puffs.length < COUNT) {
       const s = this.spot(f);
-      const bb = world3d().addBillboard(PUFF, 0, { centered: true, depthWrite: false, alphaTest: 0.01, fog: false }).setTint(0xc9d1d0);
+      const bb = world3d().objects.addBillboard(PUFF, 0, { centered: true, depthWrite: false, alphaTest: 0.01, fog: false }).setTint(0xc9d1d0);
       this.puffs.push({ bb, x: s.x, y: s.y, z: 0.05 + this.rand() * 0.22, w: 2.8 + this.rand() * 2.2, phase: this.rand() * 10, speed: 0.4 + this.rand() * 0.3 });
     }
     for (const p of this.puffs) {

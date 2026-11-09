@@ -55,7 +55,7 @@ export class DryBushObject implements WorldProp {
     this.worldX = worldX;
     this.worldY = worldY;
     this.sprite = world3d()
-      .addBillboard('dry-bush', 0, { groundShadow: true })
+      .objects.addBillboard('dry-bush', 0, { groundShadow: true })
       .setPosition(worldX, worldY)
       .setDisplaySize(0.9, 0.9);
   }
@@ -82,7 +82,7 @@ export class DryBushObject implements WorldProp {
     for (let i = 0; i < FIRE_SPOTS.length; i += 1) {
       const spot = FIRE_SPOTS[i];
       const fire = world3d()
-        .addBillboard(FIRE_KEYS[i % FIRE_KEYS.length], 0, { emissive: true })
+        .objects.addBillboard(FIRE_KEYS[i % FIRE_KEYS.length], 0, { emissive: true })
         .setPosition(this.worldX + spot.ox, this.worldY + spot.oy)
         .setDisplaySize(spot.scale, spot.scale * 1.3);
       this.fires.push(fire);
@@ -95,7 +95,7 @@ export class DryBushObject implements WorldProp {
     });
 
     // Real firelight while it burns (see BUSH_LIGHT_SCALE) — driven by the char tween below.
-    this.fireLight = world3d().addFireLight(this.worldX, this.worldY, true);
+    this.fireLight = world3d().lights.addFireLight(this.worldX, this.worldY, true);
     this.fireLight.setIntensityScale(0);
 
     // Char from natural brown (no tint) toward ash grey over the burn.

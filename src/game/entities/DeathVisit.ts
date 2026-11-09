@@ -29,7 +29,7 @@ export class DeathVisit {
 
   public constructor(private readonly host: DeathVisitHost) {
     this.body = world3d()
-      .addBillboard(ASSET_KEYS.npcDeath, 0, { alphaTest: 0.01 })
+      .objects.addBillboard(ASSET_KEYS.npcDeath, 0, { alphaTest: 0.01 })
       .setDisplaySize(SIZE, SIZE)
       .setTint(WHITE_SAFE_TINT)
       .setPosition(host.at.x, host.at.y)
@@ -40,13 +40,13 @@ export class DeathVisit {
   public async run(): Promise<void> {
     const { at, smoke, say } = this.host;
     const sound = getSoundManager();
-    sound.playDeathArrive();
+    sound.story.playDeathArrive();
     smoke(at.x, at.y);
     await this.to({ targets: this.body, alpha: 1, elevation: 0, duration: ARRIVE_MS, ease: 'Sine.easeOut' });
     await this.pause(600);
     await new Promise<void>((resolve) => say(this.body, resolve));
     await this.pause(500);
-    sound.playDeathLeave();
+    sound.story.playDeathLeave();
     smoke(at.x, at.y);
     await this.to({ targets: this.body, alpha: 0, elevation: FLOAT, duration: LEAVE_MS, ease: 'Sine.easeIn' });
     this.body.destroy();

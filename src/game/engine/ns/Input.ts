@@ -1,3 +1,4 @@
 export { InputEvents as Events } from '../constants';
-export { Pointer, InputPlugin, InputManager } from '../input';
+export { InputPlugin, InputManager } from '../input';
+export { Pointer } from '../pointer';
 export * as Keyboard from './InputKeyboard';

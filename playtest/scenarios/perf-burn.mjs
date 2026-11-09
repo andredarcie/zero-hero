@@ -21,10 +21,10 @@ export default {
 
     const staged = await page.evaluate(() => {
       const s = window.__scene;
-      const bush = s.dryBushes.find((b) => !b.isAsh);
+      const bush = s.props.dryBushes.find((b) => !b.isAsh);
       if (!bush) return null;
       s.__bush = bush;
-      return { worldX: bush.worldX, worldY: bush.worldY, bushes: s.dryBushes.length };
+      return { worldX: bush.worldX, worldY: bush.worldY, bushes: s.props.dryBushes.length };
     });
     assert('Found an unburnt bush to set alight', staged !== null, JSON.stringify(staged));
     if (!staged) return;
@@ -46,20 +46,20 @@ export default {
 
       // The real player sequence, through the real code paths.
       window.__prof.mark('pickup.wood');
-      s.onCollectItem({ kind: 'wood', worldX: s.playerWorld.worldX, worldY: s.playerWorld.worldY });
+      s.hand.onCollectItem({ kind: 'wood', worldX: s.playerWorld.worldX, worldY: s.playerWorld.worldY });
       await wait(900);
 
       // Lighting the torch is where the FIRST stall lived: the torch PointLight was lazy.
       window.__prof.mark('torch.light');
-      s.igniteHeldItem();
+      s.torch.igniteHeldItem();
       await wait(900);
 
       s.playerWorld = { worldX: bush.worldX, worldY: bush.worldY + 1 };
       await frame();
       window.__prof.mark('bush.ignite');
-      s.swingHeld(bush.worldX, bush.worldY);
+      s.swing.swingHeld(bush.worldX, bush.worldY);
       bush.ignite();
-      s.spawnFireHitEffect(bush.worldX, bush.worldY);
+      s.sparkle.spawnFireHitEffect(bush.worldX, bush.worldY);
 
       // Hold past BURN_MS (2200) so the burnout — which used to stall a THIRD time, when the
       // light was removed — is inside the profiled window too.
@@ -74,7 +74,7 @@ export default {
         programs0,
         programs1: w3.rendererInfo.programs.length,
         isAsh: bush.isAsh,
-        torchLit: s.isTorchLit,
+        torchLit: s.torch.isTorchLit,
       };
     });
 

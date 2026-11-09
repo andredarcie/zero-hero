@@ -49,11 +49,14 @@ describe('os efeitos', () => {
       ['playKeyInsert', []], ['playLockTick', []], ['playLockClunk', []], ['playOldGateCreak', []], ['playGateSwing', []],
       ['playGateStrain', []], ['playMoonflowerBloom', []], ['playMoonflowerClose', []],
     ];
-    const manager = sm() as unknown as Record<string, (...args: unknown[]) => void>;
+    // Cada efeito mora numa das peças do som (WorkSounds, UiSounds, NatureSounds, StorySounds).
+    const m = sm();
+    const owners = [m.work, m.ui, m.nature, m.story] as unknown as Array<Record<string, (...args: unknown[]) => void>>;
     for (const [name, args] of calls) {
       const before = ctx.starts;
-      expect(typeof manager[name], name).toBe('function');
-      manager[name](...args);
+      const owner = owners.find((o) => typeof o[name] === 'function');
+      expect(owner, name).toBeDefined();
+      owner![name](...args);
       expect(ctx.starts, `${name} não começou nada`).toBeGreaterThan(before);
     }
   });
@@ -63,7 +66,7 @@ describe('os efeitos', () => {
     const syllables = planSpeech('Olá, viajante.', persona, 220).flatMap((c) => (c.syllable ? [c.syllable] : []));
     expect(syllables.length).toBeGreaterThan(2);
     const before = ctx.nodes.length;
-    for (const syllable of syllables) sm().playDialogSyllable(syllable);
+    for (const syllable of syllables) sm().ui.playDialogSyllable(syllable);
     expect(ctx.nodes.length).toBeGreaterThan(before);
   });
 });
@@ -83,32 +86,32 @@ describe('volume', () => {
 describe('música e ambiente', () => {
   it('pedir uma trilha anota o pedido, baixa, decodifica e troca com fade', async () => {
     sm().preload();
-    sm().startMusic('title', 300);
-    expect(sm().requestedTrack).toBe('title');
+    sm().music.startMusic('title', 300);
+    expect(sm().music.requestedTrack).toBe('title');
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(ctx.decoded).toBeGreaterThan(0);
-    sm().fadeMusicOut(200);
-    sm().fadeMusicIn(200);
-    sm().stopMusic(100);
-    expect(sm().requestedTrack).toBeNull();
+    sm().music.fadeMusicOut(200);
+    sm().music.fadeMusicIn(200);
+    sm().music.stopMusic(100);
+    expect(sm().music.requestedTrack).toBeNull();
   });
 
   it('o vale (a trilha da aventura) escolhe uma peça', async () => {
-    sm().startMusic('overworld', 0);
+    sm().music.startMusic('overworld', 0);
     await new Promise((resolve) => setTimeout(resolve, 20));
-    sm().setMusicLayers(0.5, 0.3);
-    expect(sm().requestedTrack).toBe('overworld');
-    sm().stopMusic(0);
+    sm().music.setMusicLayers(0.5, 0.3);
+    expect(sm().music.requestedTrack).toBe('overworld');
+    sm().music.stopMusic(0);
   });
 
   it('os leitos de ambiente sobem, misturam e param', async () => {
-    sm().startAmbience();
+    sm().ambience.startAmbience();
     await new Promise((resolve) => setTimeout(resolve, 20));
-    sm().setAmbienceMix(0.7, 0.2, 0.5);
+    sm().ambience.setAmbienceMix(0.7, 0.2, 0.5);
     const out = sm().listeningOutput();
     expect(out).not.toBeNull();
     sm().setListening(true);
     sm().setListening(false);
-    sm().stopAmbience();
+    sm().ambience.stopAmbience();
   });
 });

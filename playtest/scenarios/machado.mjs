@@ -38,7 +38,7 @@ export default {
     const give = (kind) => evaluate((k) => { window.__scene.heldItem = k; }, kind);
 
     const solidAt = (x, y, hazardsPassable = false) => evaluate(
-      ([px, py, pass]) => window.__scene.isSolidForEntities(px, py, pass), [x, y, hazardsPassable],
+      ([px, py, pass]) => window.__scene.query.isSolidForEntities(px, py, pass), [x, y, hazardsPassable],
     );
 
     const tileAt = (x, y) => evaluate(([px, py]) => {
@@ -93,7 +93,7 @@ export default {
           for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
             const nx = x + dx;
             const ny = y + dy;
-            if (s.isSolidForEntities(nx, ny, false)) continue;
+            if (s.query.isSolidForEntities(nx, ny, false)) continue;
             const d = Math.abs(nx - start.worldX) + Math.abs(ny - start.worldY);
             if (!best || d < best.d) best = { x, y, nx, ny, dx: -dx, dy: -dy, frame: t.upper, d };
           }
@@ -131,10 +131,10 @@ export default {
     log('MACHADO: derruba arvore seca');
     const dry = await evaluate(() => {
       const s = window.__scene;
-      const t = (s.dryTrees ?? []).find((d) => d.blocking);
+      const t = (s.props.dryTrees ?? []).find((d) => d.blocking);
       if (!t) return null;
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        if (!s.isSolidForEntities(t.worldX + dx, t.worldY + dy, false)) {
+        if (!s.query.isSolidForEntities(t.worldX + dx, t.worldY + dy, false)) {
           return { x: t.worldX, y: t.worldY, nx: t.worldX + dx, ny: t.worldY + dy, dx: -dx, dy: -dy };
         }
       }
@@ -150,7 +150,7 @@ export default {
       await driver.faceAndUse(DIR_KEY[`${dry.dx},${dry.dy}`], 8);
       await driver.settle(900);
       const stillBlocking = await evaluate(([x, y]) => {
-        const t = window.__scene.dryTrees.find((d) => d.worldX === x && d.worldY === y);
+        const t = window.__scene.props.dryTrees.find((d) => d.worldX === x && d.worldY === y);
         return t ? t.blocking : null;
       }, [dry.x, dry.y]);
       assert('o machado derrubou a arvore seca', stillBlocking === false,

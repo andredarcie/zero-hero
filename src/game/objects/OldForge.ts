@@ -144,7 +144,7 @@ export class OldForge {
       this.tiles.add(`${p.worldX},${p.worldY}`);
       const { w, h } = SIZES[kind];
       this.bodies.push(
-        w3.addBillboard(key(kind), 0, { groundShadow: { rx: 0.45, rz: 0.16, alpha: 0.28 } })
+        w3.objects.addBillboard(key(kind), 0, { groundShadow: { rx: 0.45, rz: 0.16, alpha: 0.28 } })
           .setDisplaySize(w / 16, h / 16)
           .setPosition(p.worldX, p.worldY)
           .setTint(PROP_TINT),
@@ -154,7 +154,7 @@ export class OldForge {
     for (const f of getFurnaces()) {
       if (!pieces.some((p) => Math.hypot(p.worldX - f.worldX, p.worldY - f.worldY) <= 4)) continue;
       this.bodies.push(
-        w3.addBillboard(FLOOR_KEY, 0, { flat: true, flatY: 0.012, depthWrite: false, alphaTest: 0.05, depthLayer: 'ground' })
+        w3.objects.addBillboard(FLOOR_KEY, 0, { flat: true, flatY: 0.012, depthWrite: false, alphaTest: 0.05, depthLayer: 'ground' })
           .setDisplaySize(FLOOR_W / 16, FLOOR_H / 16)
           // O fogo ficava no forno; a bigorna, a sudoeste dele: o piso pega os dois.
           .setPosition(f.worldX - 0.45, f.worldY + 0.55)

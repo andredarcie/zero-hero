@@ -14,7 +14,8 @@ interface ForagingInternals {
   zoneTop: number;
   zoneBottom: number;
   dirt: Array<string | null>;
-  scrubTo(x: number, y: number): void;
+  /** A terra e a bucha (ForagingSoil). */
+  soil: { scrubTo(x: number, y: number): void };
 }
 
 const callbacks = (): ForagingCallbacks & Record<string, ReturnType<typeof vi.fn>> => ({
@@ -65,7 +66,7 @@ describe('a colheita', () => {
     // A bucha passa por toda a terra.
     const size = Math.sqrt(o.dirt.length);
     for (let guard = 0; guard < 4 && o.dirt.some(Boolean); guard++) {
-      o.dirt.forEach((c, i) => { if (c) o.scrubTo(i % size, Math.floor(i / size)); });
+      o.dirt.forEach((c, i) => { if (c) o.soil.scrubTo(i % size, Math.floor(i / size)); });
       advance(50);
     }
     until(() => o.stage === 'note');

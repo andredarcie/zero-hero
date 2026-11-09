@@ -15,11 +15,15 @@
 import { EventEmitter } from './events';
 import { CoreEvents, InputEvents, KeyboardEvents, SceneEvents } from './constants';
 import type { Game } from './game';
-import type { EnginePage } from './host';
+
 import type { Systems, Scene } from './scene';
 import type { Camera } from './camera';
 import { TransformMatrix } from './matrix';
 import type { GameObject } from './gameobjects/GameObject';
+import { MOUSE_DOWN, MOUSE_MOVE, MOUSE_UP, MOUSE_WHEEL, Pointer, TOUCH_CANCEL, TOUCH_END, TOUCH_MOVE, TOUCH_START } from './pointer';
+import { DomPointerInput } from './domPointerInput';
+import { PointerDispatch } from './pointerDispatch';
+import { HitAreas } from './hitAreas';
 
 // ── As teclas ───────────────────────────────────────────────────────────────────────────────────
 
@@ -396,223 +400,6 @@ export class KeyboardPlugin extends EventEmitter {
   }
 }
 
-// ── Os ponteiros ────────────────────────────────────────────────────────────────────────────────
-
-const smoothStep = (x: number, min: number, max: number): number => {
-  if (x <= min) return 0;
-  if (x >= max) return 1;
-  x = (x - min) / (max - min);
-  return x * x * (3 - 2 * x);
-};
-
-const smoothStepInterpolation = (t: number, min: number, max: number): number => min + (max - min) * smoothStep(t, 0, 1);
-
-export class Pointer {
-  public event: MouseEvent | TouchEvent | WheelEvent | undefined;
-  public downElement: EventTarget | null = null;
-  public upElement: EventTarget | null = null;
-  public camera: Camera | null = null;
-  public button = 0;
-  public buttons = 0;
-  public readonly position = { x: 0, y: 0 };
-  public readonly prevPosition = { x: 0, y: 0 };
-  public readonly midPoint = { x: -1, y: -1 };
-  public readonly velocity = { x: 0, y: 0 };
-  public angle = 0;
-  public distance = 0;
-  public smoothFactor = 0;
-  public motionFactor = 0.2;
-  public worldX = 0;
-  public worldY = 0;
-  public moveTime = 0;
-  public downX = 0;
-  public downY = 0;
-  public downTime = 0;
-  public upX = 0;
-  public upY = 0;
-  public upTime = 0;
-  public primaryDown = false;
-  public isDown = false;
-  public wasTouch = false;
-  public wasCanceled = false;
-  public movementX = 0;
-  public movementY = 0;
-  public identifier = 0;
-  public pointerId: number | null = null;
-  public target: EventTarget | null = null;
-  public active: boolean;
-  public locked = false;
-  public deltaX = 0;
-  public deltaY = 0;
-  public deltaZ = 0;
-
-  public constructor(private readonly manager: InputManager, public readonly id: number) {
-    this.active = id === 0;
-  }
-
-  public get x(): number { return this.position.x; }
-  public set x(value: number) { this.position.x = value; }
-  public get y(): number { return this.position.y; }
-  public set y(value: number) { this.position.y = value; }
-
-  public updateMotion(): void {
-    const cx = this.position.x;
-    const cy = this.position.y;
-    const mx = this.midPoint.x;
-    const my = this.midPoint.y;
-    if (cx === mx && cy === my) return;
-    let vx = smoothStepInterpolation(this.motionFactor, mx, cx);
-    let vy = smoothStepInterpolation(this.motionFactor, my, cy);
-    if (Math.abs(vx - cx) < 0.1) vx = cx;
-    if (Math.abs(vy - cy) < 0.1) vy = cy;
-    this.midPoint.x = vx;
-    this.midPoint.y = vy;
-    const dx = cx - vx;
-    const dy = cy - vy;
-    this.velocity.x = dx;
-    this.velocity.y = dy;
-    this.angle = Math.atan2(cy - vy, cx - vx);
-    this.distance = Math.sqrt(dx * dx + dy * dy);
-  }
-
-  public up(event: MouseEvent): void {
-    if ('buttons' in event) this.buttons = event.buttons;
-    this.event = event;
-    this.button = event.button;
-    this.upElement = event.target;
-    this.manager.transformPointer(this, event.pageX, event.pageY, false);
-    if (event.button === 0) {
-      this.primaryDown = false;
-      this.upX = this.x;
-      this.upY = this.y;
-    }
-    if (this.buttons === 0) {
-      this.isDown = false;
-      this.upTime = event.timeStamp;
-      this.wasTouch = false;
-    }
-  }
-
-  public down(event: MouseEvent): void {
-    if ('buttons' in event) this.buttons = event.buttons;
-    this.event = event;
-    this.button = event.button;
-    this.downElement = event.target;
-    this.manager.transformPointer(this, event.pageX, event.pageY, false);
-    if (event.button === 0) {
-      this.primaryDown = true;
-      this.downX = this.x;
-      this.downY = this.y;
-    }
-    if (this.manager.game.host.page?.mac && event.ctrlKey) {
-      this.buttons = 2;
-      this.primaryDown = false;
-    }
-    if (!this.isDown) {
-      this.isDown = true;
-      this.downTime = event.timeStamp;
-    }
-    this.wasTouch = false;
-  }
-
-  public move(event: MouseEvent): void {
-    if ('buttons' in event) this.buttons = event.buttons;
-    this.event = event;
-    this.manager.transformPointer(this, event.pageX, event.pageY, true);
-    if (this.locked) {
-      this.movementX = event.movementX || 0;
-      this.movementY = event.movementY || 0;
-    }
-    this.moveTime = event.timeStamp;
-    this.wasTouch = false;
-  }
-
-  public wheel(event: WheelEvent): void {
-    if ('buttons' in event) this.buttons = event.buttons;
-    this.event = event;
-    this.manager.transformPointer(this, event.pageX, event.pageY, false);
-    this.deltaX = event.deltaX;
-    this.deltaY = event.deltaY;
-    this.deltaZ = event.deltaZ;
-    this.wasTouch = false;
-  }
-
-  public touchmove(touch: Touch, event: TouchEvent): void {
-    this.event = event;
-    this.manager.transformPointer(this, touch.pageX, touch.pageY, true);
-    this.moveTime = event.timeStamp;
-    this.wasTouch = true;
-    this.updateMotion();
-  }
-
-  public touchstart(touch: Touch, event: TouchEvent): void {
-    const withId = touch as Touch & { pointerId?: number };
-    if (withId.pointerId) this.pointerId = withId.pointerId;
-    this.identifier = touch.identifier;
-    this.target = touch.target;
-    this.active = true;
-    this.buttons = 1;
-    this.event = event;
-    this.downElement = touch.target;
-    this.manager.transformPointer(this, touch.pageX, touch.pageY, false);
-    this.primaryDown = true;
-    this.downX = this.x;
-    this.downY = this.y;
-    this.downTime = event.timeStamp;
-    this.isDown = true;
-    this.wasTouch = true;
-    this.wasCanceled = false;
-    this.updateMotion();
-  }
-
-  public touchend(touch: Touch, event: TouchEvent): void {
-    this.buttons = 0;
-    this.event = event;
-    this.upElement = touch.target;
-    this.manager.transformPointer(this, touch.pageX, touch.pageY, false);
-    this.primaryDown = false;
-    this.upX = this.x;
-    this.upY = this.y;
-    this.upTime = event.timeStamp;
-    this.isDown = false;
-    this.wasTouch = true;
-    this.wasCanceled = false;
-    this.active = false;
-    this.updateMotion();
-  }
-
-  public touchcancel(touch: Touch, event: TouchEvent): void {
-    this.buttons = 0;
-    this.event = event;
-    this.upElement = touch.target;
-    this.manager.transformPointer(this, touch.pageX, touch.pageY, false);
-    this.primaryDown = false;
-    this.upX = this.x;
-    this.upY = this.y;
-    this.upTime = event.timeStamp;
-    this.isDown = false;
-    this.wasTouch = true;
-    this.wasCanceled = true;
-    this.active = false;
-  }
-
-  public leftButtonDown(): boolean { return (this.buttons & 1) !== 0; }
-  public rightButtonDown(): boolean { return (this.buttons & 2) !== 0; }
-  public middleButtonDown(): boolean { return (this.buttons & 4) !== 0; }
-  public backButtonDown(): boolean { return (this.buttons & 8) !== 0; }
-  public forwardButtonDown(): boolean { return (this.buttons & 16) !== 0; }
-  public noButtonDown(): boolean { return this.buttons === 0; }
-}
-
-const MOUSE_DOWN = 0;
-const MOUSE_MOVE = 1;
-const MOUSE_UP = 2;
-const TOUCH_START = 3;
-const TOUCH_MOVE = 4;
-const TOUCH_END = 5;
-const TOUCH_CANCEL = 7;
-const MOUSE_WHEEL = 9;
-
 export interface InteractiveObject {
   gameObject: GameObject | undefined;
   enabled: boolean;
@@ -626,12 +413,6 @@ export interface InteractiveObject {
   localY: number;
   dragState: number;
 }
-
-/** O RectangleContains: bordas inclusas, retângulo vazio nunca contém. */
-const RectangleContains = (rect: { x: number; y: number; width: number; height: number }, x: number, y: number): boolean => {
-  if (rect.width <= 0 || rect.height <= 0) return false;
-  return rect.x <= x && rect.x + rect.width >= x && rect.y <= y && rect.y + rect.height >= y;
-};
 
 /** A inversa da transformação do objeto (o TransformXY). */
 const TransformXY = (x: number, y: number, positionX: number, positionY: number, rotation: number, scaleX: number, scaleY: number, output: { x: number; y: number }): { x: number; y: number } => {
@@ -650,8 +431,6 @@ const TransformXY = (x: number, y: number, positionX: number, positionY: number,
 /** O gerenciador global: os ouvintes do DOM, os ponteiros e o teste de acerto. */
 export class InputManager {
   public readonly events = new EventEmitter();
-  public enabled = true;
-  public isOver = true;
   public defaultCursor = '';
   public readonly keyboard: KeyboardManager;
   public readonly pointers: Pointer[] = [];
@@ -662,7 +441,7 @@ export class InputManager {
   public time = 0;
   public canvas!: HTMLCanvasElement;
   /** Onde o mouse e o toque são ouvidos (o próprio canvas, no navegador; ver host.ts). */
-  private pointerTarget: EventTarget | null = null;
+  public pointerTarget: EventTarget | null = null;
 
   /** O alvo dos eventos de ponteiro: um evento que nasceu nele foi DENTRO do jogo (o canvas, no navegador). */
   public get eventTarget(): EventTarget | null {
@@ -672,10 +451,13 @@ export class InputManager {
   private readonly tempHitTest: GameObject[] = [];
   private readonly tempMatrix = new TransformMatrix();
   private readonly tempMatrix2 = new TransformMatrix();
-  private tempSkip = false;
-  private readonly mousePointerContainer: Pointer[];
+  public readonly mousePointerContainer: Pointer[];
   public readonly mouse = { disableContextMenu: (): void => this.disableContextMenu() };
   private contextMenuDisabled = false;
+  /** Os ouvintes de mouse e toque do DOM (ver DomPointerInput). */
+  private readonly dom = new DomPointerInput(this);
+  /** A entrada está ligada: o InputPlugin de cada cena pergunta antes de agir. */
+  public get enabled(): boolean { return this.dom.enabled; }
 
   public constructor(public readonly game: Game) {
     this.keyboard = new KeyboardManager(this);
@@ -692,8 +474,8 @@ export class InputManager {
     const page = this.game.host.page;
     if (page) {
       this.pointerTarget = page.pointerTarget(this.canvas);
-      this.startMouseListeners(page, this.pointerTarget);
-      if (this.game.config.inputTouch) this.startTouchListeners(page, this.pointerTarget);
+      this.dom.startMouseListeners(page, this.pointerTarget);
+      if (this.game.config.inputTouch) this.dom.startTouchListeners(page, this.pointerTarget);
     }
     this.game.events.on(CoreEvents.PRE_RENDER, this.preRender, this);
     this.game.events.once(CoreEvents.DESTROY, this.destroy, this);
@@ -708,106 +490,6 @@ export class InputManager {
     });
   }
 
-  // ── Mouse (o MouseManager) ──
-  private startMouseListeners(page: EnginePage, canvas: EventTarget): void {
-    const ok = (event: Event): boolean => !event.defaultPrevented && this.enabled;
-    const on = <K extends keyof HTMLElementEventMap>(type: K, fn: (event: HTMLElementEventMap[K]) => void, options?: AddEventListenerOptions): void => {
-      canvas.addEventListener(type, fn as EventListener, options);
-    };
-    on('mousemove', (event) => {
-      if (ok(event)) {
-        this.onMouseMove(event);
-        event.preventDefault();
-      }
-    });
-    on('mousedown', (event) => {
-      if (this.game.config.autoFocus) page.focus();
-      if (ok(event)) {
-        this.onMouseDown(event);
-        if (event.target === canvas) event.preventDefault();
-      }
-    });
-    on('mouseup', (event) => {
-      if (ok(event)) {
-        this.onMouseUp(event);
-        if (event.target === canvas) event.preventDefault();
-      }
-    });
-    on('mouseover', (event) => { if (ok(event)) this.setCanvasOver(event); }, { passive: true });
-    on('mouseout', (event) => { if (ok(event)) this.setCanvasOut(event); }, { passive: true });
-    on('wheel', (event) => {
-      if (ok(event)) this.onMouseWheel(event);
-      if (event.target === canvas) event.preventDefault();
-    }, { passive: false });
-    const fromTouch = (event: MouseEvent): boolean => Boolean((event as MouseEvent & { sourceCapabilities?: { firesTouchEvents?: boolean } }).sourceCapabilities?.firesTouchEvents);
-    page.addTopListener('mousedown', (e) => {
-      const event = e as MouseEvent;
-      if (fromTouch(event)) return;
-      if (ok(event) && event.target !== canvas) this.onMouseDown(event);
-    }, { passive: true });
-    page.addTopListener('mouseup', (e) => {
-      const event = e as MouseEvent;
-      if (fromTouch(event)) return;
-      if (ok(event) && event.target !== canvas) this.onMouseUp(event);
-    }, { passive: true });
-  }
-
-  // ── Toque (o TouchManager) ──
-  private startTouchListeners(page: EnginePage, canvas: EventTarget): void {
-    const ok = (event: Event): boolean => !event.defaultPrevented && this.enabled;
-    const nonPassive = { passive: false };
-    const on = (type: 'touchstart' | 'touchmove' | 'touchend' | 'touchcancel', fn: (event: TouchEvent) => void): void => {
-      canvas.addEventListener(type, fn as EventListener, nonPassive);
-    };
-    on('touchstart', (event) => {
-      if (this.game.config.autoFocus) page.focus();
-      if (ok(event)) {
-        this.onTouchStart(event);
-        if (event.cancelable && event.target === canvas) event.preventDefault();
-      }
-    });
-    on('touchmove', (event) => {
-      if (ok(event)) {
-        this.onTouchMove(event);
-        if (event.cancelable) event.preventDefault();
-      }
-    });
-    on('touchend', (event) => {
-      if (ok(event)) {
-        this.onTouchEnd(event);
-        if (event.cancelable && event.target === canvas) event.preventDefault();
-      }
-    });
-    on('touchcancel', (event) => {
-      if (ok(event)) {
-        this.onTouchCancel(event);
-        event.preventDefault();
-      }
-    });
-    page.addTopListener('touchstart', (e) => {
-      const event = e as TouchEvent;
-      if (ok(event) && event.target !== canvas) this.onTouchStart(event);
-    }, nonPassive);
-    page.addTopListener('touchend', (e) => {
-      const event = e as TouchEvent;
-      if (ok(event) && event.target !== canvas) this.onTouchEnd(event);
-    }, nonPassive);
-    page.addTopListener('touchcancel', (e) => {
-      const event = e as TouchEvent;
-      if (ok(event)) this.onTouchCancel(event);
-    }, nonPassive);
-  }
-
-  public setCanvasOver(event: Event): void {
-    this.isOver = true;
-    this.events.emit(InputEvents.GAME_OVER, event);
-  }
-
-  public setCanvasOut(event: Event): void {
-    this.isOver = false;
-    this.events.emit(InputEvents.GAME_OUT, event);
-  }
-
   private preRender(): void {
     const time = this.game.loop.now;
     const delta = this.game.loop.delta;
@@ -817,116 +499,6 @@ export class InputManager {
     for (const scene of scenes) {
       if (scene.sys.input && scene.sys.input.updatePoll(time, delta) && this.globalTopOnly) return;
     }
-  }
-
-  private updateInputPlugins(type: number, pointers: Pointer[]): void {
-    const scenes = this.game.scene.getScenes(false, true);
-    this.tempSkip = false;
-    for (const scene of scenes) {
-      if (scene.sys.input) {
-        const capture = scene.sys.input.update(type, pointers);
-        if ((capture && this.globalTopOnly) || this.tempSkip) return;
-      }
-    }
-  }
-
-  private onTouchStart(event: TouchEvent): void {
-    const changed: Pointer[] = [];
-    for (let c = 0; c < event.changedTouches.length; c++) {
-      const changedTouch = event.changedTouches[c];
-      for (let i = 1; i < this.pointers.length; i++) {
-        const pointer = this.pointers[i];
-        if (!pointer.active) {
-          pointer.touchstart(changedTouch, event);
-          this.activePointer = pointer;
-          changed.push(pointer);
-          break;
-        }
-      }
-    }
-    this.updateInputPlugins(TOUCH_START, changed);
-  }
-
-  private onTouchMove(event: TouchEvent): void {
-    const changed: Pointer[] = [];
-    for (let c = 0; c < event.changedTouches.length; c++) {
-      const changedTouch = event.changedTouches[c];
-      for (let i = 1; i < this.pointers.length; i++) {
-        const pointer = this.pointers[i];
-        if (pointer.active && pointer.identifier === changedTouch.identifier) {
-          const element = this.game.host.page?.elementFromPoint(changedTouch.clientX, changedTouch.clientY);
-          const overCanvas = element === this.pointerTarget;
-          if (!this.isOver && overCanvas) this.setCanvasOver(event);
-          else if (this.isOver && !overCanvas) this.setCanvasOut(event);
-          if (this.isOver) {
-            pointer.touchmove(changedTouch, event);
-            this.activePointer = pointer;
-            changed.push(pointer);
-          }
-          break;
-        }
-      }
-    }
-    this.updateInputPlugins(TOUCH_MOVE, changed);
-  }
-
-  private onTouchEnd(event: TouchEvent): void {
-    const changed: Pointer[] = [];
-    for (let c = 0; c < event.changedTouches.length; c++) {
-      const changedTouch = event.changedTouches[c];
-      for (let i = 1; i < this.pointers.length; i++) {
-        const pointer = this.pointers[i];
-        if (pointer.active && pointer.identifier === changedTouch.identifier) {
-          pointer.touchend(changedTouch, event);
-          changed.push(pointer);
-          break;
-        }
-      }
-    }
-    this.updateInputPlugins(TOUCH_END, changed);
-  }
-
-  private onTouchCancel(event: TouchEvent): void {
-    const changed: Pointer[] = [];
-    for (let c = 0; c < event.changedTouches.length; c++) {
-      const changedTouch = event.changedTouches[c];
-      for (let i = 1; i < this.pointers.length; i++) {
-        const pointer = this.pointers[i];
-        if (pointer.active && pointer.identifier === changedTouch.identifier) {
-          pointer.touchcancel(changedTouch, event);
-          changed.push(pointer);
-          break;
-        }
-      }
-    }
-    this.updateInputPlugins(TOUCH_CANCEL, changed);
-  }
-
-  private onMouseDown(event: MouseEvent): void {
-    this.mousePointer.down(event);
-    this.mousePointer.updateMotion();
-    this.activePointer = this.mousePointer;
-    this.updateInputPlugins(MOUSE_DOWN, this.mousePointerContainer);
-  }
-
-  private onMouseMove(event: MouseEvent): void {
-    this.mousePointer.move(event);
-    this.mousePointer.updateMotion();
-    this.activePointer = this.mousePointer;
-    this.updateInputPlugins(MOUSE_MOVE, this.mousePointerContainer);
-  }
-
-  private onMouseUp(event: MouseEvent): void {
-    this.mousePointer.up(event);
-    this.mousePointer.updateMotion();
-    this.activePointer = this.mousePointer;
-    this.updateInputPlugins(MOUSE_UP, this.mousePointerContainer);
-  }
-
-  private onMouseWheel(event: WheelEvent): void {
-    this.mousePointer.wheel(event);
-    this.activePointer = this.mousePointer;
-    this.updateInputPlugins(MOUSE_WHEEL, this.mousePointerContainer);
   }
 
   public transformPointer(pointer: Pointer, pageX: number, pageY: number, wasMove: boolean): void {
@@ -1017,16 +589,20 @@ export class InputPlugin extends EventEmitter {
   public pollRate = -1;
   public readonly keyboard: KeyboardPlugin;
   private _pollTimer = 0;
-  private readonly _eventData = { cancelled: false };
-  private readonly _eventContainer: { stopPropagation: () => void };
-  private _temp: GameObject[] = [];
-  private _list: GameObject[] = [];
-  private readonly _pendingInsertion: GameObject[] = [];
+  public readonly _eventData = { cancelled: false };
+  public readonly _eventContainer: { stopPropagation: () => void };
+  public _temp: GameObject[] = [];
+  public _list: GameObject[] = [];
+  public readonly _pendingInsertion: GameObject[] = [];
   private readonly _pendingRemoval: GameObject[] = [];
   private readonly _draggable: GameObject[] = [];
-  private readonly _drag: Record<number, GameObject[]> = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: [], 8: [], 9: [], 10: [] };
-  private readonly _over: Record<number, GameObject[]> = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: [], 8: [], 9: [], 10: [] };
+  public readonly _drag: Record<number, GameObject[]> = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: [], 8: [], 9: [], 10: [] };
+  public readonly _over: Record<number, GameObject[]> = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: [], 8: [], 9: [], 10: [] };
   private _updatedThisFrame = false;
+  /** Os eventos de ponteiro para os objetos. (ver PointerDispatch) */
+  private readonly dispatch = new PointerDispatch(this);
+  /** As áreas de toque dos objetos. (ver HitAreas) */
+  private readonly hitAreas = new HitAreas(this);
 
   public constructor(private readonly systems: Systems) {
     super();
@@ -1111,7 +687,7 @@ export class InputPlugin extends EventEmitter {
       this._temp = this.hitTestPointer(pointer);
       this.sortGameObjects(this._temp, pointer);
       if (this.topOnly && this._temp.length) this._temp.splice(1);
-      if (this.processOverOutEvents(pointer) > 0) captured = true;
+      if (this.dispatch.processOverOutEvents(pointer) > 0) captured = true;
     }
     return captured;
   }
@@ -1126,29 +702,29 @@ export class InputPlugin extends EventEmitter {
       if (this.topOnly && this._temp.length) this._temp.splice(1);
       switch (type) {
         case MOUSE_DOWN:
-          total += this.processDownEvents(pointer);
-          total += this.processOverOutEvents(pointer);
+          total += this.dispatch.processDownEvents(pointer);
+          total += this.dispatch.processOverOutEvents(pointer);
           break;
         case MOUSE_UP:
-          total += this.processUpEvents(pointer);
-          total += this.processOverOutEvents(pointer);
+          total += this.dispatch.processUpEvents(pointer);
+          total += this.dispatch.processOverOutEvents(pointer);
           break;
         case TOUCH_START:
-          total += this.processDownEvents(pointer);
-          total += this.processOverEvents(pointer);
+          total += this.dispatch.processDownEvents(pointer);
+          total += this.dispatch.processOverEvents(pointer);
           break;
         case TOUCH_END:
         case TOUCH_CANCEL:
-          total += this.processUpEvents(pointer);
-          total += this.processOutEvents(pointer);
+          total += this.dispatch.processUpEvents(pointer);
+          total += this.dispatch.processOutEvents(pointer);
           break;
         case MOUSE_MOVE:
         case TOUCH_MOVE:
-          total += this.processMoveEvents(pointer);
-          total += this.processOverOutEvents(pointer);
+          total += this.dispatch.processMoveEvents(pointer);
+          total += this.dispatch.processOverOutEvents(pointer);
           break;
         case MOUSE_WHEEL:
-          total += this.processWheelEvent(pointer);
+          total += this.dispatch.processWheelEvent(pointer);
           break;
         default:
           break;
@@ -1157,199 +733,6 @@ export class InputPlugin extends EventEmitter {
     }
     this._updatedThisFrame = true;
     return captured;
-  }
-
-  private processDownEvents(pointer: Pointer): number {
-    let total = 0;
-    const currentlyOver = this._temp;
-    const _eventData = this._eventData;
-    const _eventContainer = this._eventContainer;
-    _eventData.cancelled = false;
-    for (const gameObject of currentlyOver) {
-      if (!gameObject.input || !gameObject.input.enabled) continue;
-      total++;
-      gameObject.emit(InputEvents.GAMEOBJECT_POINTER_DOWN, pointer, gameObject.input.localX, gameObject.input.localY, _eventContainer);
-      if (_eventData.cancelled || !this.isActive()) break;
-      if (gameObject.input && gameObject.input.enabled) {
-        this.emit(InputEvents.GAMEOBJECT_DOWN, pointer, gameObject, _eventContainer);
-        if (_eventData.cancelled || !this.isActive()) break;
-      }
-    }
-    if (!_eventData.cancelled && this.isActive()) {
-      if (pointer.downElement === this.manager.eventTarget) this.emit(InputEvents.POINTER_DOWN, pointer, currentlyOver);
-      else this.emit(InputEvents.POINTER_DOWN_OUTSIDE, pointer);
-    }
-    return total;
-  }
-
-  private processUpEvents(pointer: Pointer): number {
-    const currentlyOver = this._temp;
-    const _eventData = this._eventData;
-    const _eventContainer = this._eventContainer;
-    _eventData.cancelled = false;
-    for (const gameObject of currentlyOver) {
-      if (!gameObject.input || !gameObject.input.enabled) continue;
-      gameObject.emit(InputEvents.GAMEOBJECT_POINTER_UP, pointer, gameObject.input.localX, gameObject.input.localY, _eventContainer);
-      if (_eventData.cancelled || !this.isActive()) break;
-      if (gameObject.input && gameObject.input.enabled) {
-        this.emit(InputEvents.GAMEOBJECT_UP, pointer, gameObject, _eventContainer);
-        if (_eventData.cancelled || !this.isActive()) break;
-      }
-    }
-    if (!_eventData.cancelled && this.isActive()) {
-      if (pointer.upElement === this.manager.eventTarget) this.emit(InputEvents.POINTER_UP, pointer, currentlyOver);
-      else this.emit(InputEvents.POINTER_UP_OUTSIDE, pointer);
-    }
-    return currentlyOver.length;
-  }
-
-  private processMoveEvents(pointer: Pointer): number {
-    let total = 0;
-    const currentlyOver = this._temp;
-    const _eventData = this._eventData;
-    const _eventContainer = this._eventContainer;
-    _eventData.cancelled = false;
-    for (const gameObject of currentlyOver) {
-      if (!gameObject.input || !gameObject.input.enabled) continue;
-      total++;
-      gameObject.emit('pointermove', pointer, gameObject.input.localX, gameObject.input.localY, _eventContainer);
-      if (_eventData.cancelled || !this.isActive()) break;
-      if (gameObject.input && gameObject.input.enabled) {
-        this.emit('gameobjectmove', pointer, gameObject, _eventContainer);
-        if (_eventData.cancelled || !this.isActive()) break;
-        if (this.topOnly) break;
-      }
-    }
-    if (!_eventData.cancelled && this.isActive()) this.emit(InputEvents.POINTER_MOVE, pointer, currentlyOver);
-    return total;
-  }
-
-  private processWheelEvent(pointer: Pointer): number {
-    let total = 0;
-    const currentlyOver = this._temp;
-    const _eventData = this._eventData;
-    const _eventContainer = this._eventContainer;
-    _eventData.cancelled = false;
-    const dx = pointer.deltaX;
-    const dy = pointer.deltaY;
-    const dz = pointer.deltaZ;
-    for (const gameObject of currentlyOver) {
-      if (!gameObject.input || !gameObject.input.enabled) continue;
-      total++;
-      gameObject.emit('wheel', pointer, dx, dy, dz, _eventContainer);
-      if (_eventData.cancelled || !this.isActive()) break;
-      if (gameObject.input && gameObject.input.enabled) {
-        this.emit('gameobjectwheel', pointer, gameObject, dx, dy, dz, _eventContainer);
-        if (_eventData.cancelled || !this.isActive()) break;
-      }
-    }
-    if (!_eventData.cancelled && this.isActive()) this.emit(InputEvents.POINTER_WHEEL, pointer, currentlyOver, dx, dy, dz);
-    return total;
-  }
-
-  private processOverEvents(pointer: Pointer): number {
-    const currentlyOver = this._temp;
-    let totalInteracted = 0;
-    const justOver: GameObject[] = [];
-    if (currentlyOver.length > 0) {
-      const _eventData = this._eventData;
-      const _eventContainer = this._eventContainer;
-      _eventData.cancelled = false;
-      for (const gameObject of currentlyOver) {
-        if (!gameObject.input || !gameObject.input.enabled) continue;
-        justOver.push(gameObject);
-        this.manager.setCursor(gameObject.input);
-        gameObject.emit(InputEvents.GAMEOBJECT_POINTER_OVER, pointer, gameObject.input.localX, gameObject.input.localY, _eventContainer);
-        totalInteracted++;
-        if (_eventData.cancelled || !this.isActive()) break;
-        if (gameObject.input && gameObject.input.enabled) {
-          this.emit(InputEvents.GAMEOBJECT_OVER, pointer, gameObject, _eventContainer);
-          if (_eventData.cancelled || !this.isActive()) break;
-        }
-      }
-      if (!_eventData.cancelled && this.isActive()) this.emit(InputEvents.POINTER_OVER, pointer, justOver);
-    }
-    this._over[pointer.id] = justOver;
-    return totalInteracted;
-  }
-
-  private processOutEvents(pointer: Pointer): number {
-    const previouslyOver = this._over[pointer.id];
-    let totalInteracted = 0;
-    if (previouslyOver.length > 0) {
-      const _eventData = this._eventData;
-      const _eventContainer = this._eventContainer;
-      _eventData.cancelled = false;
-      this.sortGameObjects(previouslyOver, pointer);
-      for (const gameObject of previouslyOver) {
-        if (!gameObject.input || !gameObject.input.enabled) continue;
-        this.manager.resetCursor(gameObject.input);
-        gameObject.emit(InputEvents.GAMEOBJECT_POINTER_OUT, pointer, _eventContainer);
-        totalInteracted++;
-        if (_eventData.cancelled || !this.isActive()) break;
-        if (gameObject.input && gameObject.input.enabled) {
-          this.emit(InputEvents.GAMEOBJECT_OUT, pointer, gameObject, _eventContainer);
-          if (_eventData.cancelled || !this.isActive()) break;
-        }
-      }
-      if (!_eventData.cancelled && this.isActive()) this.emit(InputEvents.POINTER_OUT, pointer, previouslyOver);
-      this._over[pointer.id] = [];
-    }
-    return totalInteracted;
-  }
-
-  private processOverOutEvents(pointer: Pointer): number {
-    const currentlyOver = this._temp;
-    const justOut: GameObject[] = [];
-    const justOver: GameObject[] = [];
-    const stillOver: GameObject[] = [];
-    const previouslyOver = this._over[pointer.id];
-    const currentlyDragging = this._drag[pointer.id];
-    for (const gameObject of previouslyOver) {
-      if (currentlyOver.indexOf(gameObject) === -1 && currentlyDragging.indexOf(gameObject) === -1) justOut.push(gameObject);
-      else stillOver.push(gameObject);
-    }
-    for (const gameObject of currentlyOver) {
-      if (previouslyOver.indexOf(gameObject) === -1) justOver.push(gameObject);
-    }
-    let totalInteracted = 0;
-    const _eventData = this._eventData;
-    const _eventContainer = this._eventContainer;
-    _eventData.cancelled = false;
-    if (justOut.length > 0) {
-      this.sortGameObjects(justOut, pointer);
-      for (const gameObject of justOut) {
-        if (!gameObject.input || !gameObject.input.enabled) continue;
-        this.manager.resetCursor(gameObject.input);
-        gameObject.emit(InputEvents.GAMEOBJECT_POINTER_OUT, pointer, _eventContainer);
-        totalInteracted++;
-        if (_eventData.cancelled || !this.isActive()) break;
-        if (gameObject.input && gameObject.input.enabled) {
-          this.emit(InputEvents.GAMEOBJECT_OUT, pointer, gameObject, _eventContainer);
-          if (_eventData.cancelled || !this.isActive()) break;
-        }
-      }
-      // (sic) o teste é com `||` aqui
-      if (!_eventData.cancelled || this.isActive()) this.emit(InputEvents.POINTER_OUT, pointer, justOut);
-    }
-    _eventData.cancelled = false;
-    if (justOver.length > 0) {
-      this.sortGameObjects(justOver, pointer);
-      for (const gameObject of justOver) {
-        if (!gameObject.input || !gameObject.input.enabled) continue;
-        this.manager.setCursor(gameObject.input);
-        gameObject.emit(InputEvents.GAMEOBJECT_POINTER_OVER, pointer, gameObject.input.localX, gameObject.input.localY, _eventContainer);
-        totalInteracted++;
-        if (_eventData.cancelled || !this.isActive()) break;
-        if (gameObject.input && gameObject.input.enabled) {
-          this.emit(InputEvents.GAMEOBJECT_OVER, pointer, gameObject, _eventContainer);
-          if (_eventData.cancelled || !this.isActive()) break;
-        }
-      }
-      if (!_eventData.cancelled && this.isActive()) this.emit(InputEvents.POINTER_OVER, pointer, justOver);
-    }
-    this._over[pointer.id] = this.sortGameObjects(stillOver.concat(justOver), pointer);
-    return totalInteracted;
   }
 
   private hitTestPointer(pointer: Pointer): GameObject[] {
@@ -1365,73 +748,15 @@ export class InputPlugin extends EventEmitter {
     return [];
   }
 
-  private sortGameObjects(gameObjects: GameObject[], pointer: Pointer): GameObject[] {
+  public sortGameObjects(gameObjects: GameObject[], pointer: Pointer): GameObject[] {
     if (gameObjects.length < 2 || !pointer.camera) return gameObjects;
     const list = pointer.camera.renderList;
     return gameObjects.sort((childA, childB) => Math.max(list.indexOf(childB), 0) - Math.max(list.indexOf(childA), 0));
   }
 
-  public setHitArea(gameObjects: GameObject | GameObject[], hitArea?: unknown): this {
-    const list = Array.isArray(gameObjects) ? gameObjects : [gameObjects];
-    if (hitArea === undefined) return this.setHitAreaFromTexture(list);
-    let cursor: string | false = false;
-    let useHandCursor = false;
-    if (hitArea && typeof hitArea === 'object' && Object.keys(hitArea).length) {
-      const config = hitArea as { cursor?: string; useHandCursor?: boolean };
-      cursor = config.cursor ?? false;
-      useHandCursor = config.useHandCursor ?? false;
-      this.setHitAreaFromTexture(list);
-    }
-    for (const gameObject of list) {
-      if (!gameObject.input) continue;
-      const io = gameObject.input;
-      io.customHitArea = false;
-      io.dropZone = false;
-      io.cursor = useHandCursor ? 'pointer' : cursor;
-      this.queueForInsertion(gameObject);
-    }
-    return this;
-  }
-
-  public setHitAreaFromTexture(gameObjects: GameObject[]): this {
-    for (const gameObject of gameObjects) {
-      const frame = (gameObject as GameObject & { frame?: { realWidth: number; realHeight: number } }).frame;
-      let width = 0;
-      let height = 0;
-      if (gameObject.width) {
-        width = gameObject.width;
-        height = gameObject.height;
-      } else if (frame) {
-        width = frame.realWidth;
-        height = frame.realHeight;
-      }
-      if (gameObject.type === 'Container' && (width === 0 || height === 0)) {
-        console.warn('Container.setInteractive must specify a Shape or call setSize() first');
-        continue;
-      }
-      if (width !== 0 && height !== 0) {
-        gameObject.input = {
-          gameObject,
-          enabled: true,
-          draggable: false,
-          dropZone: false,
-          cursor: false,
-          hitArea: { x: 0, y: 0, width, height },
-          hitAreaCallback: RectangleContains,
-          customHitArea: false,
-          localX: 0,
-          localY: 0,
-          dragState: 0,
-        };
-        this.queueForInsertion(gameObject);
-      }
-    }
-    return this;
-  }
-
   public enable(gameObject: GameObject, hitArea?: unknown): this {
     if (gameObject.input) gameObject.input.enabled = true;
-    else this.setHitArea(gameObject, hitArea);
+    else this.hitAreas.setHitArea(gameObject, hitArea);
     return this;
   }
 
@@ -1469,11 +794,6 @@ export class InputPlugin extends EventEmitter {
 
   public resetCursor(): void {
     this.manager.resetCursor(null, true);
-  }
-
-  private queueForInsertion(child: GameObject): this {
-    if (this._pendingInsertion.indexOf(child) === -1 && this._list.indexOf(child) === -1) this._pendingInsertion.push(child);
-    return this;
   }
 
   private queueForRemoval(child: GameObject): this {

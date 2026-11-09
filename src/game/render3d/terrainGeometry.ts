@@ -1,4 +1,4 @@
-﻿// Os construtores de geometria do terreno, fundidos por chunk: o chão plano com AO, as margens e o beiço da água, a
+// Os construtores de geometria do terreno, fundidos por chunk: o chão plano com AO, as margens e o beiço da água, a
 // lava e a terra queimada em volta, os blocos (rocha, parede, penhasco), o relevo com os degraus, as escadas, e a sombra
 // de massa assada aos poucos. São funções puras de dado → BufferGeometry: o World3D (buildTerrain) as chama.
 

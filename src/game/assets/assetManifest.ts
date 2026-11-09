@@ -1,4 +1,4 @@
-﻿import type * as Engine from '@/game/engine';
+import type * as Engine from '@/game/engine';
 
 import { ASSET_KEYS, TILESET_FRAME_SIZE } from '@/game/constants';
 

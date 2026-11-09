@@ -80,7 +80,7 @@ export default {
     // ── 2. As duas picaretadas ──────────────────────────────────────────────
     log('PICARETA: primeira golpada racha e AINDA bloqueia; a segunda abre o tile');
     const rock = await evaluate(() => {
-      const r = window.__scene.rocks?.[0];
+      const r = window.__scene.props.rocks?.[0];
       return r ? { x: r.worldX, y: r.worldY } : null;
     });
     assert('o mundo tem pelo menos uma pedra', rock !== null, 'nenhuma pedra em __scene.rocks');
@@ -99,7 +99,7 @@ export default {
     await driver.press('ArrowRight', { count: 1 });
     await driver.settle(500);
     const bare = await evaluate(() => {
-      const r = window.__scene.rocks?.[0];
+      const r = window.__scene.props.rocks?.[0];
       return {
         texture: r?.sprite?.texKey ?? null,
         blocking: r?.blocking ?? null,
@@ -119,7 +119,7 @@ export default {
     await shot('pedra-inteira');
 
     const texOf = () => evaluate(() => {
-      const r = window.__scene.rocks?.[0];
+      const r = window.__scene.props.rocks?.[0];
       return { texture: r?.sprite?.texKey ?? null, blocking: r?.blocking ?? null };
     });
     const before = await texOf();

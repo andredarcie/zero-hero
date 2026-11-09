@@ -84,7 +84,7 @@ export class LeafLitter implements NatureSystem {
       // Só no bosque de outono (world/biomeLife).
       if (t.kind === 'log' || !isLifeHome('litter', t.x, t.y)) continue;
       const oak = t.kind === 'oak';
-      const bb = w3.addBillboard(litter('litter-init', 4, 4, 'summer', 0, false), 0, { flat: true, flatY: 0.014, depthWrite: false, alphaTest: 0.5, depthLayer: 'ground' })
+      const bb = w3.objects.addBillboard(litter('litter-init', 4, 4, 'summer', 0, false), 0, { flat: true, flatY: 0.014, depthWrite: false, alphaTest: 0.5, depthLayer: 'ground' })
         .setDisplaySize(oak ? 3.4 : 1.6, oak ? 2.4 : 1.1)
         // Um pouco ao sul do tronco: a parte do chão que a copa cobre e a câmera vê.
         .setPosition(t.x, t.y + (oak ? 0.35 : 0.2));

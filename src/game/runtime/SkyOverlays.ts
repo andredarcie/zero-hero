@@ -417,6 +417,73 @@ const targetArt = (target: SkyTarget): HTMLCanvasElement => {
 const NOTE_FOLD_MS = 340;
 const NOTE_WRAP_CSS = 'position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 14px; pointer-events: none;';
 
+/** A ficha aberta: o papel, a hora em que abriu e quanto a escrita leva. */
+interface SkyNote { wrap: HTMLDivElement; paper: HTMLDivElement; openedAt: number; writeMs: number }
+
+/**
+ * A FICHA DE UM ALVO, a mesma do cogumelo: papel rasgado, a foto do alvo no céu escuro presa com um clipe, o nome e
+ * duas notas escritas a pena, uma depois da outra. Montada dentro de `root`; quem chama guarda e fecha.
+ */
+const buildSkyNote = (target: SkyTarget, art: HTMLCanvasElement | undefined, root: HTMLElement): SkyNote => {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = NOTE_WRAP_CSS;
+  const paper = document.createElement('div');
+  paper.className = 'zh-note';
+  const sheet = document.createElement('div');
+  sheet.className = 'zh-note-paper';
+  sheet.style.clipPath = tornEdge(seedOf(target));
+  const texture = paperTexture();
+  if (texture) sheet.style.backgroundImage = `url(${texture})`;
+
+  const night = createCanvas();
+  night.width = ART_SIZE;
+  night.height = ART_SIZE;
+  const nightCtx = night.getContext('2d');
+  if (nightCtx && art) {
+    nightCtx.fillStyle = '#070b18';
+    nightCtx.fillRect(0, 0, ART_SIZE, ART_SIZE);
+    nightCtx.drawImage(art, 0, 0);
+  }
+  const photo = document.createElement('div');
+  photo.className = 'zh-note-photo';
+  const shot = document.createElement('div');
+  shot.className = 'zh-note-shot';
+  const img = document.createElement('img');
+  img.src = night.toDataURL();
+  img.alt = t(`sky.${target}.name`);
+  shot.appendChild(img);
+  photo.append(shot, paperClip());
+
+  let at = WRITE_START_MS;
+  const ink = (text: string): HTMLSpanElement => {
+    const span = document.createElement('span');
+    const d = Math.max(280, Math.min(1100, text.length * WRITE_MS_PER_CHAR));
+    span.classList.add('zh-ink');
+    span.style.setProperty('--at', `${at}ms`);
+    span.style.setProperty('--d', `${d}ms`);
+    span.textContent = text;
+    at += d + 90;
+    return span;
+  };
+  const name = document.createElement('h2');
+  name.className = 'zh-note-name';
+  name.appendChild(ink(t(`sky.${target}.name`)));
+  const notes = document.createElement('ul');
+  notes.className = 'zh-note-notes';
+  for (const key of ['seen', 'fact']) {
+    const li = document.createElement('li');
+    li.appendChild(ink(`~ ${t(`sky.${target}.${key}`)}`));
+    notes.appendChild(li);
+  }
+  sheet.append(photo, name, notes);
+  paper.appendChild(sheet);
+  wrap.appendChild(paper);
+  root.appendChild(wrap);
+  fitNotePaper(paper);
+  paper.classList.add('zh-on');
+  return { wrap, paper, openedAt: performance.now(), writeMs: at };
+};
+
 export class SkyOverlay extends CraftOverlay {
   /** O alvo cuja ficha está aberta. O playtest lê daqui. */
   public reading: SkyTarget | null = null;
@@ -431,7 +498,7 @@ export class SkyOverlay extends CraftOverlay {
   private readonly stars: Array<{ x: number; y: number; bright: number; phase: number; blue: boolean }> = [];
   private readonly held = new Set<string>();
   private drag: { x: number; y: number } | null = null;
-  private note?: { wrap: HTMLDivElement; paper: HTMLDivElement; openedAt: number; writeMs: number };
+  private note?: SkyNote;
   private folding = false;
   private time = 0;
   private sinceFind = 0;
@@ -535,64 +602,7 @@ export class SkyOverlay extends CraftOverlay {
     this.cb.onCard();
     // Como na colheita: quando o papel sobe, ele é a única coisa na tela.
     this.canvas.style.visibility = 'hidden';
-    const wrap = document.createElement('div');
-    wrap.style.cssText = NOTE_WRAP_CSS;
-    const paper = document.createElement('div');
-    paper.className = 'zh-note';
-    const sheet = document.createElement('div');
-    sheet.className = 'zh-note-paper';
-    sheet.style.clipPath = tornEdge(seedOf(target));
-    const texture = paperTexture();
-    if (texture) sheet.style.backgroundImage = `url(${texture})`;
-
-    const night = createCanvas();
-    night.width = ART_SIZE;
-    night.height = ART_SIZE;
-    const nightCtx = night.getContext('2d');
-    const art = this.arts.get(target);
-    if (nightCtx && art) {
-      nightCtx.fillStyle = '#070b18';
-      nightCtx.fillRect(0, 0, ART_SIZE, ART_SIZE);
-      nightCtx.drawImage(art, 0, 0);
-    }
-    const photo = document.createElement('div');
-    photo.className = 'zh-note-photo';
-    const shot = document.createElement('div');
-    shot.className = 'zh-note-shot';
-    const img = document.createElement('img');
-    img.src = night.toDataURL();
-    img.alt = t(`sky.${target}.name`);
-    shot.appendChild(img);
-    photo.append(shot, paperClip());
-
-    let at = WRITE_START_MS;
-    const ink = (text: string): HTMLSpanElement => {
-      const span = document.createElement('span');
-      const d = Math.max(280, Math.min(1100, text.length * WRITE_MS_PER_CHAR));
-      span.classList.add('zh-ink');
-      span.style.setProperty('--at', `${at}ms`);
-      span.style.setProperty('--d', `${d}ms`);
-      span.textContent = text;
-      at += d + 90;
-      return span;
-    };
-    const name = document.createElement('h2');
-    name.className = 'zh-note-name';
-    name.appendChild(ink(t(`sky.${target}.name`)));
-    const notes = document.createElement('ul');
-    notes.className = 'zh-note-notes';
-    for (const key of ['seen', 'fact']) {
-      const li = document.createElement('li');
-      li.appendChild(ink(`~ ${t(`sky.${target}.${key}`)}`));
-      notes.appendChild(li);
-    }
-    sheet.append(photo, name, notes);
-    paper.appendChild(sheet);
-    wrap.appendChild(paper);
-    this.root.appendChild(wrap);
-    fitNotePaper(paper);
-    paper.classList.add('zh-on');
-    this.note = { wrap, paper, openedAt: performance.now(), writeMs: at };
+    this.note = buildSkyNote(target, this.arts.get(target), this.root);
   }
 
   protected tick(dt: number): void {

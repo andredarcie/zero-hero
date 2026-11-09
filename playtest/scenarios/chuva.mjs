@@ -22,7 +22,7 @@ export default {
       window.gameTime.setDay(1);
     });
     const read = () => page.evaluate(() => {
-      const w = window.__scene.weather;
+      const w = window.__scene.valley.weather;
       return { rain: +w.rain.toFixed(2), drops: w.dropCount, splash: w.splashCount, rings: w.ringCount, weather: w.weather };
     });
 

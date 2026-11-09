@@ -77,7 +77,7 @@ const SAMPLE = `async (dir, tiles, useTouch) => {
   while (performance.now() < deadline) {
     // Stop the moment a wall comes into view. A hero jammed against rock reads exactly like a
     // hero who has stalled, and it would poison every number below.
-    if (s.isSolidForEntities(s.playerWorld.worldX + dx, s.playerWorld.worldY + dy, false)) break;
+    if (s.query.isSolidForEntities(s.playerWorld.worldX + dx, s.playerWorld.worldY + dy, false)) break;
     await new Promise((r) => requestAnimationFrame(r));
   }
 
@@ -109,7 +109,7 @@ const CLEAR_RUNS = `(max) => {
   const out = {};
   for (const [dir, dx, dy] of [['right', 1, 0], ['left', -1, 0], ['down', 0, 1], ['up', 0, -1]]) {
     let n = 0;
-    while (n < max && !s.isSolidForEntities(
+    while (n < max && !s.query.isSolidForEntities(
       s.playerWorld.worldX + dx * (n + 1), s.playerWorld.worldY + dy * (n + 1), false,
     )) n++;
     out[dir] = n;
@@ -263,7 +263,7 @@ export default {
         await wait(holdMs);
         key('keyup', name, code);
       };
-      const free = (dx, dy) => !s.isSolidForEntities(
+      const free = (dx, dy) => !s.query.isSolidForEntities(
         s.playerWorld.worldX + dx, s.playerWorld.worldY + dy, false,
       );
       // Pick a horizontal opener with a free tile below it, so neither leg can hit a wall.

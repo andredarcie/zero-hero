@@ -258,7 +258,7 @@ export class Squirrel implements NatureSystem {
 
   private show(): void {
     if (!this.bb) {
-      this.bb = world3d().addBillboard(FRAMES.stand, 0, { depthLayer: 'overlay', groundShadow: { rx: 0.18, rz: 0.08, alpha: 0.3 } }).setTint(PROP_TINT);
+      this.bb = world3d().objects.addBillboard(FRAMES.stand, 0, { depthLayer: 'overlay', groundShadow: { rx: 0.18, rz: 0.08, alpha: 0.3 } }).setTint(PROP_TINT);
     }
     const vertical = this.pose === 'down' || this.pose === 'up';
     this.bb.setTexture(FRAMES[this.pose])

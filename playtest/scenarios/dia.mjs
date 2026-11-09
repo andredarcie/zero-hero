@@ -19,13 +19,13 @@ export default {
       const trees = (x, y) => {
         let n = 0;
         for (let dy = -3; dy <= 3; dy += 1) for (let dx = -4; dx <= 4; dx += 1) {
-          if (s.isTreeTileAt(x + dx, y + dy)) n += 1;
+          if (s.query.isTreeTileAt(x + dx, y + dy)) n += 1;
         }
         return n;
       };
       let best = null;
       for (let y = 4; y < 56; y += 2) for (let x = 4; x < 56; x += 2) {
-        if (s.isSolidForEntities(x, y)) continue;
+        if (s.query.isSolidForEntities(x, y)) continue;
         const n = trees(x, y);
         if (!best || n > best.n) best = { x, y, n };
       }
@@ -39,11 +39,11 @@ export default {
     const day = await page.evaluate(() => {
       const s = window.__scene;
       return {
-        level: s.daylifeLevel,
-        butterflies: s.butterflies.length,
-        spread: Math.max(...s.butterflies.map((b) => b.bb.displayWidth)) - Math.min(...s.butterflies.map((b) => b.bb.displayWidth)),
-        leaves: s.leaves.length,
-        falling: s.leaves.filter((l) => l.landedMs < 0).length,
+        level: s.life.daylifeLevel,
+        butterflies: s.life.butterflies.length,
+        spread: Math.max(...s.life.butterflies.map((b) => b.bb.displayWidth)) - Math.min(...s.life.butterflies.map((b) => b.bb.displayWidth)),
+        leaves: s.life.leaves.length,
+        falling: s.life.leaves.filter((l) => l.landedMs < 0).length,
       };
     });
     await shot('meio-dia', { note: 'Borboletas e folhas ao meio-dia' });
@@ -55,7 +55,7 @@ export default {
     const landed = await page.evaluate(async () => {
       const s = window.__scene;
       for (let i = 0; i < 40; i += 1) {
-        if (s.leaves.some((l) => l.landedMs >= 0)) return true;
+        if (s.life.leaves.some((l) => l.landedMs >= 0)) return true;
         await new Promise((r) => setTimeout(r, 250));
       }
       return false;
@@ -65,9 +65,9 @@ export default {
     await page.evaluate(() => window.gameTime.set(0.0));
     await sleep(7000);
     const night = await page.evaluate(() => ({
-      butterflies: window.__scene.butterflies.length,
-      level: window.__scene.daylifeLevel,
-      fireflies: window.__scene.fireflyLevel,
+      butterflies: window.__scene.life.butterflies.length,
+      level: window.__scene.life.daylifeLevel,
+      fireflies: window.__scene.life.fireflyLevel,
     }));
     assert('De noite as borboletas vao embora', night.butterflies === 0 && night.level < 0.05, JSON.stringify(night));
     assert('E os vaga-lumes assumem', night.fireflies > 0.9, JSON.stringify(night));

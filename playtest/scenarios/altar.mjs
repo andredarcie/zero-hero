@@ -29,11 +29,11 @@ export default {
     // ── 1. O MAPA ─────────────────────────────────────────────────────────────────────────────
     const map = await page.evaluate(() => {
       const s = window.__scene;
-      const f = s.furnaces[0];
+      const f = s.props.furnaces[0];
       return {
-        anvils: s.altars.map((a) => [a.worldX, a.worldY, a.playerBuilt]),
+        anvils: s.props.altars.map((a) => [a.worldX, a.worldY, a.playerBuilt]),
         furnace: f ? [f.worldX, f.worldY] : null,
-        toolboxes: s.toolboxes.length,
+        toolboxes: s.props.toolboxes.length,
       };
     });
     log(`  mapa: ${JSON.stringify(map)}`);
@@ -43,8 +43,8 @@ export default {
     assert('A mesa de ferramentas saiu do mapa', map.toolboxes === 0, String(map.toolboxes));
 
     const anvil = () => page.evaluate(() => {
-      const a = window.__scene.altars[0];
-      return { carrying: a.carrying, forging: Boolean(window.__scene.forging), held: window.__scene.heldItem };
+      const a = window.__scene.props.altars[0];
+      return { carrying: a.carrying, forging: Boolean(window.__scene.forge.forging), held: window.__scene.heldItem };
     });
     const standAt = (x, y, fx, fy) => page.evaluate(([px, py, a, b]) => {
       const s = window.__scene; window.gameTime.set(0.45);
@@ -57,7 +57,7 @@ export default {
     await standAt(ground.x, ground.y + 1, 0, -1);
     await page.evaluate(([x, y]) => window.__scene.itemManager.drop('bloom', x, y), [ground.x, ground.y]);
     await sleep(400);
-    await page.evaluate(() => window.__scene.takeIntoHand('pickaxe'));
+    await page.evaluate(() => window.__scene.hand.takeIntoHand('pickaxe'));
     for (let i = 0; i < 4; i += 1) await press('x', 400);
     const stillBloom = await page.evaluate(([x, y]) => window.__scene.itemManager.kindAt(x, y), [ground.x, ground.y]);
     assert('A esponja no chão não vira barra (só na bigorna)', stillBloom === 'bloom', String(stillBloom));
@@ -65,7 +65,7 @@ export default {
 
     // ── 3. PÔR NA BIGORNA ─────────────────────────────────────────────────────────────────────
     await standAt(ax, ay + 1, 0, -1);
-    await page.evaluate(() => { window.__scene.clearHeldItem(); window.__scene.takeIntoHand('bloom'); });
+    await page.evaluate(() => { window.__scene.hand.clearHeldItem(); window.__scene.hand.takeIntoHand('bloom'); });
     await sleep(500);
     await press('z');
     let st = await anvil();
@@ -89,11 +89,11 @@ export default {
     // ── 7. TIRAR A BARRA; A PEDRA POSTA POR ENGANO ────────────────────────────────────────────
     await standAt(ax, ay + 1, 0, -1);
     await sleep(300);
-    await page.evaluate(() => window.__scene.clearHeldItem());
+    await page.evaluate(() => window.__scene.hand.clearHeldItem());
     await press('z');
     st = await anvil();
     assert('O Z tira a barra pronta para a mão', st.carrying === null && st.held === 'iron', JSON.stringify(st));
-    await page.evaluate(() => { window.__scene.clearHeldItem(); window.__scene.takeIntoHand('stone'); });
+    await page.evaluate(() => { window.__scene.hand.clearHeldItem(); window.__scene.hand.takeIntoHand('stone'); });
     await press('z');
     st = await anvil();
     assert('Uma pedra também se põe na bigorna', st.carrying === 'stone', JSON.stringify(st));
@@ -102,9 +102,9 @@ export default {
     assert('E volta para a mão no Z (a pedra não se malha)', st.carrying === null && st.held === 'stone', JSON.stringify(st));
 
     // ── 8. A BIGORNA NÃO SE RECOLHE ───────────────────────────────────────────────────────────
-    await page.evaluate(() => window.__scene.clearHeldItem());
+    await page.evaluate(() => window.__scene.hand.clearHeldItem());
     await press('x');
-    const still = await page.evaluate(() => window.__scene.altars.length);
+    const still = await page.evaluate(() => window.__scene.props.altars.length);
     assert('A bigorna não se recolhe', still === 1, String(still));
   },
 };
