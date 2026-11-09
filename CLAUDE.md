@@ -343,7 +343,8 @@ arquivos de `public/`, armazenamento em memória, sem som e sem GPU (o 3D desenh
 nulo).
 - **O motor contra o gabarito** (`src/game/engine/__tests__/`, que **não se regera**: teste vermelho
   ali é o motor mudando de comportamento). O gabarito já tem toda curva de easing que o motor conhece:
-  um nome fora dele cairia no Linear sem aviso, e o teste acusa.
+  um nome fora dele cairia no Linear sem aviso, e o teste acusa. Os números comparam com folga de ulps
+  (o `Math.pow` do V8 muda o último bit entre versões do Node): não volte para igualdade exata.
 - **O motor sozinho:** cenas, objetos, texto, entrada, câmera e carregador (`bootEngine`).
 - **O JOGO INTEIRO** (`bootGame`, em arquivo com `// @vitest-environment jsdom`): o mesmo
   `ZeroTheHeroGame`, jogado por teclado e lido pelo `gameDebug`. Exemplos: a abertura, andar, o

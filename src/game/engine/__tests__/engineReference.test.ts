@@ -74,6 +74,43 @@ const engine: EngineAdapter = {
   newColor: (r, g, b, a) => new Color(r, g, b, a),
 };
 
+/**
+ * IGUAL AO GABARITO ATÉ O ARREDONDAMENTO. O último bit de um `Math.pow` é do JavaScript, não do motor: o V8 mudou a
+ * conta entre versões (o Node 22 do CI dá 2^-0,5 = 0,7071067811865475, o Node 24 em que o gabarito foi gravado dá
+ * …476, o arredondamento certo), e a curva Expo saía vermelha no CI sem nada no motor ter mudado. A folga é de 16 ulps
+ * do maior dos dois, com um piso de 1e-12 para as contas que cancelam (um tween que chega perto de zero vindo de 100).
+ * Um estrago de verdade fica muito acima dela: 0,0001 numa curva é ~10^8 vezes a folga, e um `>=` virando `>` no
+ * temporizador muda eventos, que comparam exatos (texto, ordem e contagem nunca têm folga).
+ */
+const near = (got: number, want: number): boolean => Object.is(got, want)
+  || Math.abs(got - want) <= Math.max(1e-12, 16 * Number.EPSILON * Math.max(Math.abs(got), Math.abs(want)));
+
+/** O primeiro lugar em que o registro de hoje difere do gabarito, ou null. */
+const firstDifference = (got: unknown, want: unknown, at = '$'): string | null => {
+  if (typeof want === 'number' && typeof got === 'number') return near(got, want) ? null : `${at}: ${got} ≠ ${want}`;
+  if (Array.isArray(want)) {
+    if (!Array.isArray(got)) return `${at}: ${JSON.stringify(got)} não é lista`;
+    if (got.length !== want.length) return `${at}: ${got.length} itens ≠ ${want.length}`;
+    for (let i = 0; i < want.length; i++) {
+      const d = firstDifference(got[i], want[i], `${at}[${i}]`);
+      if (d) return d;
+    }
+    return null;
+  }
+  if (want !== null && typeof want === 'object') {
+    if (got === null || typeof got !== 'object' || Array.isArray(got)) return `${at}: ${JSON.stringify(got)} não é objeto`;
+    const wantKeys = Object.keys(want).sort();
+    const gotKeys = Object.keys(got).sort();
+    if (wantKeys.join() !== gotKeys.join()) return `${at}: chaves ${gotKeys.join(',')} ≠ ${wantKeys.join(',')}`;
+    for (const k of wantKeys) {
+      const d = firstDifference((got as Record<string, unknown>)[k], (want as Record<string, unknown>)[k], `${at}.${k}`);
+      if (d) return d;
+    }
+    return null;
+  }
+  return Object.is(got, want) ? null : `${at}: ${JSON.stringify(got)} ≠ ${JSON.stringify(want)}`;
+};
+
 describe('motor 2D: o mesmo comportamento do gabarito', () => {
   it('o gabarito tem um registro para cada cenário', () => {
     expect(Object.keys(FIXTURES).sort()).toEqual(Object.keys(SCENARIOS).sort());
@@ -83,7 +120,7 @@ describe('motor 2D: o mesmo comportamento do gabarito', () => {
     it(name, () => {
       // O gabarito passou por JSON (NaN/Infinity viram null, -0 vira 0): o registro de hoje passa pelo mesmo caminho.
       const log = JSON.parse(JSON.stringify(run(engine))) as unknown[];
-      expect(log).toEqual(FIXTURES[name]);
+      expect(firstDifference(log, FIXTURES[name])).toBeNull();
     });
   }
 });
