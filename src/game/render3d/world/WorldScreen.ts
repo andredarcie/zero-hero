@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { Pass } from 'three/addons/postprocessing/Pass.js';
 import { FusedBloomPass } from '../FusedBloomPass';
 import { getDofIntensity } from '@/game/runtime/graphicsSettings';
 import { platform } from '@/game/platform/platform';
@@ -30,8 +31,23 @@ const PORTRAIT_FOV_CAP = 74;
  */
 const MAX_DEVICE_PIXEL_RATIO = 2;
 
+/**
+ * O passo do AR dentro da cadeia: depois da cena (ele lê a profundidade DESTE quadro, que só existe quando a cena
+ * acabou de ser desenhada) e antes do acabamento, que o soma. Não escreve no quadro: `needsSwap` fica falso.
+ */
+class AirPass extends Pass {
+  public constructor(private readonly draw: (depth: THREE.Texture | null) => void) {
+    super();
+    this.needsSwap = false;
+  }
+
+  public override render(_renderer: THREE.WebGLRenderer, _write: THREE.WebGLRenderTarget, read: THREE.WebGLRenderTarget): void {
+    this.draw(read.depthTexture);
+  }
+}
+
 /** O que WorldScreen usa de World3D. */
-export type WorldScreenHost = Pick<World3D, 'camera' | 'canvas' | 'mirror' | 'params' | 'renderer' | 'scene'>;
+export type WorldScreenHost = Pick<World3D, 'air' | 'camera' | 'canvas' | 'mirror' | 'params' | 'renderer' | 'scene'>;
 
 export class WorldScreen {
   private bloomPass!: FusedBloomPass;
@@ -129,9 +145,25 @@ export class WorldScreen {
    */
   public initPostProcessing(): void {
     const { w, h } = this.renderSize();
-    this.composer = new EffectComposer(this.host.renderer);
+    // O alvo da cena guarda a PROFUNDIDADE numa textura (e não num renderbuffer, que ninguém pode ler): é por ela que
+    // o pós volta de um pixel ao ponto do mundo — a sombra das nuvens e a luz no ar dependem disso. O mesmo
+    // meio-float que o compositor criaria sozinho.
+    const sceneTarget = new THREE.WebGLRenderTarget(w, h, {
+      type: THREE.HalfFloatType,
+      depthTexture: new THREE.DepthTexture(w, h),
+    });
+    this.composer = new EffectComposer(this.host.renderer, sceneTarget);
     this.scenePass = new RenderPass(this.host.scene, this.host.camera);
     this.composer.addPass(this.scenePass);
+
+    // O ar aceso (AirLight): lê a profundidade que a cena acabou de escrever e entrega ao acabamento.
+    this.composer.addPass(new AirPass((depth) => {
+      this.host.air.render(depth);
+      const u = this.finishPass.uniforms;
+      u.tDepth.value = depth;
+      u.uAirOn.value = this.host.air.live ? 1 : 0;
+      (u.uInvViewProj.value as THREE.Matrix4).multiplyMatrices(this.host.camera.matrixWorld, this.host.camera.projectionMatrixInverse);
+    }));
 
     this.bloomPass = new FusedBloomPass(
       new THREE.Vector2(w, h),
@@ -144,6 +176,8 @@ export class WorldScreen {
     this.finishPass = new ShaderPass(makeFinishShader(w, h));
     // O bloom nao se soma sozinho ao quadro: o acabamento soma (ver FusedBloomPass).
     this.finishPass.uniforms.tBloom.value = this.bloomPass.texture;
+    this.host.air.setSize(w, h);
+    this.finishPass.uniforms.tAir.value = this.host.air.texture;
     this.composer.addPass(this.finishPass);
     this.syncFinishUniforms();
 
@@ -167,10 +201,12 @@ export class WorldScreen {
     u.uNear.value = this.host.params.dofNear;
     u.uVignette.value = this.host.params.vignette;
     u.uLift.value = Math.max(0.05, this.host.params.lift);
+    u.uShoulder.value = Math.min(0.98, Math.max(0, this.host.params.shoulder));
     u.uGrain.value = this.host.params.grain;
     u.uHaze.value = Math.max(0, this.host.params.haze);
     u.uGrade.value = this.host.params.grade;
     u.uSaturation.value = this.host.params.saturation;
+    u.uShadeSat.value = Math.min(1, Math.max(0, this.host.params.shadeSat));
     u.uContrast.value = this.host.params.contrast;
   }
 
@@ -202,6 +238,7 @@ export class WorldScreen {
       this.composer.setSize(w, h);
       this.host.mirror.resize(w, h);
       this.bloomPass.setSize(w, h);
+      this.host.air.setSize(w, h);
       (this.finishPass.uniforms.uResolution.value as THREE.Vector2).set(w, h);
     }
   }

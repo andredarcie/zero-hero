@@ -35,7 +35,7 @@ const REPAINT_MS = 250;
  * mostraria um quadro maior do que o quadro.
  */
 const RENDER3D_CHILDREN = new Set([
-  'compose', 'castShadows', 'fires', 'particles', 'torch', 'rustle', 'biome', 'groundLight',
+  'compose', 'castShadows', 'fires', 'particles', 'torch', 'decor', 'biome', 'groundLight',
 ]);
 const parentOf = (section: string): string | null => {
   if (RENDER3D_CHILDREN.has(section)) return 'render3d';

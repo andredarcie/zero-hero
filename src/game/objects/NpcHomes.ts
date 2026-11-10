@@ -33,6 +33,15 @@ const HOMES: Readonly<Partial<Record<HomeKind, { x: number; y: number }>>> = {
   radiationSuit: { x: 5, y: 37 },
 };
 
+/**
+ * A LUZ DA JANELA NO TERREIRO: de noite a janela acendia e o chão diante dela continuava no escuro, como se o vidro
+ * fosse um adesivo. Agora ela derrama uma poça morna pequena diante da porta (um terço da de uma fogueira, e mais
+ * fraca): é o que faz a casa ler como um lugar com gente dentro. Só o desenho no chão — ver WorldLights.addStillGlow.
+ */
+const WINDOW_POOL_FORWARD = 1.1;
+const WINDOW_POOL_TILES = 5.2;
+const WINDOW_POOL_ALPHA = 0.36;
+
 /** O terreiro fica centrado um pouco à frente da casa: mais chão diante da porta do que atrás. */
 const YARD_FORWARD = 0.5;
 const YARD_Y = 0.012;
@@ -63,6 +72,7 @@ export const clearHomeYards = (): void => {
 
 export class NpcHomes {
   private readonly glows = new Map<HomeKind, Billboard3D>();
+  private readonly pools = new Map<HomeKind, { setVisible(on: boolean): void; destroy(): void }>();
   private readonly bodies: Billboard3D[] = [];
   private shown = '';
 
@@ -85,13 +95,16 @@ export class NpcHomes {
         .setDisplaySize(HOME_SIZE, HOME_SIZE)
         .setPosition(x, y + 0.32)
         .setVisible(false));
+      this.pools.set(kind, world3d().lights.addStillGlow(x, y + WINDOW_POOL_FORWARD, WINDOW_POOL_TILES, WINDOW_POOL_ALPHA));
     }
   }
 
   public destroy(): void {
     for (const bb of [...this.bodies, ...this.glows.values()]) bb.destroy();
+    for (const pool of this.pools.values()) pool.destroy();
     this.bodies.length = 0;
     this.glows.clear();
+    this.pools.clear();
   }
 
   public isSolidAt(x: number, y: number): boolean {
@@ -107,5 +120,6 @@ export class NpcHomes {
     if (key === this.shown) return;
     this.shown = key;
     for (const [kind, glow] of this.glows) glow.setVisible(night && !gone.has(kind));
+    for (const [kind, pool] of this.pools) pool.setVisible(night && !gone.has(kind));
   }
 }

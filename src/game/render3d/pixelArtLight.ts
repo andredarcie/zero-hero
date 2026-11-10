@@ -1,6 +1,9 @@
 import * as THREE from 'three';
+import { CLOUD_FIELD_GLSL, CLOUD_HEIGHT_TILES, skyUniforms } from './atmosphere';
 import { biomeRampColorGlsl, biomeRampUniform, type BiomeRampKind } from './biomeRamp';
-import { OUTLINE_FRAGMENT_GLSL, OUTLINE_VERTEX_GLSL, outlineUniforms } from './spriteOutline';
+import { shadowTint } from './CastShadow3D';
+import { OUTLINE_FRAGMENT_GLSL, OUTLINE_VERTEX_GLSL, RIM_FRAGMENT_GLSL, outlineUniforms } from './spriteOutline';
+import { STAND_ACTOR_SLOTS, STAND_FRAGMENT_PARS_GLSL, STAND_FRAGMENT_SHADE_GLSL, STAND_VERTEX_GLSL, standActorsUniform, standUniform } from './decorSway';
 
 // ── The world's light treatment ───────────────────────────────────────────────
 //
@@ -70,7 +73,6 @@ export const windUniform: THREE.IUniform = { value: 1 };
  */
 const WIND_WAVE_GLSL = `
   uniform float uWind;
-  attribute vec3 aWind; // x = quanto esta planta obedece ao vento, yz = o CENTRO do tile
   float zhWindWave(vec2 centre) {
     float phase = uFlowTime * 1.15 + centre.x * 0.55 + centre.y * 0.38;
     float swell = 0.55 + 0.45 * sin(uFlowTime * 0.21 + centre.x * 0.05 + centre.y * 0.04);
@@ -82,10 +84,8 @@ const WIND_WAVE_GLSL = `
 // machado, tan(7°) = 0,123): a brisa é um terço disso, porque ela nunca para — o que num golpe é
 // impacto, num loop infinito vira enjoo.
 const WIND_LEAN = '0.042';
-// Quanto o mato deitado GIRA no plano do chão, em radianos (~2,4°). Ele não pode se inclinar (é um
-// quad deitado), então ele faz o gesto que o jogo já usa quando o herói pisa nele: rodar em torno
-// do próprio centro (ver updateRustles). Menor que o pisão de propósito: um é resposta, outro é ar.
-const WIND_TWIST = '0.042';
+// (A decoração deitada GIRAVA no plano do chão, a opção 'stir'. Ela saiu: toda a decoração fica em pé e
+// a planta se curva de verdade — decorSway.ts.)
 
 /**
  * A ÁGUA QUE ANDA — o efeito de superfície do mar (o `worldFx: 'seaFlow'`, ver PatchOpts).
@@ -182,6 +182,62 @@ const WATER_REFLECT_GLSL = /* glsl */ `
 `;
 
 /**
+ * O CÉU NA ÁGUA — o lago e o rio devolvem o céu que a câmera nunca mostra (`hd3d.waterSky`; 0 = a água de antes).
+ *
+ * A água deste jogo era uma arte azul com faíscas: bonita, e opaca. Água parada é espelho, e o que ela mais reflete é
+ * céu. Então cada texel de ARTE da superfície (16 por tile, na grade do mundo — o reflexo sai em pixel de arte, nunca
+ * em degradê liso) lança o raio do olho refletido para cima e pergunta o que há lá:
+ *
+ *   · as NUVENS, do mesmo campo que faz sombra no chão (atmosphere.ts), num teto a CLOUD_HEIGHT_TILES de altura — é a
+ *     altura que dá a paralaxe: andar pela margem faz o céu deslizar dentro do lago, mais depressa que o chão;
+ *   · as ESTRELAS e a LUA, de noite — no infinito, então elas acompanham quem anda, como reflexo de verdade;
+ *   · a cor do céu da hora (azul, fogo no entardecer, anil de noite), que vem do skyPreset.
+ *
+ * O espelho treme por linha com a mesma marola que quebra o reflexo dos corpos, e reflete menos na beira rasa (onde
+ * se vê o fundo) e perto da câmera (olhar mais a pique: menos Fresnel). Entra ANTES do reflexo dos personagens e das
+ * faíscas: o herói refletido tapa o céu, e a faísca brilha por cima dos dois.
+ */
+export const waterSkyUniform: THREE.IUniform = { value: 0.5 };
+
+const WATER_SKY_GLSL = /* glsl */ `
+  if (uWaterSky > 0.0) {
+    vec2 zhWt = (floor(vWorldFxPos.xz * 16.0) + 0.5) / 16.0;
+    vec3 zhEye = normalize(vec3(zhWt.x, vWorldFxPos.y, zhWt.y) - cameraPosition);
+    float zhSkyRow = floor(vWorldFxPos.z * 16.0);
+    float zhTilt = sin(zhSkyRow * 0.73 + uFlowTime * 2.3) * 0.65 + sin(zhSkyRow * 1.91 - uFlowTime * 3.7) * 0.35;
+    vec3 zhRay = reflect(zhEye, normalize(vec3(zhTilt * 0.03, 1.0, 0.0)));
+    zhRay.y = max(zhRay.y, 0.2);
+    vec2 zhDome = zhRay.xz / zhRay.y;
+    float zhCl = zhCloud(zhWt + zhDome * ${CLOUD_HEIGHT_TILES.toFixed(1)});
+    // A NUVEM REFLETIDA É PINTADA, NÃO ESFUMADA: o campo de nuvens é macio (ele também faz a sombra larga no chão), e
+    // devolvido direto na água saía uma mancha cinza em degradê, o único borrão do quadro. Aqui ela cai em quatro
+    // tons chapados, com a beira serrilhada por texel como a da espuma: nuvem de pixel art.
+    float zhClRag = fract(sin(dot(floor(vWorldFxPos.xz * 16.0), vec2(23.7, 91.3))) * 24634.6345);
+    zhCl = floor(clamp(zhCl + (zhClRag - 0.5) * 0.14, 0.0, 1.0) * 3.0 + 0.5) / 3.0;
+    vec3 zhSkyCol = mix(uSkyColor, uCloudColor, zhCl);
+    if (uStars > 0.0) {
+      // As estrelas moram numa grade do céu; só ~6% das células têm uma, e ela ocupa o miolo da célula (um ou dois
+      // texels de água). Cada uma pisca no seu ritmo.
+      vec2 zhSg = zhDome * 34.0;
+      vec2 zhSc = floor(zhSg);
+      float zhSr = fract(sin(dot(zhSc, vec2(127.1, 311.7))) * 43758.5453);
+      vec2 zhSi = abs(fract(zhSg) - 0.5);
+      float zhStar = step(0.94, zhSr) * step(max(zhSi.x, zhSi.y), 0.3);
+      float zhTw = 0.55 + 0.45 * sin(uFlowTime * (1.3 + zhSr * 2.6) + zhSr * 41.0);
+      zhSkyCol += vec3(0.8, 0.88, 1.0) * zhStar * zhTw * uStars * (1.0 - zhCl) * 2.2;
+      // A lua: um disco e o clarão em volta. Fica um pouco à esquerda e acima do centro do céu refletido.
+      float zhMd = distance(normalize(zhRay), vec3(-0.2, 0.795, -0.572));
+      zhSkyCol += vec3(0.9, 0.94, 1.0) * uStars * (step(zhMd, 0.034) * 2.0 + 0.3 * smoothstep(0.34, 0.0, zhMd))
+        * (1.0 - 0.75 * zhCl);
+    }
+    float zhFres = 0.5 + 0.5 * smoothstep(0.82, 0.58, -zhEye.y);
+    // Só o último fio junto da margem perde o céu: um rio de um tile é "margem" de ponta a ponta, e sem isto não refletia nada.
+    float zhDeep = 1.0 - 0.6 * smoothstep(0.6, 0.98, vShore);
+    gl_FragColor.rgb = mix(gl_FragColor.rgb, zhSkyCol, clamp(uWaterSky * zhFres * zhDeep, 0.0, 1.0));
+  }
+`;
+
+/**
  * As faíscas do céu sobre a ondulação — o mesmo brilho para o rio e para o mar.
  *
  * Cada faísca é um TRAÇO de 2×1 pixels de arte (16 linhas por tile, no mundo), e só ~4% deles
@@ -193,13 +249,24 @@ const WATER_GLINT_GLSL = /* glsl */ `
   {
     vec2 wp = vWorldFxPos.xz;
     vec2 cell = floor(vec2(wp.x * 8.0, wp.y * 16.0)); // wp = mundo.xz: o .y dele é o z
-    float rnd = fract(sin(dot(cell, vec2(41.3, 289.1))) * 43758.5453);
-    float live = step(0.96, fract(rnd * 7.31));
+    // O sorteio por célula (hash12 de Hoskins). O antigo era sin(dot(cell, (41,3; 289,1))): 289,1 é quase 7 × 41,3,
+    // então ele só dependia de x + 7z e as faíscas caíam em diagonais retas — invisível com 4% delas acesas, uma
+    // grade de bolinhas assim que o rastro do sol acendeu mais.
+    vec3 zhH3 = fract(vec3(cell.xyx) * 0.1031);
+    zhH3 += dot(zhH3, zhH3.yzx + 33.33);
+    float rnd = fract((zhH3.x + zhH3.y) * zhH3.z);
+    // O RASTRO DO SOL: olhando contra a luz (o raio do olho refletido na água aponta para o sol ou a lua) a água
+    // cintila MAIS — mais traços vivos, e mais acesos. De costas para a luz ela volta às faíscas esparsas de sempre.
+    vec3 zhGv = normalize(vec3(wp.x, vWorldFxPos.y, wp.y) - cameraPosition);
+    float zhToSun = max(dot(reflect(zhGv, vec3(0.0, 1.0, 0.0)), uSunDir), 0.0);
+    float zhPath = zhToSun * zhToSun * zhToSun;
+    // (Poucos traços a mais, e não muitos: eles moram numa grade, e um terço dela aceso vira uma tela de bolinhas.)
+    float live = step(0.96 - 0.05 * zhPath, fract(rnd * 7.31));
     float ph = fract(rnd + uFlowTime * 0.20);
-    float flash = smoothstep(0.93, 1.0, sin(ph * 6.2831853) * 0.5 + 0.5);
+    float flash = smoothstep(0.93 - 0.08 * zhPath, 1.0, sin(ph * 6.2831853) * 0.5 + 0.5);
     // Adds BEFORE tone mapping: past ~0.6 a glint pixel clears the bloom threshold and the
     // water reads as neon sparks. A thin dash can afford more than the old block did.
-    gl_FragColor.rgb += uGlint * flash * live * 0.55;
+    gl_FragColor.rgb += uGlint * flash * live * (0.55 + 0.45 * zhPath);
   }
 `;
 
@@ -244,6 +311,15 @@ const SEA_SHALLOW_GLSL = /* glsl */ `
       step(0.72 + edge * 0.7, swell) * 0.7 * min(life, 1.0));
     diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.019, 0.082, 0.117), shallow * 0.85 * min(life, 1.0));
     diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.003, 0.254, 0.275), crest * min(life, 1.0));
+    // A ESPUMA: um fio claro na FRENTE da onda (a beira de fora da faixa rasa), que avança e recua com ela. É uma
+    // faixa estreita de vShore e não "tudo além do limiar": numa enseada ou num rio de um tile a margem vale quase 1
+    // de ponta a ponta, e a espuma enchia a curva inteira de pontilhado. Quebrada por texel (quatro em cada dez),
+    // com o desenho fixo no mundo: quem a move é a onda, nunca um sorteio por quadro — espuma que pisca lê como
+    // ruído. O tom fica abaixo do limiar do bloom mesmo ao sol do meio-dia.
+    float foamAt = 0.585 - 0.10 * wave + edge;
+    float foam = step(foamAt, vShore) * (1.0 - step(foamAt + 0.065, vShore))
+      * step(0.6, zhSeaHash(floor(vWorldFxPos.xz * 16.0) + 7.0));
+    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.38, 0.5, 0.52), foam * min(life, 1.0));
     diffuseColor.rgb *= 1.0 - (0.03 - 0.03 * wave) * life;
   }
 `;
@@ -555,6 +631,55 @@ const skipDarkPointLights = (chunk: string, maskPointLights: boolean): string =>
   return head + guarded + tail;
 };
 
+/** A sombra de sol/lua caindo sobre um sprite em pé (ver o remendo de `footDistance`). */
+const SPRITE_SHADE_GLSL = /* glsl */ `
+  if (uShadeOn > 0.5) {
+    vec2 zhSq = vZhFootXZ + uShadeProbe;
+    vec2 zhSuv = vec2((zhSq.x - uShadeRect.x) / uShadeRect.z, (uShadeRect.y - zhSq.y) / uShadeRect.w);
+    if (zhSuv.x > 0.0 && zhSuv.x < 1.0 && zhSuv.y > 0.0 && zhSuv.y < 1.0) {
+      float zhSh = clamp((1.0 - textureLod(uShadeMap, zhSuv, 3.0).r) * 1.2, 0.0, 1.0);
+      outgoingLight *= mix(vec3(1.0), uShadeTint, zhSh);
+    }
+  }
+`;
+
+/**
+ * A LUZ DAS ÁRVORES — a mata do mapa deixa de ser recorte chapado (o `wind: 'lean'`, nas plantas: `aWind.x` = 1).
+ *
+ * Cada árvore do tileset era acesa por igual do pé à ponta, e igual ao meio-dia e ao pôr do sol. Agora ela pega a
+ * mesma luz de coisa em pé que a decoração (decorSway.ts) e que os personagens (spriteOutline.ts), na grade da arte:
+ *   · o pé mais escuro e a copa mais clara, em quatro faixas de fileira;
+ *   · o texel de BORDA do lado do sol (o vizinho daquele lado vazio) ganha o fio de luz, na cor do sol ou da lua; a
+ *     ponta, quando a luz vem de trás ou do alto;
+ *   · a borda do lado oposto escurece — é o lado que o sol não vê.
+ * O lado muda com a hora: a mesma árvore tem a direita acesa ao meio-dia, a ponta ao amanhecer, a esquerda à noite.
+ * Pedra, muro e lápide (`aWind.x` = 0) ficam como estavam.
+ */
+const TREE_LIGHT_PARS_GLSL = /* glsl */ `
+  float zhTreeAlphaAt(vec2 texel, vec4 bounds) {
+    vec2 uv = texel / uMapSize;
+    if (uv.x < bounds.x || uv.x > bounds.z || uv.y < bounds.y || uv.y > bounds.w) return 0.0;
+    return texture2D(map, uv).a;
+  }
+`;
+
+const TREE_LIGHT_GLSL = /* glsl */ `
+  if (vZhPlant > 0.5 && diffuseColor.a >= 0.5) {
+    vec2 zhTt = floor(vMapUv * uMapSize) + 0.5;
+    float zhTrow = (zhTt.y - floor(vUvBounds.y * uMapSize.y)) / 16.0;
+    float zhTside = uRimSide.x >= 0.0 ? 1.0 : -1.0;
+    float zhTlit = 1.0 - step(0.5, zhTreeAlphaAt(zhTt + vec2(zhTside, 0.0), vUvBounds));
+    float zhTback = 1.0 - step(0.5, zhTreeAlphaAt(zhTt - vec2(zhTside, 0.0), vUvBounds));
+    float zhTtop = 1.0 - step(0.5, zhTreeAlphaAt(zhTt + vec2(0.0, 1.0), vUvBounds));
+    float zhTrim = max(zhTlit * abs(uRimSide.x), zhTtop * uRimSide.y);
+    // (0,78 a 1,08 e 0,34 no lado de trás desde o estudo HD-2D: a árvore tem lado de sol e lado de sombra, não só um
+    // fio de luz na borda. Continua em faixas de fileira e em texel de borda — nada de degradê.)
+    diffuseColor.rgb *= mix(0.78, 1.08, clamp(floor(zhTrow * 4.0) / 3.0, 0.0, 1.0))
+      * (1.0 - 0.34 * zhTback * abs(uRimSide.x) * (1.0 - zhTlit));
+    totalEmissiveRadiance += uRimSun * zhTrim * (0.25 + 0.75 * diffuseColor.rgb) * 0.8;
+  }
+`;
+
 /** Probe for materials that sample the mask at their own position (the ground). */
 const zeroProbeUniform: THREE.IUniform<THREE.Vector2> = { value: new THREE.Vector2(0, 0) };
 
@@ -606,14 +731,11 @@ type PatchOpts = {
    */
   mirrorSurface?: boolean;
   /**
-   * O VENTO nas malhas de vegetação (ver WIND_WAVE_GLSL). Duas formas, porque são duas geometrias:
-   *   · 'lean' — o tile EM PÉ (a mata): só o topo sai do prumo, o pé fica plantado.
-   *   · 'stir' — o tile DEITADO (capim, folhagem, flor): ele não tem altura para inclinar, então
-   *              gira em torno do próprio centro — o mesmo gesto do pisão (updateRustles).
-   * Precisa do atributo por vértice `aWind` (máscara + centro do tile): é ele que deixa a pedra e
-   * o túmulo parados na MESMA malha em que a árvore balança.
+   * O VENTO na mata (ver WIND_WAVE_GLSL): 'lean' — o tile EM PÉ, só o topo sai do prumo, o pé fica plantado.
+   * Precisa do atributo por vértice `aWind` (máscara + centro do tile): é ele que deixa o túmulo parado na MESMA
+   * malha em que a árvore balança. (A decoração balança pela opção `standing`.)
    */
-  wind?: 'lean' | 'stir';
+  wind?: 'lean';
   /**
    * Anti-alias the art's texel grid (see TEXEL_AA_GLSL). With `bounds` the sampled frame comes from
    * a uniform — one frame per material, swapped as a whole (a billboard's walk cycle). Without it,
@@ -635,6 +757,13 @@ type PatchOpts = {
   biome?: BiomeRampKind;
   /** O contorno de 1 texel dos personagens (ver spriteOutline.ts). Só billboard com frame em `repeat/offset`. */
   outline?: boolean;
+  /**
+   * A DECORAÇÃO EM PÉ (standingDecor.ts / decorSway.ts): fica em pé, pega a luz de coisa em pé, e a planta se curva
+   * na brisa do vale e se abre em volta dos corpos de `standActorsUniform`. Precisa dos atributos por vértice
+   * `aStand` (centro do tile x, z, a altura do vértice, o pisão) e `aFlex`, e do `texelAa` por quad (a curva mora na
+   * leitura da arte).
+   */
+  standing?: boolean;
 };
 
 /**
@@ -658,7 +787,7 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
   // Three caches compiled programs by this key; without it, materials patched
   // DIFFERENTLY would silently share whichever variant compiled first.
   mat.customProgramCacheKey = () =>
-    `pixelArt|q${opts.quantize ? 1 : 0}n${opts.normalUp ? 1 : 0}f${opts.footDistance ? 1 : 0}a${(opts.footAnchorY ?? 0).toFixed(2)}t${opts.fill ? 1 : 0}w${opts.worldFx ?? '0'}g${opts.quantize && !opts.footDistance ? 1 : 0}x${opts.texelAa ? (opts.texelAa.bounds ? 'u' : 'a') : '0'}m${opts.quantize ? (opts.maskProbe ? 'p' : 'g') : '0'}v${opts.wind ?? '0'}r${opts.mirrorSurface ? 1 : 0}b${opts.biome ?? '0'}o${opts.outline ? 1 : 0}`;
+    `pixelArt|q${opts.quantize ? 1 : 0}n${opts.normalUp ? 1 : 0}f${opts.footDistance ? 1 : 0}a${(opts.footAnchorY ?? 0).toFixed(2)}t${opts.fill ? 1 : 0}w${opts.worldFx ?? '0'}g${opts.quantize && !opts.footDistance ? 1 : 0}x${opts.texelAa ? (opts.texelAa.bounds ? 'u' : 'a') : '0'}m${opts.quantize ? (opts.maskProbe ? 'p' : 'g') : '0'}v${opts.wind ?? '0'}r${opts.mirrorSurface ? 1 : 0}b${opts.biome ?? '0'}o${opts.outline ? 1 : 0}s${opts.standing ? 1 : 0}`;
 
   const bornAt = import.meta.env.DEV ? new Error().stack ?? '' : '';
 
@@ -675,32 +804,56 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
     // `#include <begin_vertex>` e caem ENTRE ele e este bloco — o que deixa `vLightGridPos` (a
     // posição que a luz baixa-resolução consulta) sendo lida da planta EM REPOUSO. É o que se
     // quer: uma árvore balançando não pode piscar de célula de luz enquanto balança.
-    if (opts.wind) {
+    if (opts.wind || opts.standing) {
+      // A MESMA brisa para a mata e a decoração em pé: uma onda só atravessando o vale.
       shader.uniforms.uFlowTime = flowTimeUniform;
       shader.uniforms.uWind = windUniform;
       shader.vertexShader = shader.vertexShader.replace(
         'void main() {',
         `uniform float uFlowTime;\n${WIND_WAVE_GLSL}\nvoid main() {`,
       );
+    }
+    if (opts.standing) {
+      // A DECORAÇÃO EM PÉ (standingDecor.ts / decorSway.ts): fica em pé, e a planta se curva e abre em volta de quem passa.
+      shader.uniforms.uStandActors = standActorsUniform;
+      shader.uniforms.uStand = standUniform;
+      shader.vertexShader = shader.vertexShader
+        .replace(
+          'void main() {',
+          `attribute vec4 aStand;\nattribute float aFlex;\nuniform vec4 uStandActors[${STAND_ACTOR_SLOTS}];\nuniform float uStand;\nvarying float vZhBend;\nvoid main() {`,
+        )
+        .replace('#include <begin_vertex>', `#include <begin_vertex>\n${STAND_VERTEX_GLSL}`);
+      // A curva mora no AA de texel (o `zhStandBend` abaixo); aqui, o que a curva tirou do quadro e a luz de coisa
+      // em pé, depois da arte e da rampa do bioma e antes do corte de alfa.
+      shader.fragmentShader = shader.fragmentShader
+        .replace('void main() {', 'uniform float uStand;\nvarying float vZhBend;\nvoid main() {')
+        .replace('#include <alphamap_fragment>', `${STAND_FRAGMENT_SHADE_GLSL}\n#include <alphamap_fragment>`);
+    }
+    if (opts.wind === 'lean') {
+      shader.vertexShader = shader.vertexShader.replace(
+        'void main() {',
+        // x = quanto esta planta obedece ao vento, yz = o CENTRO do tile
+        'attribute vec3 aWind;\nvarying float vZhPlant;\nvoid main() {',
+      );
+      // A luz das árvores (TREE_LIGHT_GLSL): só a planta a pega, e quem diz o que é planta é a mesma máscara do vento.
+      // Ela lê a arte pela janela de cada quad (`vUvBounds`), então só existe nas malhas fundidas com AA de texel.
+      shader.fragmentShader = shader.fragmentShader.replace('void main() {', 'varying float vZhPlant;\nvoid main() {');
+      if (opts.texelAa && !opts.texelAa.bounds) {
+        shader.uniforms.uRimSun = skyUniforms.uRimSun;
+        shader.uniforms.uRimSide = skyUniforms.uRimSide;
+        shader.fragmentShader = shader.fragmentShader
+          .replace('void main() {', 'uniform vec3 uRimSun;\nuniform vec2 uRimSide;\nvoid main() {')
+          .replace('#include <alphamap_fragment>', `${TREE_LIGHT_GLSL}\n#include <alphamap_fragment>`);
+      }
+      // O PÉ FICA PLANTADO: o peso é a altura ao quadrado, então o tronco quase não anda e a copa faz todo o
+      // movimento. Linear, a árvore inteira deslizava de lado.
       shader.vertexShader = shader.vertexShader.replace(
         '#include <begin_vertex>',
-        opts.wind === 'lean'
-          // O PÉ FICA PLANTADO: o peso é a altura ao quadrado, então o tronco quase não anda e a
-          // copa faz todo o movimento. Linear, a árvore inteira deslizava de lado.
-          ? `#include <begin_vertex>
-             float zhLeanW = clamp(transformed.y, 0.0, 1.0);
-             transformed.x += zhWindWave(aWind.yz) * aWind.x * uWind * ${WIND_LEAN}
-                            * zhLeanW * zhLeanW;`
-          // GIRA em torno do centro do tile. O local é medido do CENTRO ABSOLUTO que o atributo
-          // carrega (e não de um offset fixo), e é isso que faz o vento COMPOR com o pisão: o
-          // rustle já rodou os cantos no buffer, e o vento roda o que encontrar lá.
-          : `#include <begin_vertex>
-             vec2 zhLocal = transformed.xz - aWind.yz;
-             float zhTwist = zhWindWave(aWind.yz) * aWind.x * uWind * ${WIND_TWIST};
-             float zhC = cos(zhTwist);
-             float zhS = sin(zhTwist);
-             transformed.x = aWind.y + zhLocal.x * zhC - zhLocal.y * zhS;
-             transformed.z = aWind.z + zhLocal.x * zhS + zhLocal.y * zhC;`,
+        `#include <begin_vertex>
+         vZhPlant = aWind.x;
+         float zhLeanW = clamp(transformed.y, 0.0, 1.0);
+         transformed.x += zhWindWave(aWind.yz) * aWind.x * uWind * ${WIND_LEAN}
+                        * zhLeanW * zhLeanW;`,
       );
     }
 
@@ -732,8 +885,9 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
         // quads and the merged sea: two waters that sparkled to different rhythms two
         // tiles apart would announce that they are two systems.
         shader.uniforms.uGlint = waterGlintUniform;
+        shader.uniforms.uSunDir = skyUniforms.uSunDir;
         shader.fragmentShader = shader.fragmentShader
-          .replace('void main() {', 'uniform vec3 uGlint;\nvoid main() {')
+          .replace('void main() {', 'uniform vec3 uGlint;\nuniform vec3 uSunDir;\nvoid main() {')
           .replace('#include <opaque_fragment>', `#include <opaque_fragment>\n${WATER_GLINT_GLSL}`);
       }
       if (opts.worldFx === 'seaFlow') {
@@ -770,6 +924,28 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
           )
           .replace('#include <opaque_fragment>', `#include <opaque_fragment>\n${WATER_REFLECT_GLSL}`);
       }
+      if (opts.worldFx === 'seaFlow') {
+        // O céu na água (WATER_SKY_GLSL): pendurado por último no mesmo token, então cai PRIMEIRO no shader — o
+        // reflexo dos corpos tapa o céu e a faísca brilha por cima dos dois.
+        shader.uniforms.uWaterSky = waterSkyUniform;
+        shader.uniforms.uSkyNoise = skyUniforms.uSkyNoise;
+        shader.uniforms.uCloudDrift = skyUniforms.uCloudDrift;
+        shader.uniforms.uCloudCover = skyUniforms.uCloudCover;
+        shader.uniforms.uSkyColor = skyUniforms.uSkyColor;
+        shader.uniforms.uCloudColor = skyUniforms.uCloudColor;
+        shader.uniforms.uStars = skyUniforms.uStars;
+        shader.fragmentShader = shader.fragmentShader
+          .replace(
+            'void main() {',
+            `uniform float uWaterSky;
+             uniform vec3 uSkyColor;
+             uniform vec3 uCloudColor;
+             uniform float uStars;
+             ${CLOUD_FIELD_GLSL}
+             void main() {`,
+          )
+          .replace('#include <opaque_fragment>', `#include <opaque_fragment>\n${WATER_SKY_GLSL}`);
+      }
     }
 
     if (opts.footDistance) {
@@ -779,6 +955,34 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
         'vViewPosition = - mvPosition.xyz;',
         `vViewPosition = - (modelViewMatrix * vec4(0.0, ${anchorY}, 0.0, 1.0)).xyz;`,
       );
+      // ── A SOMBRA QUE O CORPO RECEBE ──────────────────────────────────────────
+      // A sombra de uma árvore era um decalque no CHÃO: o herói atravessava por cima dela aceso, como um adesivo
+      // colado na tela. Agora quem pisa numa sombra escurece com ela — a mesma conta do decalque (cor × alfa), lida na
+      // máscara das silhuetas vistas de cima (AirLight) no PÉ do sprite, um passo em direção ao sol para ele não ficar
+      // na própria sombra, que começa exatamente ali. Uma leitura larga (nível 3): o corpo entra na sombra aos poucos.
+      shader.uniforms.uShadeMap = skyUniforms.uShadeMap;
+      shader.uniforms.uShadeRect = skyUniforms.uShadeRect;
+      shader.uniforms.uShadeProbe = skyUniforms.uShadeProbe;
+      shader.uniforms.uShadeOn = skyUniforms.uShadeOn;
+      shader.uniforms.uShadeTint = { value: shadowTint };
+      shader.vertexShader = shader.vertexShader
+        .replace('void main() {', 'varying vec2 vZhFootXZ;\nvoid main() {')
+        .replace(
+          '#include <begin_vertex>',
+          `#include <begin_vertex>\n vZhFootXZ = (modelMatrix * vec4(0.0, ${anchorY}, 0.0, 1.0)).xz;`,
+        );
+      shader.fragmentShader = shader.fragmentShader
+        .replace(
+          'void main() {',
+          `uniform sampler2D uShadeMap;
+           uniform vec4 uShadeRect;
+           uniform vec2 uShadeProbe;
+           uniform float uShadeOn;
+           uniform vec3 uShadeTint;
+           varying vec2 vZhFootXZ;
+           void main() {`,
+        )
+        .replace('#include <opaque_fragment>', `${SPRITE_SHADE_GLSL}\n#include <opaque_fragment>`);
     }
 
     // ── Low-res light (see lightResUniform) ──────────────────────────────────
@@ -947,17 +1151,32 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
     // ── O contorno dos personagens (ver spriteOutline.ts) ─────────────────────
     // Pendurado depois do `map_fragment` (o token fica: o `fill` e o AA de texel ainda o procuram).
     if (opts.outline) {
+      // O anel escuro e, para quem pisa no chão (footDistance: é de lá que vem a posição do pé), a luz de contorno.
+      const rim = Boolean(opts.footDistance);
       shader.uniforms.uOutline = outlineUniforms.uOutline;
       shader.uniforms.uOutlineColor = outlineUniforms.uOutlineColor;
+      shader.uniforms.uRimSun = skyUniforms.uRimSun;
+      shader.uniforms.uRimSide = skyUniforms.uRimSide;
+      shader.uniforms.uRimFire = skyUniforms.uRimFire;
+      shader.uniforms.uRimFireColor = skyUniforms.uRimFireColor;
       shader.vertexShader = shader.vertexShader
-        .replace('void main() {', 'varying vec2 vZhFrameA;\nvarying vec2 vZhFrameB;\nvoid main() {')
+        .replace('void main() {', 'varying vec2 vZhFrameA;\nvarying vec2 vZhFrameB;\nvarying float vZhFlip;\nvoid main() {')
         .replace('#include <uv_vertex>', `#include <uv_vertex>\n${OUTLINE_VERTEX_GLSL}`);
       shader.fragmentShader = shader.fragmentShader
         .replace(
           'void main() {',
-          'uniform float uOutline;\nuniform vec3 uOutlineColor;\nvarying vec2 vZhFrameA;\nvarying vec2 vZhFrameB;\nvoid main() {',
+          `uniform float uOutline;
+           uniform vec3 uOutlineColor;
+           uniform vec3 uRimSun;
+           uniform vec2 uRimSide;
+           uniform vec3 uRimFire;
+           uniform vec3 uRimFireColor;
+           varying vec2 vZhFrameA;
+           varying vec2 vZhFrameB;
+           varying float vZhFlip;
+           void main() {`,
         )
-        .replace('#include <map_fragment>', `#include <map_fragment>\n${OUTLINE_FRAGMENT_GLSL}`);
+        .replace('#include <map_fragment>', `#include <map_fragment>\n${OUTLINE_FRAGMENT_GLSL}${rim ? RIM_FRAGMENT_GLSL : ''}`);
     }
 
     // ── Texel-grid AA (see TEXEL_AA_GLSL) ────────────────────────────────────
@@ -993,13 +1212,17 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
         // WRAP within the frame's own window, which is why it cannot be a uniform added in the
         // vertex shader: `bounds` clamps, and a clamped drift smears the frame's edge texel
         // instead of bringing the pattern round the other side.
-        const uvExpr = opts.worldFx === 'seaFlow' ? `zhSeaDrift( vMapUv, ${bounds} )` : 'vMapUv';
+        // A planta em pé se curva pela fileira (decorSway.ts) pelo mesmo caminho: dentro da leitura, antes do AA.
+        const uvExpr = opts.worldFx === 'seaFlow' ? `zhSeaDrift( vMapUv, ${bounds} )`
+          : opts.standing ? `zhStandBend( vMapUv, ${bounds} )` : 'vMapUv';
         shader.fragmentShader = shader.fragmentShader
           .replace(
             'void main() {',
             `${perQuad ? 'varying vec4 vUvBounds;' : 'uniform vec4 uUvBounds;'}
              ${TEXEL_AA_GLSL}
              ${opts.worldFx === 'seaFlow' ? SEA_FLOW_GLSL : ''}
+             ${opts.standing ? STAND_FRAGMENT_PARS_GLSL : ''}
+             ${opts.wind === 'lean' ? TREE_LIGHT_PARS_GLSL : ''}
              void main() {`,
           )
           .replace(

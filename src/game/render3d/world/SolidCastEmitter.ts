@@ -20,6 +20,43 @@ import { CAST_POOL_MAX, MIN_CAST_LEN } from './worldDefs';
  */
 const CAST_CAMERA_REACH = 18;
 
+/** A arte de que a silhueta de um sólido é recortada, e de onde ela sai. Um objeto só, reescrito a cada chamada. */
+const castArt = {
+  x: 0, z: 0, height: 1, footPad: 0,
+  uv: { offsetX: 0, offsetY: 0, repeatX: 1, repeatY: 1 },
+};
+/** A janela de duas células de uma árvore alta, por quadro (a de baixo e a de cima, na mesma coluna do atlas). */
+const tallWindows = new Map<number, { offsetX: number; offsetY: number; repeatX: number; repeatY: number }>();
+
+/**
+ * A SOMBRA É A DA ÁRVORE QUE SE VÊ. O tile do mapa diz "pinheiro em (x, z)"; a árvore desenhada pode estar fora do
+ * centro, ter outra forma e, nas altas, dois tiles (render3d/forest.ts). A silhueta sai do PÉ dela, recortada da arte
+ * que ela veste, com a altura dela — senão a sombra de um pinheiro-padrão cairia ao lado de um abeto esguio.
+ * Devolve um objeto compartilhado: ler antes da próxima chamada.
+ */
+export const solidCastArt = (tile: SolidTileEntry): typeof castArt => {
+  const look = tile.look;
+  castArt.x = tile.x + (look?.dx ?? 0);
+  castArt.z = tile.z + (look?.dz ?? 0);
+  const frame = look?.frame ?? tile.frame;
+  if (look?.tall) {
+    let win = tallWindows.get(frame);
+    if (!win) {
+      const foot = frameUvWindow('forest-tileset', frame);
+      win = { offsetX: foot.offsetX, offsetY: foot.offsetY, repeatX: foot.repeatX, repeatY: foot.repeatY * 2 };
+      tallWindows.set(frame, win);
+    }
+    castArt.uv = win;
+    castArt.height = 2;
+    castArt.footPad = frameFootPad('forest-tileset', frame) / 2;
+  } else {
+    castArt.uv = frameUvWindow('forest-tileset', frame);
+    castArt.height = 1;
+    castArt.footPad = frameFootPad('forest-tileset', frame);
+  }
+  return castArt;
+};
+
 /** O que SolidCastEmitter usa de World3D. */
 export type SolidCastEmitterHost = Pick<World3D, 'camTarget' | 'casts' | 'moonDimmed' | 'params' | 'probe' | 'tiles'>;
 
@@ -70,8 +107,9 @@ export class SolidCastEmitter {
     const dx = tile.x - n.worldX;
     const dz = tile.z - n.worldY;
     if (dx * dx + dz * dz > radius * radius) return;
+    const art = solidCastArt(tile); // o pé e a arte da árvore que se vê (ver solidCastArt)
     if (!castTransformInto(
-      this.host.casts.fireCastScratch, tile.x, tile.z, 1, n.worldX, n.worldY, n.level, radius, alpha, heightScale,
+      this.host.casts.fireCastScratch, art.x, art.z, art.height, n.worldX, n.worldY, n.level, radius, alpha, heightScale,
     )) return;
     const p = this.host.casts.fireCastScratch;
 
@@ -99,9 +137,9 @@ export class SolidCastEmitter {
     }
 
     this.host.tiles.solidCastField.add(
-      tile.x, tile.z, frameUvWindow('forest-tileset', tile.frame),
+      art.x, art.z, art.uv,
       CAST_WIDTH_FACTOR, length, rotY, a,
-      frameFootPad('forest-tileset', tile.frame),
+      art.footPad,
       undefined,
       reliefLevelAt(tile.x, tile.z) * RELIEF_HEIGHT,
     );

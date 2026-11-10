@@ -22,7 +22,8 @@ export interface TerrainMaterials {
   /** As paredes do POÇO da escada, e o fundo dele: preto que não recebe luz (ver o bake). */
   pit: THREE.MeshBasicMaterial;
   pitFloor: THREE.MeshBasicMaterial;
-  decor: THREE.MeshLambertMaterial;
+  /** A DECORAÇÃO EM PÉ (standingDecor.ts): toda a decoração do mapa, de pé, com a luz de coisa em pé e a planta curvando. */
+  standing: THREE.MeshLambertMaterial;
   solid: THREE.MeshLambertMaterial;
   /** A MONTANHA em cubo: o mesmo atlas, com o volume nas cores de vértice (ROCK_CUBE_SHADE). */
   rock: THREE.MeshLambertMaterial;
@@ -72,15 +73,16 @@ export const makeTerrainMaterials = (tileset: THREE.Texture): TerrainMaterials =
   // mesmo motivo pelo qual o teto do muro de dungeon e preto puro.
   const pit = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide });
   const pitFloor = new THREE.MeshBasicMaterial({ color: 0x000000 });
-  // depthWrite MUST stay false: this flat decor sits at y=0.02, just above the
-  // ground-level cast shadows/blobs. If it wrote depth it would occlude those
-  // shadows in tile-shaped patches wherever decor grows (dense around fires) —
-  // the "invisible square blocks eating the shadow" (user feedback). Flat ground
-  // cover never needs to occlude anything, so it simply doesn't write depth.
-  const decor = new THREE.MeshLambertMaterial({
+  // A DECORAÇÃO, em pé (standingDecor.ts): o mesmo atlas, a rampa do bioma da decoração e a luz do chão em que pisa
+  // (a normal para cima). depthWrite MUST stay false, como sempre ficou na decoração deitada: as sombras do chão
+  // (o blob, as silhuetas) são desenhadas depois, e se ela gravasse profundidade comeria essas sombras em blocos do
+  // tamanho do tile ("invisible square blocks eating the shadow", relato do autor). A decoração nunca precisa esconder
+  // nada; a ordem do pintor (norte→sul na malha) resolve uma peça na frente da outra.
+  const standing = new THREE.MeshLambertMaterial({
     map: tileset, transparent: true, alphaTest: 0.35, depthWrite: false, vertexColors: true,
   });
-  patchPixelMaterial(decor, { quantize: true, texelAa: tileAa, wind: 'stir', biome: 'decor' });
+  patchPixelMaterial(standing, { quantize: true, texelAa: tileAa, biome: 'decor', standing: true });
+  standing.name = 'terrain-decor';
   const solid = new THREE.MeshLambertMaterial({ map: tileset, alphaTest: 0.5 });
   patchPixelMaterial(solid, { quantize: true, normalUp: true, texelAa: tileAa, wind: 'lean' });
   // AS ÁRVORES EM PÉ: o `solid` com a cor do bioma no vértice (world/biomes, `treeTint`). Material
@@ -120,7 +122,7 @@ export const makeTerrainMaterials = (tileset: THREE.Texture): TerrainMaterials =
   patchPixelMaterial(vines, { quantize: true, normalUp: true });
   vines.name = 'terrain-vines';
   return {
-    ground, sea, bank, lavaBank, lava, pit, pitFloor, decor, solid, trees, rock, stair, wallTop, vines,
+    ground, sea, bank, lavaBank, lava, pit, pitFloor, standing, solid, trees, rock, stair, wallTop, vines,
     voidMist: makeVoidMistMaterial(),
     blob: makeShadowBlobMaterial(0.34),
   };

@@ -4,10 +4,7 @@ import {
   reflectionMapUniform, reflectionMatrixUniform, reflectionOnUniform, reflectionTexelUniform,
 } from './pixelArtLight';
 import type { CullView } from './sceneCull';
-
-/** Os baldes de água têm 8×8 tiles (x >> 3); a chave recebe as coordenadas JÁ divididas. */
-const WATER_BUCKET_SHIFT = 3;
-const waterBucketKey = (bx: number, bz: number): number => (bx + 1024) * 4096 + (bz + 1024);
+import { WaterIndex } from './waterIndex';
 
 type Rect = { x0: number; y0: number; x1: number; y1: number };
 /** O alvo inteiro: o próximo espelho limpa tudo. */
@@ -26,9 +23,10 @@ const everything = (): Rect => ({ x0: 0, y0: 0, x1: Number.POSITIVE_INFINITY, y1
  *   3. o plano próximo da projeção virtual é inclinado até o plano da água, para que nada ABAIXO
  *      dela entre no reflexo (com a câmera embaixo, o chão ficaria entre ela e o herói).
  *
- * Barato porque desenha quase nada: só os corpos marcados `reflected` perto da tela, e só quando
- * há água à vista. As luzes vão TODAS para a lista, sempre — o three assa a contagem de luzes na
- * chave do programa, e uma passada com menos luzes compilaria o herói de novo (a lei do pool).
+ * O que ela desenha: os corpos marcados `reflected` (herói, vizinhos, gato) e, desde 2026-11-10, o CENÁRIO em pé —
+ * a mata, a pedra e a serra do terreno, e todo sprite em pé com água logo ao sul (a árvore grande, a cachoeira, a
+ * casa). Só roda com água de fato na tela (waterIndex.ts). As luzes vão TODAS para a lista, sempre — o three assa a
+ * contagem de luzes na chave do programa, e uma passada com menos luzes compilaria o herói de novo (a lei do pool).
  */
 export class WaterMirror {
   private target!: THREE.WebGLRenderTarget;
@@ -37,8 +35,14 @@ export class WaterMirror {
   private readonly bodies = new Set<THREE.Object3D>();
   /** A lista de filhos da passada do espelho: as luzes (todas) + os corpos. */
   private readonly kept: THREE.Object3D[] = [];
-  /** Os baldes de 8×8 tiles que têm ÁGUA (rio ou mar) — a passada só roda com um à vista. */
-  private readonly waterBuckets = new Set<number>();
+  /** Onde há água (rio ou mar): a passada só roda com água na tela, e só reflete o que tem água logo ao sul. */
+  private readonly water = new WaterIndex();
+  /**
+   * O CENÁRIO que aparece na água: as malhas fundidas do terreno em pé (a mata, as pedras, a serra, a decoração da
+   * margem). Os corpos soltos (árvores grandes, casas, a cachoeira) entram pela marca `userData.zhMirror` que o
+   * Billboard3D põe em todo sprite em pé — só os que têm água por perto, a cada quadro.
+   */
+  private readonly scenery = new Set<THREE.Object3D>();
   private readonly scratch = {
     pos: new THREE.Vector3(), dir: new THREE.Vector3(), up: new THREE.Vector3(),
     plane: new THREE.Plane(), clip: new THREE.Vector4(), q: new THREE.Vector4(), clear: new THREE.Color(),
@@ -87,14 +91,28 @@ export class WaterMirror {
     this.bodies.add(mesh);
   }
 
-  /** Este tile é água (rio ou mar): o balde dele conta como "água à vista". */
-  public addWaterTile(x: number, z: number): void {
-    this.waterBuckets.add(waterBucketKey(x >> WATER_BUCKET_SHIFT, z >> WATER_BUCKET_SHIFT));
+  /**
+   * Os corpos marcados (herói, vizinhos, gato): são também os que abrem o capim em pé (TerrainGrass). Um registro só
+   * de "quem é corpo no mundo" — dois seriam duas listas para esquecer de atualizar.
+   */
+  public get actorBodies(): ReadonlySet<THREE.Object3D> {
+    return this.bodies;
   }
 
-  /** O terreno foi refeito: a água volta a ser marcada por ele. */
+  /** Este tile é água (rio ou mar). */
+  public addWaterTile(x: number, z: number): void {
+    this.water.add(x, z);
+  }
+
+  /** O terreno foi refeito: a água e o cenário voltam a ser marcados por ele. */
   public clearWater(): void {
-    this.waterBuckets.clear();
+    this.water.clear();
+    this.scenery.clear();
+  }
+
+  /** Uma malha fundida do terreno em pé que a água reflete (ela sai da lista sozinha quando sai da cena). */
+  public addScenery(mesh: THREE.Object3D): void {
+    this.scenery.add(mesh);
   }
 
   /**
@@ -118,11 +136,24 @@ export class WaterMirror {
     const kept = this.kept;
     kept.length = 0;
     let bodies = 0;
-    if (strength > 0.001 && this.waterInView()) {
-      for (const o of this.scene.children) {
-        if ((o as THREE.Light).isLight) kept.push(o);
-      }
+    let scenery = 0;
+    if (strength > 0.001 && this.water.inView(this.view)) {
       const v = this.view;
+      for (const o of this.scene.children) {
+        if ((o as THREE.Light).isLight) { kept.push(o); continue; }
+        // O cenário solto (árvore grande, casa, pedra): em pé, à vista, e com água logo ao sul.
+        if (!o.userData.zhMirror || !o.visible || this.bodies.has(o)) continue;
+        const x = o.position.x;
+        const z = o.position.z;
+        if (!(x >= v.minX - 2 && x <= v.maxX + 2 && z >= v.minZ - 4 && z <= v.maxZ + 2) || !this.water.southOf(x, z)) continue;
+        kept.push(o);
+        scenery++;
+      }
+      for (const m of this.scenery) {
+        if (!m.parent) { this.scenery.delete(m); continue; } // a malha foi refeita
+        kept.push(m);
+        scenery++;
+      }
       for (const m of this.bodies) {
         if (!m.parent) { this.bodies.delete(m); continue; } // o corpo morreu
         const x = m.position.x;
@@ -133,8 +164,8 @@ export class WaterMirror {
         bodies++;
       }
     }
-    reflectionOnUniform.value = bodies > 0 ? 1 : 0;
-    if (bodies === 0) return;
+    reflectionOnUniform.value = bodies + scenery > 0 ? 1 : 0;
+    if (bodies + scenery === 0) return;
 
     // ── 1. a câmera virtual ──
     const s = this.scratch;
@@ -189,7 +220,8 @@ export class WaterMirror {
     const target = this.target;
     const tw = target.width;
     const th = target.height;
-    const now = this.bodiesRect(kept, mirror, tw, th);
+    // Com cenário na lista (uma malha fundida cobre o mundo inteiro) o retângulo é o alvo todo.
+    const now = scenery > 0 ? { x0: 0, y0: 0, x1: tw, y1: th } : this.bodiesRect(kept, mirror, tw, th);
     const was = this.dirty;
     const x0 = Math.max(0, Math.min(now.x0, was.x0));
     const y0 = Math.max(0, Math.min(now.y0, was.y0));
@@ -260,21 +292,5 @@ export class WaterMirror {
       x1: Math.min(tw, Math.ceil(x1) + 2),
       y1: Math.min(th, Math.ceil(y1) + 2),
     };
-  }
-
-  /** Há água (rio ou mar) na área de chão visível do último quadro? Uma consulta por balde 8×8. */
-  private waterInView(): boolean {
-    const v = this.view;
-    if (!Number.isFinite(v.minX) || this.waterBuckets.size === 0) return false;
-    const bx0 = Math.floor(v.minX) >> WATER_BUCKET_SHIFT;
-    const bx1 = Math.floor(v.maxX) >> WATER_BUCKET_SHIFT;
-    const bz0 = Math.floor(v.minZ) >> WATER_BUCKET_SHIFT;
-    const bz1 = Math.floor(v.maxZ) >> WATER_BUCKET_SHIFT;
-    for (let bx = bx0; bx <= bx1; bx++) {
-      for (let bz = bz0; bz <= bz1; bz++) {
-        if (this.waterBuckets.has(waterBucketKey(bx, bz))) return true;
-      }
-    }
-    return false;
   }
 }

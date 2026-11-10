@@ -34,6 +34,8 @@ import { TerrainFeatures } from './world/TerrainFeatures';
 import { TerrainBaker } from './world/TerrainBaker';
 import { ShaderPrewarm } from './world/ShaderPrewarm';
 import { WorldLook, type World3DParams } from './world/WorldLook';
+import { SkyLight } from './world/SkyLight';
+import { AirLight } from './AirLight';
 import { WorldScreen } from './world/WorldScreen';
 import { CameraRig } from './world/CameraRig';
 import { WorldProjection } from './world/WorldProjection';
@@ -106,13 +108,6 @@ export const world3d = (): World3D => {
   return currentWorld3D;
 };
 
-interface GrassRustle {
-  vertStart: number; // first vertex index of the quad in the decor geometry
-  x: number;
-  z: number;
-  t: number; // 0..1 across the whole yoyo cycle
-}
-
 export class World3D {
   public readonly params: World3DParams = defaultWorld3DParams();
 
@@ -145,8 +140,6 @@ export class World3D {
   /** A soma das luzes pontuais por célula de luz do chão (ver GroundLightMap). */
   public groundLight!: GroundLightMap;
   public readonly camTarget = new THREE.Vector3();
-
-  public readonly activeRustles = new Map<string, GrassRustle>();
 
   /** O espelho d'água (ver WaterMirror e pixelArtLight.WATER_REFLECT_GLSL). */
   public mirror!: WaterMirror;
@@ -321,8 +314,6 @@ export class World3D {
 
   // ── firelight cast shadows (2D ground silhouettes) ────────────────────────────
 
-  // ── grass rustle (the 2D board's step-on-grass wobble, on the baked decor) ────
-
   // ── camera ───────────────────────────────────────────────────────────────────
 
   // ── a hora do dia ────────────────────────────────────────────────────────────
@@ -358,6 +349,10 @@ export class World3D {
   public readonly prewarm: ShaderPrewarm = new ShaderPrewarm(this);
   /** O céu, a hora do dia e o grade de cor. (ver WorldLook) */
   public readonly look: WorldLook = new WorldLook(this);
+  /** As nuvens, o céu na água e a cor da luz no ar, a cada quadro. (ver SkyLight) */
+  public readonly sky: SkyLight = new SkyLight(this);
+  /** A luz no ar: os fachos de sol entre as copas e o halo das chamas. (ver AirLight) */
+  public readonly air: AirLight = new AirLight(this);
   /** O tamanho do buffer e a cadeia de pós. (ver WorldScreen) */
   public readonly screen: WorldScreen = new WorldScreen(this);
   /** A câmera que segue o herói. (ver CameraRig) */
@@ -401,6 +396,7 @@ export class World3D {
     });
     this.shadows.maskTarget.dispose();
     this.screen.composer.dispose();
+    this.air.dispose();
     this.groundLight.dispose();
     this.renderer.dispose();
     this.canvas.remove();

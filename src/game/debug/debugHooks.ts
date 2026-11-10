@@ -1,7 +1,7 @@
 import type * as Engine from '@/game/engine';
 import type { HeldItemKind } from '@/game/entities/ItemPickup';
 import type { World3DParams } from '@/game/render3d/World3D';
-import { getDay, getTimeOfDay, setDay, setTimeOfDay, timeOfDayLabel } from '@/game/runtime/timeOfDay';
+import { getDay, getTimeOfDay, setDay, setTimeOfDay, setTimeScale, timeOfDayLabel } from '@/game/runtime/timeOfDay';
 import type { NpcKind } from '@/game/world/ScreenContent';
 import type { GameProbes } from './probes';
 import type { EditorProbes } from './probes/editorProbe';
@@ -119,7 +119,13 @@ declare global {
     /** Live 3D-renderer knobs, present only while the GameScene is active (see render3d/World3D.ts). */
     hd3d?: World3DParams;
     /** Read or set the persistent game clock (0 = midnight, .5 = noon). */
-    gameTime?: { get: () => { phase: number; clock: string; day: number }; set: (phase: number) => void; setDay: (day: number) => void };
+    gameTime?: {
+      get: () => { phase: number; clock: string; day: number };
+      set: (phase: number) => void;
+      setDay: (day: number) => void;
+      /** A velocidade do relógio (1 = normal, 0 = parado): uma foto numa hora exata precisa do sol quieto. */
+      scale: (speed: number) => void;
+    };
   }
 }
 
@@ -149,6 +155,7 @@ export const registerSceneDebugHooks = (
     set: (phase: number) => setTimeOfDay(phase),
     // O dia do relógio (estação e chuva saem dele): os playtests do tempo pulam para um dia de chuva.
     setDay: (value: number) => setDay(value),
+    scale: (speed: number) => setTimeScale(speed),
   };
 
   // GameScene temporarily replaces the sleeping editor's hooks during live play. Restore the

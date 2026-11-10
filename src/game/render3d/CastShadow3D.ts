@@ -73,6 +73,42 @@ const castAnchorInto = (
   anchorScratch.y = objY + Math.cos(rotY) * back;
 };
 
+/**
+ * O DEGRAU da sombra assada. A escuridão e o comprimento da sombra de sol/lua mudam com a hora — e durante a manhã e a
+ * tarde inteiras mudam um fio a cada quadro (a hora dourada chega e vai embora devagar). Re-assar o campo de milhares
+ * de árvores e a barra dos maciços a cada fio seria um assado por quadro durante minutos. Então o que se assa anda em
+ * degraus: 1/50 de escuridão, 1/20 de tile de comprimento (menos de um pixel de arte) — invisível, e o assado só
+ * acontece quando o degrau vira.
+ */
+export const bakedShadowAlpha = (alpha: number): number => Math.round(alpha * 50) / 50;
+export const bakedShadowLength = (length: number): number => Math.round(length * 20) / 20;
+
+/**
+ * A SOMBRA TEM COR. Uma sombra de sol não é ausência de luz: é o lugar onde só o CÉU ilumina, e o céu é azul — de
+ * tarde, violeta. Pintá-la de preto translúcido apagava essa metade do desenho (a "luz quente, sombra fria" que toda
+ * pintura de paisagem usa), e o chão sombreado saía só mais sujo. Esta é a cor de uma sombra CHEIA, multiplicada sobre
+ * o chão: preto dá a sombra de antes, exatamente.
+ *
+ * Uma instância só, dividida pelos três materiais de sombra de chão (o campo instanciado, a sombra de cada ator, a
+ * barra dos maciços): quem escreve é o FrameRenderer, do knob `hd3d.shadowTint`, que muda com a hora do dia.
+ */
+export const shadowTint = new THREE.Color(0, 0, 0);
+
+/**
+ * A mistura de uma sombra colorida: destino × (cor × alfa + 1 − alfa). É multiplicação, então N sombras sobrepostas
+ * comutam (a ordem dentro de um lote instanciado deixa de importar) e o alfa do alvo não é tocado.
+ */
+export const tintShadowMaterial = (mat: THREE.MeshBasicMaterial): void => {
+  mat.color = shadowTint;
+  mat.premultipliedAlpha = true;
+  mat.blending = THREE.CustomBlending;
+  mat.blendEquation = THREE.AddEquation;
+  mat.blendSrc = THREE.DstColorFactor;
+  mat.blendDst = THREE.OneMinusSrcAlphaFactor;
+  mat.blendSrcAlpha = THREE.ZeroFactor;
+  mat.blendDstAlpha = THREE.OneFactor;
+};
+
 /** O máximo que a sombra se inclina em relação à base do objeto antes de a base começar a girar. */
 const MAX_SKEW = THREE.MathUtils.degToRad(62);
 
@@ -190,6 +226,7 @@ export const makeCastMesh = (): THREE.Mesh => {
     // quadro só um dos lados encara a câmera, e a outra passada não produzia um pixel.
     forceSinglePass: true,
   });
+  tintShadowMaterial(mat);
   mat.customProgramCacheKey = () => 'castTail';
   mat.onBeforeCompile = fadeCastTail;
   const mesh = new THREE.Mesh(geo, mat);
@@ -304,6 +341,7 @@ export class SolidCastField {
         fog: !mask,
       });
       if (mask) applyMaxBlending(mat);
+      else tintShadowMaterial(mat);
       mat.customProgramCacheKey = () => (mask ? 'solidCastFieldMask' : 'solidCastField');
       mat.onBeforeCompile = (shader) => {
         shader.vertexShader = shader.vertexShader

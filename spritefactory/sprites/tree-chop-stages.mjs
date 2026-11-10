@@ -16,7 +16,10 @@
 const A = '#626439'; // folhagem oliva — medida do frame 4
 const B = '#815938'; // tronco
 const C = '#3a3f3f'; // escuro da massa
-const D = '#000000'; // preto da base (o tileset shipped usa preto no contato com o chao)
+// A base era #000000, "como a do pinheiro" — mas o pé do pinheiro é preto a 39% de alfa, que o corte de alfa da mata
+// em pé descarta: na tela a árvore inteira não tem barra, e o toco ficava com um retângulo preto chapado que não recebe
+// luz. Ardósia funda, como nas árvores anciãs e nas decorações (revisão de arte, 2026-11-10; ver ancient-grove.mjs).
+const D = '#272b2d';
 const H = '#b7916a'; // wood claro — a MADEIRA CORTADA, a unica cor que os estagios acrescentam
 
 export default {
@@ -86,9 +89,9 @@ export default {
     + '8-15 do frame 4 do tileset, entao a arvore ferida e a mesma arvore com a copa decepada, e '
     + 'nao um desenho novo que so parece. H (#b7916a) e a unica cor acrescentada: a madeira do '
     + 'corte fresco, clara contra o tronco — a ferida tem de ser a coisa que se ve mudar. '
-    + 'Os avisos black-outline e edge-touch sao esperados. O preto do estagio 1 e a base do '
-    + 'pinheiro shipped reusada verbatim: trocar por #3a3f3f faria a arvore ferida ter um pe '
-    + 'mais claro que o das arvores inteiras ao lado dela, que e pior que a regra que ele viola. '
+    + 'O aviso edge-touch e esperado. A base e ardosia funda (#272b2d) e nao mais preto: na mata '
+    + 'em pe o pinheiro inteiro nao mostra barra nenhuma (o pe dele e preto a 39% de alfa, cortado), '
+    + 'entao o preto chapado do toco era o unico pe sem luz do quadro. '
     + 'Quanto ao edge-touch: o kind mais proximo e '
     + '"prop" (nao ha kind de TILE de camada superior), e um tile desses DEVE encostar na borda '
     + '— o pinheiro que ele substitui encosta nas quatro. Nada aqui vaza do tile.',

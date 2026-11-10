@@ -11,9 +11,9 @@
 //     tufos de enchimento aparece; na touceira todos. É o que transforma a distribuição uniforme em mancha.
 //
 // O que NÃO entra, de propósito: espelhar (a luz desta arte vem sempre da esquerda — espelhar a inverte, a lei do
-// CLAUDE.md), escalar (pixels maiores) e qualquer coisa nas ÁRVORES (o desvio delas já foi tentado e desfeito: "a
-// grade é o desenho" — ver TerrainFeatures.bakeSolids). O mato alto (19/20) também fica parado e sempre visível: ele
-// barra o herói, e uma barreira que some na clareira mentiria.
+// CLAUDE.md) e escalar (pixels maiores). As ÁRVORES têm o desvio e a variedade delas noutro lugar, com regras
+// próprias porque elas BARRAM (render3d/forest.ts). O mato alto (19/20) fica parado e sempre visível: ele barra o
+// herói, e uma barreira que some na clareira mentiria.
 
 import { ANCIENT_GROVE, BIOME_DECOR } from '@/game/world/biomes';
 

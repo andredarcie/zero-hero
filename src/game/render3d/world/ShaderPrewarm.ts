@@ -12,7 +12,7 @@ import { FX_DOT_TEXTURE } from './worldDefs';
 
 /** O que ShaderPrewarm usa de World3D. */
 export type ShaderPrewarmHost = Pick<World3D,
-  'camera' | 'groundLight' | 'mirror' | 'objects' | 'renderer' | 'scene' | 'screen' | 'shadows' | 'tiles'
+  'air' | 'camera' | 'groundLight' | 'mirror' | 'objects' | 'renderer' | 'scene' | 'screen' | 'shadows' | 'tiles'
 >;
 
 export class ShaderPrewarm {
@@ -45,6 +45,7 @@ export class ShaderPrewarm {
       { emissive: true },                     // heart, dropped item, campfire flame
       { additive: true },                     // fire glow, embers
       { groundShadow: true },                 // a skeleton, an NPC: lit, with a contact blob
+      { groundShadow: true, outline: true },  // o gato que chega, as visitas da fogueira: contornados (spriteOutline)
       { castGroundShadow: true },             // the hero
       { centered: true },                     // the item raised on ITEM GET
       { centered: true, fog: false, depthWrite: false, emissive: true, alphaTest: 0.02 },
@@ -136,6 +137,9 @@ export class ShaderPrewarm {
     this.host.groundLight.update(this.host.renderer, this.host.camera);
     this.host.renderer.setRenderTarget(this.host.screen.composer.renderTarget1);
     this.drawEverythingOnce();
+    // O ar aceso (AirLight): a máscara de sombras vista de cima é OUTRO alvo de saída para os materiais de sombra, e o
+    // passe do ar é um programa próprio — os dois desenham aqui, com a profundidade que o quadro acima acabou de gravar.
+    this.host.air.warm(this.host.screen.composer.renderTarget1.depthTexture);
     // E de novo no alvo do ESPELHO, pela mesma razão: é outro alvo, e o primeiro reflexo do jogo
     // não pode ser o quadro em que o ANGLE termina o programa do herói.
     // (A água sai deste desenho sem o espelho: amostrar o alvo em que se desenha é um laço de

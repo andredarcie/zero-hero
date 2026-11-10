@@ -70,10 +70,37 @@ export const defaultWorld3DParams = (): World3DParams => ({
     // A troca de paleta dos biomas e o contorno dos personagens (2026-11-10, ver biomeRamp.ts e spriteOutline.ts).
     biomeRamp: 1,
     outline: 0.62,
+    // A decoração em pé (2026-11-10, ver standingDecor.ts): 1 = em pé, 0 = deitada como antes (o A/B ao vivo).
+    stand: 1,
     // O jogo nasceu de noite, e todo número abaixo foi escolhido a olho contra o escuro: a noite
     // É o padrão, e o dia é o delta (render3d/skyPreset.ts). O valor real vem do ajuste do jogador
     // no construtor — este 0 é só o que o TypeScript precisa ver.
     daylight: 0,
+    golden: 0, // escrito pelo relógio (WorldLook.applySky)
+    // ── A LUZ NO AR, O CÉU E AS SOMBRAS COM COR (2026-11-10: AirLight.ts, atmosphere.ts, CastShadow3D.shadowTint) ──
+    // Os valores daqui são os da NOITE, como tudo neste arquivo; o dia e a hora dourada são deltas (skyPreset.ts).
+    // 0,86: só o que passava de ~0,9 muda (a chama, o brilho d'água, o branco ao sol); o resto do quadro é idêntico.
+    shoulder: 0.86,
+    // A sombra da lua é fraca (0,22) e quase preta: um fio de azul, para a noite não sujar o chão de cinza.
+    shadowTint: '#0d1230',
+    // O luar no ar: frio e discreto. Entre as árvores ele desenha fachos azulados; em campo aberto quase não existe.
+    air: 2.2,
+    airColor: '#6f8fe0',
+    airHeight: 2.4,
+    airOpen: 0.06,
+    airFire: 1,
+    // De noite a nuvem mal faz sombra (a lua é preenchimento) — mas ela continua passando, e o lago a reflete.
+    clouds: 0.22,
+    // 0,57: perto de um terço do céu com nuvem — o quadro quase sempre tem sol E uma sombra passando, que é o que
+    // faz a sombra ler como nuvem. Mais coberto, a tela inteira escurece por minutos e o dia só parece mais sujo.
+    cloudCover: 0.57,
+    // As duas cores do céu noturno parecem claras escritas assim, e é de propósito: o quadro da noite vai LINEAR para
+    // a tela (sem curva), então um anil escrito "escuro" chegaria preto. Na tela isto é anil fundo e nuvem de chumbo.
+    waterSky: 0.55,
+    waterSkyColor: '#2d426e',
+    waterCloudColor: '#586688',
+    stars: 1,
+    rim: 0.8,
     // Lifted from 4.0 (user: "faça o jogo ser menos escuro de modo geral") — the unlit
     // forest is now readable everywhere and the night mood comes from the cool tint and
     // the warm-vs-cold contrast, not from crushing the dark to near-black. The fire pool
@@ -189,4 +216,6 @@ export const defaultWorld3DParams = (): World3DParams => ({
     grade: 0.34,
     saturation: 1.02,
     contrast: 1.0,
+    // De noite o quadro já tem pouca cor (acima); a sombra só perde a dela de dia e na hora dourada (skyPreset.ts).
+    shadeSat: 0,
   });

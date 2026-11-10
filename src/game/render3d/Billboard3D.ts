@@ -206,6 +206,8 @@ export class Billboard3D {
     else if (!opts.centered) geo.translate(0, 0.5, 0); // upright: origin at the feet
     this.mesh = new THREE.Mesh(geo, this.mat);
     if (opts.renderOrder !== undefined) this.mesh.renderOrder = opts.renderOrder;
+    // Em pé no mundo = aparece na água quando há água logo ao sul (WaterMirror). Faísca e baforada soltas no ar, não.
+    if (!this.flat && !opts.centered && !opts.additive) this.mesh.userData.zhMirror = true;
 
     // NO shadow-map plumbing here on purpose. Real shadow maps are off for the whole game
     // (billboards are slivers seen from a light — see World3D), and every billboard used to

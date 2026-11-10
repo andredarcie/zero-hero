@@ -3,7 +3,7 @@
 
 import * as THREE from 'three';
 import { terrainHeightAt } from '@/game/world/relief';
-import { applyCast, castTransformInto, handoffCastInto } from '../CastShadow3D';
+import { applyCast, bakedShadowAlpha, bakedShadowLength, castTransformInto, handoffCastInto } from '../CastShadow3D';
 import { frameFootPad, getTexture3D } from '../textures3d';
 import type { World3D } from '../World3D';
 import { Billboard3D } from '../Billboard3D';
@@ -55,8 +55,10 @@ export class CastShadows {
   public updateCastShadows(): void {
     const radius = Math.max(0.5, this.host.params.castShadowRadius);
     const alpha = this.host.params.castShadowAlpha;
-    const moonAlpha = this.host.params.moonShadowAlpha;
-    const moonLength = this.host.params.moonShadowLength;
+    // Em degraus (ver bakedShadowAlpha): o campo assado e a barra dos maciços só refazem quando o degrau vira, e a
+    // sombra de quem anda usa os mesmos números, para a árvore e o herói ao lado dela nunca discordarem.
+    const moonAlpha = bakedShadowAlpha(this.host.params.moonShadowAlpha);
+    const moonLength = bakedShadowLength(this.host.params.moonShadowLength);
     // The shadowHeight knob made honest (0d): it always promised "higher light = shorter
     // shadows" but only ever moved the LIGHT. Normalized so the tuned default (2.2) is
     // exactly the old behaviour.

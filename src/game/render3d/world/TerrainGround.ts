@@ -83,9 +83,9 @@ export class TerrainGround {
     const { groundTiles, highGroundTiles, bedTiles, seaTiles, solidSet } = t;
     // O bioma × a mancha larga × a sombra de copa (groundTintAt): a mesma cor que o beiço e a margem vestem.
     const tint = groundTintAt(solidSet);
-    this.host.terrain.addTerrainMesh(new THREE.Mesh(buildFlatTileGeometry(groundTiles, 0, solidSet, undefined, undefined, tint), mats.ground));
+    this.host.terrain.addTerrainMesh(new THREE.Mesh(buildFlatTileGeometry(groundTiles, 0, solidSet, undefined, tint), mats.ground));
     if (highGroundTiles.length > 0) {
-      this.host.terrain.addTerrainMesh(new THREE.Mesh(buildFlatTileGeometry(highGroundTiles, (x, z) => reliefLevelAt(x, z) * RELIEF_HEIGHT, solidSet, undefined, undefined, tint), mats.ground));
+      this.host.terrain.addTerrainMesh(new THREE.Mesh(buildFlatTileGeometry(highGroundTiles, (x, z) => reliefLevelAt(x, z) * RELIEF_HEIGHT, solidSet, undefined, tint), mats.ground));
     }
 
     // The sunken riverbed (the same dirt, dropped a level) + the earthen banks that

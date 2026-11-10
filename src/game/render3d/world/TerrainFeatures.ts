@@ -1,4 +1,4 @@
-// O QUE SE ERGUE DO TERRENO: a bacia de lava e o poço da escada, a decoração rasteira, as árvores e os cubos, a névoa
+// O QUE SE ERGUE DO TERRENO: a bacia de lava e o poço da escada, a decoração que aparece, as árvores e os cubos, a névoa
 // negra de fora do mapa, e as sombras assadas (o blob de cada sólido e os campos instanciados do fogo e da lua).
 
 import * as THREE from 'three';
@@ -7,15 +7,16 @@ import { RELIEF_HEIGHT, reliefLevelAt } from '@/game/world/relief';
 import { isLifeHome } from '@/game/world/biomeLife';
 import { ANCIENT_GROVE, BIOME_DECOR, biomeTreeTintAt } from '@/game/world/biomes';
 import { SolidCastField } from '../CastShadow3D';
+import { treeLookAt } from '../forest';
 import { buildShadowBlobGeometry } from '../groundShadow';
 import { getBaseTexture3D } from '../textures3d';
-import { bucketKey, buildBankGeometry, buildFlatTileGeometry, groundTintAt, buildLavaSurface, buildScorchGeometry, buildShoreGeometry, buildUprightTileGeometry, CLIFF_WALL_SET, DUNGEON_WALL_SET, LAVA_BANK_BANDS, LAVA_DEPTH_TILES, LAVA_RIM_TINT, tileKey, WIND_STIR_FRAMES } from '../terrainGeometry';
+import { bucketKey, buildBankGeometry, buildFlatTileGeometry, buildLavaSurface, buildScorchGeometry, buildShoreGeometry, buildUprightTileGeometry, CLIFF_WALL_SET, DUNGEON_WALL_SET, LAVA_BANK_BANDS, LAVA_DEPTH_TILES, LAVA_RIM_TINT, tileKey } from '../terrainGeometry';
 import { buildMistCurtainGeometry, type MistUniforms } from '../glowMaterials';
 import type { TerrainMaterials } from '../terrainMaterials';
 import type { TerrainTile, TerrainSort } from './TerrainSorter';
 import type { World3D } from '../World3D';
 import { CAST_POOL_MAX } from './worldDefs';
-import { decorScatterAt, decorShown } from './decorScatter';
+import { decorShown } from './decorScatter';
 
 // A altura da CORTINA de névoa. As árvores medem 1; 1.3 cobre a copa com folga, para nenhuma
 // ponta de pinheiro furar a névoa por cima.
@@ -35,8 +36,6 @@ const VOID_MIST_HEIGHT = 1.3;
  * a descida ATRAVESSANDO o fundo — e o fundo é a única coisa que ainda o esconde.
  */
 export const STAIRS_PIT_DEPTH = 0.62;
-// The rustleable ground decor (low grass) — same frame the 2D board renderer tracked.
-const LOW_GRASS_TILE = 0;
 // O VAGA-LUME MORA NO MATO. Estes são os frames de decoração que contam como vegetação viva —
 // capim, folhagem, o arbusto florido e os cogumelos —, e deliberadamente NÃO a serrapilheira
 // (graveto, seixo, osso): um enxame precisa dizer "aqui é verde", e piscar sobre cascalho não diz
@@ -100,35 +99,21 @@ export class TerrainFeatures {
 
   }
 
-  public bakeDecor(t: TerrainSort, mats: TerrainMaterials): void {
-    const { solidSet } = t;
+  /**
+   * A decoração que aparece neste assado — toda ela fica EM PÉ (render3d/standingDecor.ts, StandingDecor): só o chão
+   * puro fica no chão. Devolve os tiles; aqui fica o que é pergunta do MAPA (quais aparecem, onde mora vaga-lume).
+   */
+  public bakeDecor(t: TerrainSort): TerrainTile[] {
     // TOUCEIRA E CLAREIRA (ver decorScatter.ts): o enchimento rareia onde o ruído largo abre o chão. Só no desenho —
     // o tile continua com a decoração no dado, e o que o jogo faz com ele não muda.
-    const decorTiles = t.decorTiles.filter((d) => decorShown(d.x, d.z, d.frame));
-    // A decoracao do PLANALTO sobe com ele: a mesma malha (o indice dos quads e o do arbusto que
-    // farfalha), so a altura de cada quad muda.
-    this.host.tiles.decorGeo = buildFlatTileGeometry(
-      decorTiles, (x, z) => 0.02 + reliefLevelAt(x, z) * RELIEF_HEIGHT, solidSet, undefined,
-      (frame) => (WIND_STIR_FRAMES.has(frame) ? 1 : 0),
-      // a decoração leva a cor INTEIRA do bioma, a mesma do chão: a rampa (render3d/biomeRamp.ts) só a aplica na
-      // folha, então o tufo é do mesmo verde do chão em que nasce e a flor mantém a cor dela (a margarida continua
-      // branca, a campânula continua azul). Antes era metade da cor em tudo, e o tufo destoava do chão. A mesma mancha
-      // larga e a mesma sombra de copa do chão (groundTintAt), para o tufo não destoar da mancha em que nasce.
-      groundTintAt(solidSet),
-      // …e cada planta anda um pouco dentro do tile e varia um fio de tom (ver decorScatter.ts)
-      decorScatterAt,
-    );
-    this.host.terrain.addTerrainMesh(new THREE.Mesh(this.host.tiles.decorGeo, mats.decor));
-    decorTiles.forEach((tile, i) => {
-      this.host.tiles.decorQuads.set(`${tile.x},${tile.z}`, i * 4);
-      if (tile.frame === LOW_GRASS_TILE) this.host.tiles.grassQuads.set(`${tile.x},${tile.z}`, i * 4);
-      // Onde o enxame de vaga-lumes pode pousar. Sai da MESMA varredura da decoração porque é a
-      // mesma pergunta ("que tile é verde?"): um segundo passo sobre o mundo seria uma segunda
-      // resposta, livre para discordar.
-      // E só onde eles moram (world/biomeLife): a geada e o musgo. A luz que vem de todo canto polui a noite.
+    const shown = t.decorTiles.filter((d) => decorShown(d.x, d.z, d.frame));
+    // Onde o enxame de vaga-lumes pode pousar. Sai da MESMA varredura da decoração porque é a mesma pergunta ("que
+    // tile é verde?"): um segundo passo sobre o mundo seria uma segunda resposta, livre para discordar. E só onde eles
+    // moram (world/biomeLife): a geada e o musgo. A luz que vem de todo canto polui a noite.
+    for (const tile of shown) {
       if (FIREFLY_HOST_FRAMES.has(tile.frame) && isLifeHome('fireflies', tile.x, tile.z)) this.host.tiles.greenTiles.push(tile.x, tile.z);
-    });
-
+    }
+    return shown;
   }
 
   public bakeSolids(t: TerrainSort, mats: TerrainMaterials): void {
@@ -158,13 +143,18 @@ export class TerrainFeatures {
 
     // All standing trees/walls merged into ONE upright mesh (one draw call, one shadow).
     // Lit like the ground at their feet — same treatment the dynamic billboards get.
-    // TODA árvore fica no centro exato do seu tile — a de dentro do mapa e a de fora igualmente.
     //
-    // Houve aqui um desvio de profundidade por tile na mata de fora, para as fileiras não lerem
-    // como pomar. Foi erro de leitura: **o mundo é uma grade, e a grade é o desenho.** Uma árvore
-    // fora do centro do tile não lê como floresta natural, lê como peça solta — e desmente a única
-    // coisa que todo tile deste jogo promete: que ali cabe exatamente um. A variedade da mata vem
-    // dos SEIS frames de pinheiro, que é variação DENTRO do tile, e da névoa por cima.
+    // A MATA FORA DA GRADE (render3d/forest.ts, pedido do autor em 2026-11-10). Toda árvore ficava no centro exato do
+    // tile, e eram seis versões da mesma silhueta: com o resto do vale variado e orgânico, a mata em fileiras de pomar
+    // virou a única coisa quadrada da tela. A COLISÃO continua na grade (um tile, uma árvore, no dado); o desenho de
+    // cada uma sai do centro em pixel inteiro, veste uma das formas da família nova e um tom próprio. Na beira, onde
+    // se pisa ao lado, o desvio é pequeno: o tile que barra continua visivelmente ocupado.
+    const voidSet = new Set(t.voidTiles.map((v) => tileKey(v.x, v.z)));
+    const forest = {
+      solid: (x: number, z: number): boolean => solidSet.has(tileKey(x, z)),
+      outside: (x: number, z: number): boolean => voidSet.has(tileKey(x, z)),
+    };
+    for (const tile of quadTiles) tile.look = treeLookAt(tile.frame, tile.x, tile.z, forest) ?? undefined;
     this.host.terrain.addTerrainMesh(new THREE.Mesh(buildUprightTileGeometry(quadTiles, (x, z) => reliefLevelAt(x, z) * RELIEF_HEIGHT, biomeTreeTintAt), mats.trees));
 
     // Quem é CUBO é MASSA. As duas listas ficam guardadas porque a massa é a única geometria do
@@ -240,8 +230,11 @@ export class TerrainFeatures {
     // The soft ambient ground blob each obstacle had in 2D ("anchors lifted obstacles so
     // they read as standing up") — merged into one mesh, all sharing the soft blob texture.
     // A touch of forward (+z, toward camera) bias peeks the blob out at the tree's foot.
+    // (O blob fica no PÉ da árvore, que não é mais o centro do tile: ver `look` em TerrainData.)
     const blobGeo = buildShadowBlobGeometry(
-      this.host.tiles.castableSolids.map((t) => ({ x: t.x, z: t.z + 0.06, lift: reliefLevelAt(t.x, t.z) * RELIEF_HEIGHT })), 0.46, 0.42,
+      this.host.tiles.castableSolids.map((t) => ({
+        x: t.x + (t.look?.dx ?? 0), z: t.z + (t.look?.dz ?? 0) + 0.06, lift: reliefLevelAt(t.x, t.z) * RELIEF_HEIGHT,
+      })), 0.46, 0.42,
     );
     const ellipses = new THREE.Mesh(blobGeo, mats.blob);
     ellipses.renderOrder = 3; // after the additive fire glow, so the blob isn't washed out

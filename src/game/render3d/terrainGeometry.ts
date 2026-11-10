@@ -8,6 +8,7 @@ import { RELIEF_HEIGHT } from '@/game/world/relief';
 import { ANCIENT_GROVE, BIOME_DECOR, biomeTintAt } from '@/game/world/biomes';
 import { VINE_VARIANTS, type VineQuad } from './vineTexture';
 import { tilesetFrameUv } from './textures3d';
+import { FOREST_FRAMES, type TreeLook } from './forest';
 
 /** Trepadeira em uma face a cada tantas (de cem), escolhidas pela coordenada. */
 const VINE_CHANCE = 42;
@@ -30,9 +31,13 @@ const AO_MAX = 0.5;
 //
 // A mata em pé: pinheiros (4/14-18), árvore seca (3/21) e os dois estágios de tombamento (36/37),
 // que continuam sendo madeira em pé. Fora ficam a cabeça na estaca (22) e o túmulo (25).
-const WIND_SWAY_FRAMES: ReadonlySet<number> = new Set([3, 4, 14, 15, 16, 17, 18, 21, 36, 37, ANCIENT_GROVE.treeA, ANCIENT_GROVE.treeB]);
-// O mato deitado: capim, folhagem e o arbusto florido. Cogumelo, graveto, seixo, pedregulho e osso
-// ficam de fora — o que é rígido no mundo tem de ficar rígido na tela.
+const WIND_SWAY_FRAMES: ReadonlySet<number> = new Set([
+  3, 4, 14, 15, 16, 17, 18, 21, 36, 37, ANCIENT_GROVE.treeA, ANCIENT_GROVE.treeB,
+  ...FOREST_FRAMES, // a mata nova (render3d/forest.ts): toda forma dela é árvore
+]);
+// A PLANTA da decoração (que fica em pé, render3d/standingDecor.ts): capim, folhagem, o arbusto florido e as flores
+// — ela se curva no vento, se abre e farfalha. Cogumelo, graveto, seixo, pedregulho e osso ficam de fora: em pé e
+// parados — o que é rígido no mundo tem de ficar rígido na tela.
 export const WIND_STIR_FRAMES: ReadonlySet<number> = new Set([
   0, 1, 7, 8, 19, 20,
   // a flora dos biomas que balança; cristal, brasa e folha caída ficam parados
@@ -199,37 +204,24 @@ export const buildFlatTileGeometry = (
   /** Per-corner shore ramp, emitted as the `aShore` attribute the sea's material reads. */
   shore?: (x: number, z: number) => number[],
   /**
-   * Emite o atributo `aWind` (ver WIND_WAVE_GLSL). Só a malha de DECORAÇÃO passa isto: o chão, o
-   * leito e o mar não têm vegetação nenhuma, e um atributo a mais em 11 mil quads de oceano seria
-   * meio megabyte para multiplicar por zero.
-   */
-  windMask?: (frame: number) => number,
-  /**
    * A cor do BIOMA (world/biomes.ts), lida em cada CANTO do tile: dois tiles vizinhos perguntam pelo
    * mesmo ponto e chegam à mesma cor, então a passagem de um bioma ao outro é um degradê, nunca um risco.
    */
   tintAt?: (x: number, z: number) => readonly [number, number, number],
-  /**
-   * O ESPALHAMENTO da decoração (ver TerrainFeatures.bakeDecor): quanto o quad anda dentro do próprio tile, em tiles, e
-   * quanto o tom dele varia. Só a malha de DECORAÇÃO passa isto — o chão emenda canto a canto e não pode andar.
-   */
-  scatter?: (x: number, z: number, frame: number) => { dx: number; dz: number; shade: number },
 ): THREE.BufferGeometry => {
+  // (A decoração deitada passava aqui a máscara de vento e o espalhamento dela. Ela fica em pé agora:
+  // render3d/standingDecor.ts. Esta malha é só chão — chão emenda canto a canto e não anda.)
   const pos: number[] = [];
   const uv: number[] = [];
   const bounds: number[] = [];
   const nrm: number[] = [];
   const col: number[] = [];
   const shr: number[] = [];
-  const wind: number[] = [];
   const idx: number[] = [];
   tiles.forEach(({ x, z, frame }, i) => {
     const f = tilesetFrameUv(frame);
     const y = typeof yAt === 'number' ? yAt : yAt(x, z);
-    const sc = scatter?.(x, z, frame);
-    const cx = x + (sc?.dx ?? 0);
-    const cz = z + (sc?.dz ?? 0);
-    pos.push(cx - 0.5, y, cz - 0.5, cx + 0.5, y, cz - 0.5, cx + 0.5, y, cz + 0.5, cx - 0.5, y, cz + 0.5);
+    pos.push(x - 0.5, y, z - 0.5, x + 0.5, y, z - 0.5, x + 0.5, y, z + 0.5, x - 0.5, y, z + 0.5);
     uv.push(f.u0, f.v1, f.u1, f.v1, f.u1, f.v0, f.u0, f.v0);
     // Which frame of the atlas this quad may sample, so the texel-AA fetch cannot slide into the
     // next tile's art (pixelArtLight/zhTexelUv). Per vertex because it is ONE mesh: the whole
@@ -237,22 +229,16 @@ export const buildFlatTileGeometry = (
     for (let k = 0; k < 4; k++) bounds.push(f.cu0, f.cv0, f.cu1, f.cv1);
     nrm.push(0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0);
     const ao = tileAoCorners(x, z, solids);
-    const tone = sc?.shade ?? 1;
     if (tintAt) {
       // os cantos na MESMA ordem das posições acima
       [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]].forEach(([dx, dz], k) => {
         const t = tintAt(x + dx, z + dz);
-        col.push(ao[k] * t[0] * tone, ao[k] * t[1] * tone, ao[k] * t[2] * tone);
+        col.push(ao[k] * t[0], ao[k] * t[1], ao[k] * t[2]);
       });
     } else {
-      for (const shade of ao) col.push(shade * tone, shade * tone, shade * tone);
+      for (const shade of ao) col.push(shade, shade, shade);
     }
     if (shore) shr.push(...shore(x, z));
-    if (windMask) {
-      // o vento gira o quad em volta do centro DELE (o que andou com o espalhamento), não do tile
-      const stir = windMask(frame);
-      for (let k = 0; k < 4; k++) wind.push(stir, cx, cz);
-    }
     const b = i * 4;
     idx.push(b, b + 3, b + 2, b, b + 2, b + 1);
   });
@@ -263,7 +249,6 @@ export const buildFlatTileGeometry = (
   geo.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
   geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   if (shore) geo.setAttribute('aShore', new THREE.Float32BufferAttribute(shr, 1));
-  if (windMask) geo.setAttribute('aWind', new THREE.Float32BufferAttribute(wind, 3));
   geo.setIndex(idx);
   return geo;
 };
@@ -1502,7 +1487,7 @@ export const bakeMassShadow = function* (
 
 
 export const buildUprightTileGeometry = (
-  tiles: ReadonlyArray<{ x: number; z: number; frame: number }>,
+  tiles: ReadonlyArray<{ x: number; z: number; frame: number; look?: TreeLook }>,
   /** O chão de cada árvore: a mata sobe o morro junto com ele (ver world/relief). */
   liftAt: (x: number, z: number) => number = () => 0,
   /** A cor do bioma no pé da árvore (ver `trees` em terrainMats); sem ela, a arte crua. */
@@ -1515,21 +1500,27 @@ export const buildUprightTileGeometry = (
   const col: number[] = [];
   const wind: number[] = [];
   const idx: number[] = [];
-  tiles.forEach(({ x, z, frame }, i) => {
-    const f = tilesetFrameUv(frame);
-    // Upright quad on the tile, facing the (fixed-yaw) camera direction (+z). NO CENTRO EXATO do
-    // tile, sempre: o mundo é uma grade e a grade é o desenho (ver o chamador em buildTerrain).
+  tiles.forEach(({ x, z, frame, look }, i) => {
+    // Um quad em pé, de frente para a câmera (+z). O TILE é o do mapa; o que a árvore VESTE vem do `look`
+    // (render3d/forest.ts): o pé fora do centro, a forma, e nas altas duas células do atlas empilhadas na mesma
+    // coluna, lidas como uma arte só de dois tiles. Sem `look` (o túmulo, a cabeça na estaca), o centro e o quadro dele.
+    const f = tilesetFrameUv(look?.frame ?? frame);
+    const top = look?.tall ? tilesetFrameUv(look.topFrame) : f;
+    const height = look?.tall ? 2 : 1;
+    const fx = x + (look?.dx ?? 0);
+    const fz = z + (look?.dz ?? 0);
     const lift = liftAt(x, z);
-    pos.push(x - 0.5, lift + 1, z, x + 0.5, lift + 1, z, x + 0.5, lift, z, x - 0.5, lift, z);
-    uv.push(f.u0, f.v1, f.u1, f.v1, f.u1, f.v0, f.u0, f.v0);
-    for (let k = 0; k < 4; k++) bounds.push(f.cu0, f.cv0, f.cu1, f.cv1);
+    pos.push(fx - 0.5, lift + height, fz, fx + 0.5, lift + height, fz, fx + 0.5, lift, fz, fx - 0.5, lift, fz);
+    uv.push(f.u0, top.v1, f.u1, top.v1, f.u1, f.v0, f.u0, f.v0);
+    for (let k = 0; k < 4; k++) bounds.push(f.cu0, f.cv0, f.cu1, top.cv1);
     nrm.push(0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1);
     // Quem obedece ao VENTO, e o centro do tile de onde a onda é lida (ver WIND_WAVE_GLSL). É
     // por vértice porque é UMA malha: a árvore que balança e o túmulo que não estão nela juntos.
     const sway = WIND_SWAY_FRAMES.has(frame) ? 1 : 0;
     for (let k = 0; k < 4; k++) wind.push(sway, x, z);
     const t = tintAt ? tintAt(x, z) : [1, 1, 1];
-    for (let k = 0; k < 4; k++) col.push(t[0], t[1], t[2]);
+    const tone = look?.tone ?? 1;
+    for (let k = 0; k < 4; k++) col.push(t[0] * tone, t[1] * tone, t[2] * tone);
     const b = i * 4;
     idx.push(b, b + 2, b + 1, b, b + 3, b + 2);
   });

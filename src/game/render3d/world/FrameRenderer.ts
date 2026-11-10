@@ -6,9 +6,10 @@ import { cullFarChildren } from '../sceneCull';
 import { profiler } from '@/game/debug/Profiler';
 import { shroudDayUniform } from '../ChunkShroud3D';
 import { getPixelScale } from '@/game/runtime/graphicsSettings';
-import { flowTimeUniform, lightCapUniform, lightResUniform, lightStepsUniform, lightWobbleUniform, reflectionStrengthUniform, seaFlowUniform, texelAaUniform, waterGlintUniform, windUniform } from '../pixelArtLight';
+import { flowTimeUniform, lightCapUniform, lightResUniform, lightStepsUniform, lightWobbleUniform, reflectionStrengthUniform, seaFlowUniform, texelAaUniform, waterGlintUniform, waterSkyUniform, windUniform } from '../pixelArtLight';
 import { platform } from '@/game/platform/platform';
 import { biomeRampUniform } from '../biomeRamp';
+import { shadowTint } from '../CastShadow3D';
 import { outlineUniforms } from '../spriteOutline';
 import { fireGlowResUniform, fireRampCoreUniform, fireRampMidUniform, fireRampRimUniform, type MistUniforms, setFireGlow } from '../glowMaterials';
 import type { FireEntry } from './TerrainData';
@@ -23,7 +24,7 @@ const CULL_PAD_TILES = CAST_REACH_TILES;
 
 /** O que FrameRenderer usa de World3D. */
 export type FrameRendererHost = Pick<World3D,
-  'ambientLight' | 'appliedFov' | 'cam' | 'camTarget' | 'camera' | 'casts' | 'chunkShroud' | 'elapsed' | 'groundLight' | 'hero' | 'lights' | 'look' | 'mirror' | 'moonLight' | 'objects' | 'params' | 'particles' | 'projection' | 'renderer' | 'scene' | 'screen' | 'shadowLight' | 'shadows' | 'tiles'
+  'ambientLight' | 'appliedFov' | 'cam' | 'camTarget' | 'camera' | 'casts' | 'chunkShroud' | 'elapsed' | 'groundLight' | 'hero' | 'lights' | 'look' | 'mirror' | 'moonLight' | 'params' | 'particles' | 'projection' | 'renderer' | 'scene' | 'screen' | 'shadowLight' | 'shadows' | 'sky' | 'tiles'
 >;
 
 export class FrameRenderer {
@@ -41,13 +42,17 @@ export class FrameRenderer {
     // We own the reset now (autoReset is off), so the frame's counters cover every pass the
     // composer runs, not just the last one.
     this.host.renderer.info.reset();
-    profiler.begin('rustle');
-    this.host.objects.updateRustles(dt);
-    profiler.end('rustle');
+    // A decoração em pé: o knob hd3d.stand (em pé / deitada), o pisão e quem passa por ela.
+    profiler.begin('decor');
+    this.host.tiles.standing?.update(dt);
+    profiler.end('decor');
     this.host.chunkShroud.update(dtMs); // avança (e encerra) as dissoluções de compra de chunk
 
     // Live knobs (window.hd3d). A hora do dia vem PRIMEIRO: ela reescreve os outros.
     this.host.look.syncDaylight(dtMs);
+    // O céu deste quadro (as nuvens andando, as cores da hora) e a cor da sombra de chão.
+    this.host.sky.update(dt);
+    this.host.look.applyColor('shadowTint', shadowTint, this.host.params.shadowTint);
     texelAaUniform.value = Math.min(1, Math.max(0, this.host.params.texelAa));
     lightStepsUniform.value = Math.max(0, this.host.params.lightSteps);
     lightResUniform.value = Math.max(0, this.host.params.lightRes);
@@ -55,6 +60,7 @@ export class FrameRenderer {
     lightCapUniform.value = this.host.params.lightCap;
     seaFlowUniform.value = Math.max(0, this.host.params.seaFlow);
     reflectionStrengthUniform.value = Math.min(1, Math.max(0, this.host.params.reflection));
+    waterSkyUniform.value = Math.min(1, Math.max(0, this.host.params.waterSky));
     biomeRampUniform.value = Math.min(1, Math.max(0, this.host.params.biomeRamp));
     outlineUniforms.uOutline.value = Math.min(1, Math.max(0, this.host.params.outline));
     // These five are CSS STRINGS, live-tunable through window.hd3d — and Color.set(string) parses
@@ -194,6 +200,7 @@ export class FrameRenderer {
     } else {
       this.host.shadowLight.intensity = 0;
     }
+    this.host.sky.setFireRim(nearest); // o fio quente na borda de quem está em volta da chama
 
     // Hand the pooled lights to the lit fires closest to the camera. There are only
     // FIRE_LIGHT_SLOTS of them because every light taxes every lit fragment (see the

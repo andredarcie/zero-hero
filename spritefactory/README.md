@@ -9,7 +9,9 @@ Extraído dos 151 PNGs shipped (`node spritefactory/extract-palette.mjs` regener
 `reports/palette-report.txt`):
 
 1. **Frames de 16×16.** Sheets empilham frames (herói = 80×16 em linha; chave = 16×32 em coluna).
-   Nenhum pixel pode vazar do tile — profundidade vem do shader 3D, nunca de arte maior.
+   Nenhum pixel pode vazar do tile — profundidade vem do shader 3D, nunca de arte maior. (A exceção
+   desenhada são as árvores ALTAS da mata, `sprites/forest-trees.mjs`: duas células de 16×16 empilhadas
+   na mesma coluna do atlas, na mesma densidade de pixel — nunca arte ampliada.)
 2. **2 a 8 cores por frame.** A pedra tem 2, a árvore 3, o sheet inteiro do herói 8. Menos é mais.
 3. **Alpha binário.** Zero anti-aliasing, zero sombra suave (0,23% de pixels semi-transparentes em
    todo o jogo — e são artefatos, não estilo).
@@ -17,7 +19,9 @@ Extraído dos 151 PNGs shipped (`node spritefactory/extract-palette.mjs` regener
    chapadas: o herói é navy com detalhe verde, o vaso é navy sobre navy. Exceção: *pickups* podem
    ganhar halo claro #cdcdcd para ler no chão escuro (precedente: frame de mapa da key.png).
 5. **Sombra chapada, luz da esquerda.** A pedra é literalmente lado claro + lado escuro com aresta
-   dura. Sem gradiente, sem dithering ordenado.
+   dura. Sem gradiente, sem dithering ordenado. **A sombra de pé, quando desenhada na arte, é ardósia
+   (#3a3f3f nas decorações, #272b2d nas árvores), nunca #000000:** preto puro não recebe luz, e em pé
+   vira um retângulo chapado no chão. O atlas não tem mais nenhum pixel de preto puro.
 6. **Textura orgânica = speckle.** Folhagem e água usam ruído esparso (árvore, grass tile, água),
    nunca degradê.
 7. **Terreno é full-bleed 100% opaco;** props e itens flutuam centrados com respiro dentro do tile.

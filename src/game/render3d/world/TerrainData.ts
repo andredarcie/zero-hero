@@ -4,8 +4,10 @@
 
 import * as THREE from 'three';
 import { SolidCastField } from '../CastShadow3D';
+import type { TreeLook } from '../forest';
 import type { MassHeightGrid, ReliefPoint } from '../terrainGeometry';
 import type { TerrainMaterials } from '../terrainMaterials';
+import type { StandingDecor } from './StandingDecor';
 
 /**
  * A standing solid tile (tree/wall), as the shadow pass sees it. The optional fields are
@@ -19,6 +21,12 @@ export interface SolidTileEntry {
   x: number;
   z: number;
   frame: number;
+  /**
+   * O que a árvore deste tile VESTE na tela (render3d/forest.ts): fora do centro, noutra forma, às vezes alta. O tile
+   * (x, z, frame) continua sendo o do mapa — a colisão e as perguntas do jogo não mudam; quem desenha a árvore e a
+   * sombra dela lê daqui. Ausente no que não é árvore.
+   */
+  look?: TreeLook;
   mark?: number;
   lastFire?: FireEntry | 'torch' | null;
   moonSlot?: number;
@@ -70,11 +78,6 @@ export class TerrainData {
   // Deep-in-the-forest-wall tiles are excluded: their overlapping blobs/shadows would
   // merge into one dark block, so only these get a contact blob and cast a shadow.
   public readonly castableSolids: SolidTileEntry[] = [];
-  public decorGeo!: THREE.BufferGeometry;
-  public readonly grassQuads = new Map<string, number>(); // "x,z" → vertex start
-  // The decor quad of EVERY flat decor tile (grassQuads is only the rustleable frame) — the
-  // shovel erases foliage/litter under a dug hole, whatever the frame (removeDecorTile).
-  public readonly decorQuads = new Map<string, number>(); // "x,z" → vertex start
   /**
    * The terrain's own meshes, kept so an infinite world can throw the window away and bake the
    * next one (see rebuildTerrain). The authored worlds never call it — they bake once at boot.
@@ -127,4 +130,6 @@ export class TerrainData {
   public massGrid: MassHeightGrid | null = null;
   public stairTiles: Array<{ x: number; z: number; ux: number; uz: number; base: number }> = [];
   public cubeMeshes: THREE.Mesh[] = [];
+  /** A DECORAÇÃO EM PÉ (StandingDecor): nasce no primeiro assado e é refeita a cada um, com toda a decoração do mapa. */
+  public standing?: StandingDecor;
 }

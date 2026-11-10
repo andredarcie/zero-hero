@@ -2,7 +2,7 @@
 // shader), as fogueiras registradas e o halo de cada uma.
 
 import * as THREE from 'three';
-import { makeFireGlowMaterial } from '../glowMaterials';
+import { makeFireGlowMaterial, setFireGlow } from '../glowMaterials';
 import type { FireEntry } from './TerrainData';
 import type { World3D } from '../World3D';
 import { FIRE_COLOR } from './worldDefs';
@@ -112,6 +112,21 @@ export class WorldLights {
   private releaseGlow(glow: THREE.Mesh): void {
     glow.visible = false;
     this.freeGlows.push(glow);
+  }
+
+  /**
+   * Uma poça de luz PARADA no chão: a janela acesa de uma casa derramando no terreiro. É o mesmo desenho da poça do
+   * fogo (as bandas, a grade da arte), mas só o desenho: não é luz THREE, não empresta vaga do pool, não projeta
+   * sombra e não entra em `fires` — quem conta fogos (as sondas, a sombra) não a vê. Nasce apagada.
+   */
+  public addStillGlow(x: number, z: number, size: number, opacity: number): { setVisible(on: boolean): void; destroy(): void } {
+    const glow = this.acquireGlow();
+    setFireGlow(glow, x, z, size, opacity);
+    glow.visible = false;
+    return {
+      setVisible: (on) => { glow.visible = on; },
+      destroy: () => this.releaseGlow(glow),
+    };
   }
 
   /** As luzes pontuais que existem agora (a tocha e a do herói nascem no primeiro uso). */

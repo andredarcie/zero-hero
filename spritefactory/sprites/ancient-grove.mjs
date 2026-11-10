@@ -6,10 +6,15 @@
 //   2 MOITA VELHA          um tufo baixo de folha escura, com musgo por cima.
 //   3 CAPIM ANTIGO         capim comprido e alto, já pálido, entre tufinhos de musgo.
 //
-// O padrão é o do atlas: ruído esparso de 3 a 5 cores, luz da esquerda, alpha binário, sombra preta no pé, as
+// O padrão é o do atlas: ruído esparso de 3 a 5 cores, luz da esquerda, alpha binário, sombra de ardósia no pé, as
 // cores da casa (a oliva, a madeira, a ardósia). Instala no FIM do forest-tileset (frames 73..76).
 
-const E = '#000000';
+// A SOMBRA DE PÉ É ARDÓSIA FUNDA, NÃO PRETO (revisão de arte, 2026-11-10). Ela nasceu em #000000, copiando o pé do
+// pinheiro antigo — mas o pé do pinheiro é preto a 39% de alfa, que o corte de alfa da mata em pé descarta: na tela o
+// pinheiro não tem barra nenhuma, e só estas peças ficavam com um retângulo preto chapado no pé. Preto puro não
+// recebe luz (é zero vezes qualquer coisa): ao meio-dia era um furo no chão, a única sombra do quadro sem cor. É a
+// mesma lição das decorações (biome-decor.mjs). A ardósia funda já era da paleta (K, o fundo da copa).
+const E = '#272b2d';
 
 export default {
   name: 'ancient-grove',

@@ -11,10 +11,10 @@
 //   2. E ELE ESCALA. Com a força em 5 tem de mexer mais que em 1: isso separa "o efeito existe" de
 //      "alguma coisa na tela se move".
 //   3. O QUE NÃO É PLANTA NÃO BALANÇA, e esta é a parte que dá para errar em silêncio. As malhas do
-//      terreno são fundidas por CAMADA, não por assunto: o mesmo mesh deitado carrega o capim e o
-//      SEIXO. Quem separa é o atributo `aWind` por vértice — e é ele que o assert lê, tile a tile
-//      (gameDebug.render.windMasks), porque um seixo balançando é o tipo de coisa que ninguém vê num
-//      teste de pixel e todo mundo vê jogando.
+//      terreno são fundidas por CAMADA, não por assunto: o mesmo mesh da decoração em pé carrega o
+//      capim e o SEIXO. Quem separa é a máscara por vértice (`aWind` na mata, `aFlex` na decoração) —
+//      e é ela que o assert lê, tile a tile (gameDebug.render.windMasks), porque um seixo balançando é
+//      o tipo de coisa que ninguém vê num teste de pixel e todo mundo vê jogando.
 //   4. A FORÇA É UM KNOB VIVO, NUNCA UM RECOMPILE. "Quanto de vento" é decisão de olho e vai ser
 //      mexida com o jogo rodando; se mudá-la compilasse um programa novo, o mundo travaria ~500ms
 //      no meio da brisa. Conta-se os programas do renderer antes e depois de mexer no knob.
@@ -26,7 +26,7 @@ import { readPng } from '../../spritefactory/lib/png.mjs';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 /** Frames da camada de cima: pinheiros e árvores (balançam) — ver WIND_SWAY_FRAMES no terrainGeometry. */
 const PINES = [4, 14, 15, 16, 17, 18];
-/** Na decoração deitada: folhagem (estremece) e seixo/graveto (parados). */
+/** Na decoração em pé: folhagem (balança) e seixo/graveto (parados). */
 const LEAVES = [19, 20];
 const LITTER = [2, 9, 13];
 
@@ -118,14 +118,14 @@ export default {
     const mixed = (layer) => Object.entries(masks[layer]).filter(([, e]) => e.on > 0 && e.off > 0).map(([f]) => f);
     const present = (layer, frames) => frames.map((f) => masks[layer][String(f)]).filter(Boolean);
     log(`  em pé: ${JSON.stringify(masks.upright)}`);
-    log(`  deitado: ${JSON.stringify(masks.decor)}`);
+    log(`  decoração: ${JSON.stringify(masks.decor)}`);
     assert('Cada frame obedece ao vento por inteiro ou não obedece (nenhum tile pela metade)',
       mixed('upright').length === 0 && mixed('decor').length === 0, JSON.stringify({ upright: mixed('upright'), decor: mixed('decor') }));
     const pines = present('upright', PINES);
     assert('Os pinheiros do vale obedecem ao vento', pines.length > 0 && pines.every((e) => e.on > 0 && e.off === 0), JSON.stringify(masks.upright));
     const decorOn = Object.values(masks.decor).some((e) => e.on > 0);
     const decorOff = Object.values(masks.decor).some((e) => e.off > 0);
-    assert('Na MESMA malha deitada, uma parte estremece e outra fica parada', decorOn && decorOff, JSON.stringify(masks.decor));
+    assert('Na MESMA malha da decoração, uma parte balança e outra fica parada', decorOn && decorOff, JSON.stringify(masks.decor));
     const leaf = present('decor', LEAVES);
     const litter = present('decor', LITTER);
     if (leaf.length) assert('A folhagem do chão estremece', leaf.every((e) => e.on > 0 && e.off === 0), JSON.stringify(masks.decor));

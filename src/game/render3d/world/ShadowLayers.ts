@@ -2,6 +2,7 @@
 // sombra dos maciços (muro, montanha, serra), re-assada aos poucos quando a luz direcional muda.
 
 import * as THREE from 'three';
+import { bakedShadowAlpha, bakedShadowLength, tintShadowMaterial } from '../CastShadow3D';
 import { shadowMaskOnUniform, shadowMaskRectUniform, shadowMaskUniform } from '../pixelArtLight';
 import { platform } from '@/game/platform/platform';
 import { bakeMassShadow, MASS_BAKE_MS_PER_FRAME } from '../terrainGeometry';
@@ -65,7 +66,7 @@ export class ShadowLayers {
   }
 
   public startMassShadowBake(): Generator<void, THREE.BufferGeometry | null, void> {
-    const length = this.host.params.moonShadowLength;
+    const length = bakedShadowLength(this.host.params.moonShadowLength);
     this.appliedMassShadow.length = length;
     this.appliedMassShadow.rotY = this.host.moonCastRotY;
 
@@ -83,7 +84,7 @@ export class ShadowLayers {
   }
 
   private installMassShadow(geo: THREE.BufferGeometry | null): void {
-    const alpha = this.host.params.moonShadowAlpha;
+    const alpha = bakedShadowAlpha(this.host.params.moonShadowAlpha);
     this.appliedMassShadow.alpha = alpha;
     const old = this.massShadowMesh;
     if (old) {
@@ -96,12 +97,11 @@ export class ShadowLayers {
       if (old) (old.material as THREE.Material).dispose();
       return;
     }
-    const mat = (old?.material as THREE.MeshBasicMaterial | undefined) ?? new THREE.MeshBasicMaterial({
-      color: 0x000000,
-      transparent: true,
-      depthWrite: false,
-      fog: true,
-    });
+    let mat = old?.material as THREE.MeshBasicMaterial | undefined;
+    if (!mat) {
+      mat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, depthWrite: false, fog: true });
+      tintShadowMaterial(mat); // a mesma cor de sombra da árvore ao lado (CastShadow3D.shadowTint)
+    }
     mat.opacity = alpha;
     const mesh = new THREE.Mesh(geo, mat);
     // A mesma ordem das outras sombras de chão: depois do brilho aditivo do fogo, senão a barra

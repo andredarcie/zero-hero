@@ -128,12 +128,21 @@ export const shadowProbe = (s: GameScene) => {
         const moonAttr = moonField.geometry.getAttribute('aCastAlpha');
         const fireAttr = fireField.geometry.getAttribute('aCastAlpha');
         const im = fireField.instanceMatrix.array;
-        const fireByTile = new Map<string, number>();
+        // De quem é cada silhueta de fogo: da árvore cujo PÉ está mais perto de onde ela nasce. O pé não é mais o
+        // centro do tile (render3d/forest.ts tira cada árvore do centro), então arredondar a posição da sombra para
+        // achar o tile erraria justamente as árvores mais deslocadas.
+        const fireByTile = new Map<(typeof tiles.castableSolids)[number], number>();
         let shortest = Infinity;
         for (let i = 0; i < fireField.count; i++) {
           const o = i * 16;
           shortest = Math.min(shortest, Math.hypot(im[o + 8], im[o + 9], im[o + 10]));
-          fireByTile.set(`${Math.round(im[o + 12])},${Math.round(im[o + 14])}`, fireAttr.getX(i));
+          let owner: (typeof tiles.castableSolids)[number] | null = null;
+          let best = 1.2;
+          for (const t of tiles.solidTiles) {
+            const d = Math.hypot(t.x + (t.look?.dx ?? 0) - im[o + 12], t.z + (t.look?.dz ?? 0) - im[o + 14]);
+            if (d < best) { best = d; owner = t; }
+          }
+          if (owner) fireByTile.set(owner, fireAttr.getX(i));
         }
         out.shortestCast = shortest === Infinity ? null : shortest;
         let starved = 0;
@@ -141,7 +150,7 @@ export const shadowProbe = (s: GameScene) => {
         for (const t of tiles.castableSolids) {
           if (t.moonSlot === undefined) continue;
           const moon = moonAttr.getX(t.moonSlot);
-          const fireA = fireByTile.get(`${t.x},${t.z}`) ?? 0;
+          const fireA = fireByTile.get(t) ?? 0;
           const presence = moon + fireA;
           if (presence < world.params.moonShadowAlpha - 0.01) {
             starved++;

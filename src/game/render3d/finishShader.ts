@@ -1,6 +1,7 @@
 // O ACABAMENTO DO QUADRO: o último passo da cadeia de pós (ver World3D.initPostProcessing).
 
 import * as THREE from 'three';
+import { CLOUD_FIELD_GLSL, skyUniforms } from './atmosphere';
 
 // ── HD-2D post: the finish shader (tilt-shift DoF + vignette + grain) ─────────
 //
@@ -38,10 +39,26 @@ export const makeFinishShader = (w: number, h: number): THREE.ShaderMaterialPara
     uShadowTint: { value: new THREE.Vector3(0.88, 0.95, 1.10) },
     uHighTint: { value: new THREE.Vector3(1.12, 1.02, 0.86) },
     uSaturation: { value: 1.1 },
+    // A SOMBRA PERDE COR (ver o bloco no shader): 0 = a saturação igual do claro ao escuro, como era.
+    uShadeSat: { value: 0 },
     uContrast: { value: 1.0 },
     uFade: { value: 0 },
     uSeasonTint: { value: new THREE.Vector3(1, 1, 1) },
     uSeasonSat: { value: 1 },
+    // ── A LUZ NO AR E AS NUVENS (ver atmosphere.ts e AirLight.ts) ──
+    // A profundidade do quadro e a matriz que a leva de volta ao MUNDO: é por ela que a sombra de uma nuvem sabe em
+    // que chão cai. `tAir` é o ar aceso (os fachos entre as árvores, o halo do fogo), somado antes da curva.
+    tDepth: { value: null },
+    tAir: { value: null },
+    uAirOn: { value: 0 },
+    uInvViewProj: { value: new THREE.Matrix4() },
+    uSkyNoise: skyUniforms.uSkyNoise,
+    uCloudDrift: skyUniforms.uCloudDrift,
+    uCloudCover: skyUniforms.uCloudCover,
+    uCloudShade: skyUniforms.uCloudShade,
+    uCloudTint: { value: new THREE.Vector3(0.62, 0.7, 0.88) },
+    // O OMBRO das altas-luzes (ver o bloco no shader): 0 = o corte seco de antes.
+    uShoulder: { value: 0 },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -71,10 +88,19 @@ export const makeFinishShader = (w: number, h: number): THREE.ShaderMaterialPara
     uniform vec3 uShadowTint;
     uniform vec3 uHighTint;
     uniform float uSaturation;
+    uniform float uShadeSat;
     uniform float uContrast;
     uniform float uFade;
     uniform vec3 uSeasonTint;
     uniform float uSeasonSat;
+    uniform sampler2D tDepth;
+    uniform sampler2D tAir;
+    uniform float uAirOn;
+    uniform mat4 uInvViewProj;
+    uniform float uCloudShade;
+    uniform vec3 uCloudTint;
+    uniform float uShoulder;
+    ${CLOUD_FIELD_GLSL}
     varying vec2 vUv;
     // O quadro com o bloom ja somado — a soma aditiva que o UnrealBloomPass fazia numa passada
     // de tela cheia, agora aqui, amostra por amostra (ver FusedBloomPass). O blend dele e
@@ -96,21 +122,44 @@ export const makeFinishShader = (w: number, h: number): THREE.ShaderMaterialPara
       // Quantise the radius to half a pixel: a continuously-varying blur makes the pixel art
       // "boil" as the hero walks, because every frame resamples the same texels differently.
       float radius = floor(uBlur * t * 2.0 + 0.5) * 0.5;
+      // ── O AR QUENTE acima das chamas (o alfa do ar aceso, ver AirLight) ───────
+      // Cada fileira do quadro escorrega de lado um pixel e pouco, numa onda que SOBE: o tremor de ar quente. Só existe
+      // na coluna acima de uma chama acesa; no resto da tela o alfa é zero e a leitura é a de sempre.
+      vec4 zhAir = uAirOn > 0.0 ? texture2D(tAir, vUv) : vec4(0.0);
+      vec2 zhUv = vUv;
+      if (zhAir.a > 0.004) {
+        zhUv += zhAir.a * vec2(sin(vUv.y * 260.0 - uTime * 11.0), 0.35 * cos(vUv.y * 190.0 - uTime * 8.0)) * 1.4 / uResolution;
+      }
       // Na faixa nitida o raio e ZERO e as sete amostras caem no mesmo texel (os pesos somam 1):
       // uma leitura so da o mesmo pixel. E a faixa e a maior parte da tela — o chao do heroi.
       vec3 col;
       if (radius == 0.0) {
-        col = frameAt(vUv);
+        col = frameAt(zhUv);
       } else {
         vec2 px = radius / uResolution;
-        col = frameAt(vUv) * 0.30;
-        col += frameAt(vUv + vec2( 1.0,  0.6) * px) * 0.12;
-        col += frameAt(vUv + vec2(-1.0,  0.6) * px) * 0.12;
-        col += frameAt(vUv + vec2( 1.0, -0.6) * px) * 0.12;
-        col += frameAt(vUv + vec2(-1.0, -0.6) * px) * 0.12;
-        col += frameAt(vUv + vec2( 0.0,  1.4) * px) * 0.11;
-        col += frameAt(vUv + vec2( 0.0, -1.4) * px) * 0.11;
+        col = frameAt(zhUv) * 0.30;
+        col += frameAt(zhUv + vec2( 1.0,  0.6) * px) * 0.12;
+        col += frameAt(zhUv + vec2(-1.0,  0.6) * px) * 0.12;
+        col += frameAt(zhUv + vec2( 1.0, -0.6) * px) * 0.12;
+        col += frameAt(zhUv + vec2(-1.0, -0.6) * px) * 0.12;
+        col += frameAt(zhUv + vec2( 0.0,  1.4) * px) * 0.11;
+        col += frameAt(zhUv + vec2( 0.0, -1.4) * px) * 0.11;
       }
+
+      // ── A SOMBRA DAS NUVENS ───────────────────────────────────────────────────
+      // O céu não entra no quadro, mas passa por cima dele: cada pixel volta ao MUNDO pela profundidade e pergunta ao
+      // campo de nuvens (o mesmo que o lago reflete) se há uma sobre aquele chão. Multiplica, e esfria: debaixo de
+      // nuvem a luz que sobra é a do céu. Manchas largas e lentas — é a luz do vale mudando, não um efeito em cima dele.
+      if (uCloudShade > 0.0) {
+        vec4 zhClip = uInvViewProj * vec4(vUv * 2.0 - 1.0, texture2D(tDepth, vUv).x * 2.0 - 1.0, 1.0);
+        vec2 zhGround = zhClip.xz / zhClip.w;
+        col *= mix(vec3(1.0), uCloudTint, zhCloud(zhGround) * uCloudShade);
+      }
+
+      // ── O AR ACESO (AirLight.ts) ──────────────────────────────────────────────
+      // Luz espalhada no ar entre a câmera e o que ela vê: os fachos de sol entre as copas, o halo em volta do fogo.
+      // Calculado e suavizado em meia resolução (ar é macio); aqui é uma leitura só, ampliada pelo filtro linear.
+      col += zhAir.rgb;
 
       // ── A DISTÂNCIA SEM BORRAR: a perspectiva atmosférica ─────────────────────
       // Acima da faixa do herói o quadro perde cor e se inclina para a cor do AR (o skyColor: poeira dourada de dia,
@@ -170,9 +219,27 @@ export const makeFinishShader = (w: number, h: number): THREE.ShaderMaterialPara
           luma = pow(max(luma, 0.0), sexp);
         }
       }
-      col = mix(vec3(luma), col, uSaturation + sight * 0.35); // saturation around luma
+      // ── A SOMBRA PERDE COR (uShadeSat) ────────────────────────────────────────
+      // Num dia de sol a cor mora na LUZ: o que o sol pega é vivo, e o que fica na sombra só tem o céu para devolver,
+      // e sai mais cinza. Com a saturação igual do claro ao escuro, a sombra de uma árvore era um verde tão forte
+      // quanto o prado ao lado, e o quadro lia como chapado mesmo com a sombra funda. Só o grave perde; do meio-tom
+      // para cima nada muda, e em 0 (a noite) a conta nem roda.
+      float zhSat = uSaturation + sight * 0.35;
+      if (uShadeSat > 0.0) zhSat *= 1.0 - uShadeSat * (1.0 - smoothstep(0.05, 0.4, luma));
+      col = mix(vec3(luma), col, zhSat); // saturation around luma
       col = (col - 0.5) * uContrast + 0.5;           // contrast around mid-grey
       col = max(col, 0.0);
+
+      // ── O OMBRO DAS ALTAS-LUZES (uShoulder) ───────────────────────────────────
+      // Sem tone mapping, 1.0 era corte seco: a chama, o brilho na água e a flor branca ao sol estouravam num borrão
+      // chapado. Acima do joelho o valor agora ROLA até o branco em vez de bater nele (uma exponencial: contínua no
+      // joelho, nunca passa de 1), canal a canal — o quente demais desbota para o branco como num filme. Abaixo do
+      // joelho é a identidade: a sombra e o meio-tom que o jogo afinou a olho não mudam um bit.
+      if (uShoulder > 0.0) {
+        vec3 zhOver = max(col - uShoulder, 0.0);
+        float zhSpan = 1.0 - uShoulder;
+        col = min(col, vec3(uShoulder)) + zhSpan * (1.0 - exp(-zhOver / zhSpan));
+      }
 
       vec2 vuv = (vUv - 0.5) * vec2(1.0, 1.2);
       col *= 1.0 - smoothstep(0.5, 0.95, length(vuv)) * uVignette;

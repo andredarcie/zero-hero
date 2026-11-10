@@ -34,9 +34,10 @@ export const renderProbe = (s: GameScene) => {
     },
 
     /**
-     * O VENTO, TILE A TILE: em cada malha que carrega o atributo `aWind` (a da mata em pé e a da decoração deitada),
+     * O VENTO, TILE A TILE: na mata em pé (o atributo `aWind`) e na decoração em pé (o atributo `aFlex`: 1 = planta),
      * quantos tiles de cada frame obedecem ao vento ('on') e quantos ficam parados ('off'). O frame sai do UV do próprio
-     * quad (a decoração é sorteada pelo bioma na hora de desenhar, então o mapa não sabe qual é); a máscara, do vértice.
+     * quad (a decoração é sorteada pelo bioma na hora de desenhar, então o mapa não sabe qual é) — pelo CENTRO dele, que
+     * cai dentro do quadro mesmo com a margem de balanço da decoração; a máscara, do vértice.
      */
     windMasks: () => {
       const world = w3();
@@ -45,18 +46,21 @@ export const renderProbe = (s: GameScene) => {
       const rows = Math.round(1 / (1 - tilesetFrameUv(0).v0));
       const out: Record<'upright' | 'decor', Record<string, { on: number; off: number }>> = { upright: {}, decor: {} };
       for (const mesh of world.tiles.terrainMeshes) {
+        const flex = mesh.geometry.getAttribute('aFlex');
+        const stand = mesh.geometry.getAttribute('aStand');
         const wind = mesh.geometry.getAttribute('aWind');
         const uv = mesh.geometry.getAttribute('uv');
-        if (!wind || !uv) continue;
-        const layer = mesh.geometry === world.tiles.decorGeo ? 'decor' : 'upright';
-        for (let v = 0; v + 3 < wind.count; v += 4) {
-          // Um quad desmontado (o mato cortado) colapsa em zero: fica de fora.
-          if (wind.getY(v) === 0 && wind.getZ(v) === 0 && wind.getX(v) === 0) continue;
-          let u = Infinity; let w = Infinity;
-          for (let k = 0; k < 4; k++) { u = Math.min(u, uv.getX(v + k)); w = Math.min(w, uv.getY(v + k)); }
-          const frame = (rows - 1 - Math.round(w * rows)) * cols + Math.round(u * cols);
+        const mask = flex ?? wind;
+        if (!mask || !uv) continue;
+        const layer = flex ? 'decor' : 'upright';
+        for (let v = 0; v + 3 < mask.count; v += 4) {
+          // Um quad desmontado (a cova cavada, o mato cortado) colapsa: fica de fora.
+          if (stand ? stand.getZ(v + 2) === 0 : (wind.getY(v) === 0 && wind.getZ(v) === 0 && wind.getX(v) === 0)) continue;
+          let u = 0; let w = 0;
+          for (let k = 0; k < 4; k++) { u += uv.getX(v + k) / 4; w += uv.getY(v + k) / 4; }
+          const frame = (rows - 1 - Math.floor(w * rows)) * cols + Math.floor(u * cols);
           const entry = (out[layer][String(frame)] ??= { on: 0, off: 0 });
-          entry[wind.getX(v) > 0.5 ? 'on' : 'off'] += 1;
+          entry[mask.getX(v) > 0.5 ? 'on' : 'off'] += 1;
         }
       }
       return out;

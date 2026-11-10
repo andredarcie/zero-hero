@@ -26,6 +26,13 @@ const SHEET = 'garden-mist-sheet';
  */
 const TINT = 0x9cb3d2;
 /**
+ * QUANTO DESSE TOM SOBRA AO MEIO-DIA. A névoa é iluminada, e a luz do dia subiu (skyPreset, "A TERCEIRA VERSÃO":
+ * o teto foi de 2 a 3): com o tom inteiro ela passava do branco, acendia o bloom e virava uma parede leitosa por cima
+ * do jardim — o herói sumia dentro dela. De noite o tom é o de sempre; de dia ele desce na proporção em que a luz
+ * subiu, e o véu volta a ser o cinza frio que deixa ver as silhuetas.
+ */
+const DAY_TINT_SCALE = 0.76;
+/**
  * O VÉU, não a parede: a névoa deixa ver as silhuetas atrás dela — é isso que guarda o mistério (2026-11-10). Ela era
  * quase opaca (0,82 a 1) e escondia o jardim inteiro por igual.
  */
@@ -93,6 +100,13 @@ const ensureTextures = (): void => {
   registered = true;
 };
 
+/** O tom da névoa para uma luz do dia de 0 (a noite: o tom inteiro) a 1 (o meio-dia: DAY_TINT_SCALE dele). */
+export const mistTint = (daylight: number): number => {
+  const k = 1 - (1 - DAY_TINT_SCALE) * Math.min(1, Math.max(0, daylight));
+  const ch = (shift: number): number => Math.round(((TINT >> shift) & 0xff) * k);
+  return (ch(16) << 16) | (ch(8) << 8) | ch(0);
+};
+
 const fadeAt = (d: number): number => {
   const t = Math.min(1, Math.max(0, (FADE_TO - d) / (FADE_TO - FADE_FROM)));
   return t * t * (3 - 2 * t);
@@ -121,6 +135,8 @@ export class GardenMist {
   private readonly puffs: Puff[] = [];
   private clock = 0;
   private blowing = false;
+  /** O degrau de luz do dia com que o tom foi escrito por último (ver DAY_TINT_SCALE): só reescreve quando muda. */
+  private tintStep = -1;
 
   public constructor(private readonly scene: Engine.Scene, center: { x: number; y: number }) {
     ensureTextures();
@@ -180,6 +196,7 @@ export class GardenMist {
   private tick(deltaMs: number): void {
     this.clock += deltaMs / 1000;
     const t = this.clock;
+    this.syncTint();
     for (const p of this.puffs) {
       // CAMADAS EM RITMOS DIFERENTES (2026-11-10): a nuvem mais alta anda mais e mais depressa que o lençol rente ao
       // chão, como num vale de verdade — é o desencontro entre as camadas que dá profundidade ao véu.
@@ -193,6 +210,15 @@ export class GardenMist {
       const breathe = 0.85 + 0.15 * Math.sin(t * 0.4 + p.phase);
       p.bb.setAlpha(p.alpha * breathe * (1 - p.gone));
     }
+  }
+
+  /** O tom da névoa acompanha a luz do dia, em vinte degraus (a troca de hora é lenta: quase nunca reescreve). */
+  private syncTint(): void {
+    const step = Math.round(Math.min(1, Math.max(0, world3d().params.daylight)) * 20);
+    if (step === this.tintStep) return;
+    this.tintStep = step;
+    const tint = mistTint(step / 20);
+    for (const p of this.puffs) p.bb.setTint(tint);
   }
 
   /**

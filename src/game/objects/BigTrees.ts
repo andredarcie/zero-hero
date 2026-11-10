@@ -16,12 +16,15 @@ import { createCanvas } from '@/game/platform/platform';
  * O ESTILO É O DO TILESET (forest_tile_set.png), e não um novo — o autor: "elas não seguem cores e estilos das árvores
  * já existentes". As regras, tiradas pixel a pixel da árvore antiga (quadros 73/74) e do pinheiro (4):
  *   · A PALETA do tileset, e só ela: folha #626439 / #4d4f2c, ardósia #3a3f3f / #272b2d nas sombras da copa, o musgo
- *     claro #8a8d49 só nos fios pendurados e em poucos toques, tronco #815938 / #63452c, sombra preta no pé.
- *   · TEXTURA GRANULADA: cada pixel sorteado entre 2 ou 3 tons da faixa (topo, miolo, fundo da copa). Nada de degradê
- *     suave nem de contorno.
- *   · A COPA é um domo de topo recortado; embaixo, a ardósia domina; da borda de baixo pendem fios de musgo.
+ *     claro #8a8d49 só nos fios pendurados e em poucos toques, tronco #815938 / #63452c, sombra de ardósia no pé.
+ *   · TEXTURA GRANULADA: cada pixel sorteado entre 2 ou 3 tons da faixa. Nada de degradê suave nem de contorno.
+ *   · A COPA é um domo de topo recortado, feito de BOLOTAS; cada bolota tem lado de luz (alto e esquerda, a luz do
+ *     tileset) e lado de sombra, e a faixa de onde o pixel é sorteado sai daí. Embaixo, a ardósia domina; da borda de
+ *     baixo pendem fios de musgo. (Revisão de arte, 2026-11-10: a faixa era só "topo, miolo, fundo" da copa inteira,
+ *     e o miolo — quase tudo — saía num ruído igual de ponta a ponta: de perto lia como um tapete, não como folhagem.)
  *   · O TRONCO é de colunas claras e escuras misturadas e ABRE EM RAÍZES separadas por vãos; embaixo, 2 linhas de
- *     preto, a sombra de contato que o tile também desenha.
+ *     ardósia funda, a sombra de contato que o tile também desenha (era preto puro: não recebe luz, e ao meio-dia
+ *     era um retângulo chapado, a única sombra sem cor do quadro — a mesma lição de ancient-grove.mjs).
  *   · A COR DO BIOMA no material (`biomeTreeTintAt`), igual às árvores do mapa — e não o tom das peças de cenário.
  * A densidade é a mesma (16 px por tile): uma árvore grande é uma árvore do tileset com MAIS pixels, não pixels maiores.
  *
@@ -60,7 +63,8 @@ const SLATE = '#3a3f3f';
 const SLATE_DK = '#272b2d';
 const BARK = '#815938';
 const BARK_DK = '#63452c';
-const BLACK = '#000000';
+/** O escuro do pé e do oco: a ardósia funda da copa, não preto (ver o cabeçalho). */
+const FOOT = SLATE_DK;
 /**
  * Do próprio tileset: o cinza das pedras (a casca da bétula — o branco puro virava amarelo-gema com a cor do bioma
  * dos campos) e os tons de osso das outras peças (os cogumelos, o miolo do tronco cortado).
@@ -105,14 +109,30 @@ const canvas = (w: number, h: number, paint: (put: Put) => void): HTMLCanvasElem
   return c;
 };
 
+/** De onde vem a luz da arte: do alto e da esquerda, um pouco de frente (a regra do tileset). */
+const ART_LIGHT = { x: -0.6, y: -0.72, z: 0.34 };
+
 /**
- * A COPA no estilo do tileset: a máscara é a união das `bumps` (círculos), com o topo recortado; cada pixel é sorteado
- * pela faixa em que está — o topo de cada bolota em folha, o miolo em folha escura salpicada de ardósia, o fundo da
- * copa em ardósia — e da borda de baixo pendem fios de musgo. `light` puxa a copa para a folha (as árvores jovens,
- * mais ralas e mais claras).
+ * A COPA no estilo do tileset: a máscara é a união das `bumps` (círculos), com o topo recortado. Cada pixel é sorteado
+ * pela faixa de LUZ em que está na sua bolota — a crista acesa em folha (com raros toques de musgo), a meia-luz em
+ * folha e folha escura, a virada em folha escura e ardósia, o lado de baixo e da direita em ardósia. A bolota dona de
+ * um pixel é a que está NA FRENTE ali: a última da lista que o cobre (as de baixo vêm depois, e ficam por cima). É
+ * isso que separa as massas de folha: onde a crista de uma bolota encontra a sombra da de trás, aparece o vão. O
+ * fundo da copa segue em ardósia, e da borda de baixo pendem fios de musgo. `light` puxa a copa para a folha (as
+ * árvores jovens, mais ralas e mais claras).
  */
 const crown = (put: Put, w: number, h: number, bumps: ReadonlyArray<readonly [number, number, number]>, seed: number, light = 0, drips = true): void => {
   const inside = (x: number, y: number): boolean => bumps.some(([cx, cy, r]) => Math.hypot(x + 0.5 - cx, (y + 0.5 - cy) * 1.1) <= r);
+  const litAt = (x: number, y: number): number => {
+    let lit = 0;
+    for (const [cx, cy, r] of bumps) {
+      const nx = (x + 0.5 - cx) / r;
+      const ny = ((y + 0.5 - cy) * 1.1) / r;
+      const d2 = nx * nx + ny * ny;
+      if (d2 <= 1) lit = nx * ART_LIGHT.x + ny * ART_LIGHT.y + Math.sqrt(1 - d2) * ART_LIGHT.z;
+    }
+    return lit;
+  };
   for (let x = 0; x < w; x += 1) {
     let y0 = -1;
     let y1 = -1;
@@ -128,10 +148,14 @@ const crown = (put: Put, w: number, h: number, bumps: ReadonlyArray<readonly [nu
       const fromBottom = y1 - y;
       // O topo de cada bolota (sem outra logo acima): folha, como a primeira linha do tile.
       const onTop = y === y0 || !inside(x, y - 2);
+      const lit = litAt(x, y) + light * 0.3;
       let c: string;
       if (onTop) c = pick(r, [[LEAF, 0.7 + light * 0.2], [LEAF_DK, 0.3]]);
       else if (fromBottom < 3) c = pick(r, [[SLATE, 0.4 - light * 0.2], [SLATE_DK, 0.25 - light * 0.15], [LEAF_DK, 0.35]]);
-      else c = pick(r, [[LEAF_DK, 0.45], [LEAF, 0.2 + light * 0.3], [SLATE, 0.25 - light * 0.15], [SLATE_DK, 0.1]]);
+      else if (lit > 0.6) c = pick(r, [[LEAF, 0.82], [LEAF_DK, 0.18]]);
+      else if (lit > 0.28) c = pick(r, [[LEAF, 0.5], [LEAF_DK, 0.42], [SLATE, 0.08]]);
+      else if (lit > -0.05) c = pick(r, [[LEAF_DK, 0.56], [LEAF, 0.14], [SLATE, 0.3]]);
+      else c = pick(r, [[SLATE, 0.46], [LEAF_DK, 0.3], [SLATE_DK, 0.24]]);
       put(x, y, c);
     }
     // Os fios de musgo pendurados da borda de baixo, de 2 a 3 px, espaçados.
@@ -166,19 +190,19 @@ const roots = (put: Put, cx: number, y0: number, legs: ReadonlyArray<readonly [n
   });
 };
 
-/** A sombra de contato do tile: 2 linhas de preto sob o pé. */
+/** A sombra de contato do tile: 2 linhas de ardósia funda sob o pé. */
 const shadow = (put: Put, cx: number, y: number, half: number): void => {
-  for (let x = Math.floor(cx - half); x < Math.ceil(cx + half); x += 1) put(x, y, BLACK);
-  for (let x = Math.floor(cx - half * 0.65); x < Math.ceil(cx + half * 0.65); x += 1) put(x, y + 1, BLACK);
+  for (let x = Math.floor(cx - half); x < Math.ceil(cx + half); x += 1) put(x, y, FOOT);
+  for (let x = Math.floor(cx - half * 0.65); x < Math.ceil(cx + half * 0.65); x += 1) put(x, y + 1, FOOT);
 };
 
 /** O CARVALHO VELHO, quadro de vento `f`: a árvore antiga do tileset (73/74), crescida. 44×44. */
 const paintOak = (f: number, seed: number): HTMLCanvasElement => canvas(44, 44, (put) => {
   const cx = 22;
-  // A sombra primeiro (as raízes pisam nela), o tronco grosso com o oco preto, e as raízes abrindo embaixo.
+  // A sombra primeiro (as raízes pisam nela), o tronco grosso com o oco escuro, e as raízes abrindo embaixo.
   shadow(put, cx, 42, 13);
   trunk(put, cx, 24, 37, (y) => 4 + (y < 27 ? (27 - y) * 0.5 : 0) + (y > 34 ? (y - 34) * 0.6 : 0), seed);
-  for (const [x, y] of [[21, 31], [21, 32], [22, 32]] as const) put(x, y, BLACK);
+  for (const [x, y] of [[21, 31], [21, 32], [22, 32]] as const) put(x, y, FOOT);
   roots(put, cx, 37, [[-9, 5], [-4, 5], [3, 5], [8, 5]], seed);
   // A copa: bolotas grandes, as de cima mexidas pelo vento no quadro 1.
   const s = f ? 1 : 0;
@@ -216,8 +240,8 @@ const paintSapling = (f: number, seed: number): HTMLCanvasElement => canvas(16, 
 /** O TRONCO CAÍDO: deitado, a ponta cortada com os anéis, musgo por cima, e cogumelos claros. 32×14. */
 const paintLog = (seed: number): HTMLCanvasElement => canvas(32, 14, (put) => {
   const cy = 7;
-  for (let x = 3; x < 31; x += 1) put(x, 12, BLACK);
-  for (let x = 6; x < 28; x += 1) put(x, 13, BLACK);
+  for (let x = 3; x < 31; x += 1) put(x, 12, FOOT);
+  for (let x = 6; x < 28; x += 1) put(x, 13, FOOT);
   for (let x = 4; x < 31; x += 1) {
     for (let y = cy - 3; y <= cy + 3; y += 1) {
       const e = y - cy;

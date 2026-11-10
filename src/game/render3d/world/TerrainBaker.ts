@@ -3,18 +3,20 @@
 
 import * as THREE from 'three';
 import { RELIEF_HEIGHT, reliefLevelAt } from '@/game/world/relief';
-import { WIDTH_FACTOR as CAST_WIDTH_FACTOR } from '../CastShadow3D';
+import { bakedShadowAlpha, bakedShadowLength, WIDTH_FACTOR as CAST_WIDTH_FACTOR } from '../CastShadow3D';
 import { buildVineGeometry } from '../vineTexture';
-import { frameFootPad, frameUvWindow, getBaseTexture3D } from '../textures3d';
+import { getBaseTexture3D } from '../textures3d';
+import { solidCastArt } from './SolidCastEmitter';
 import { buildFlatTileGeometry, buildMassHeightGrid, buildReliefContourGeometry, buildStairGeometry, buildTileCubeGeometry, collapseQuad, isMassFrame, shapeRock, tileKey } from '../terrainGeometry';
 import { makeTerrainMaterials, type TerrainMaterials } from '../terrainMaterials';
 import type { SolidTileEntry } from './TerrainData';
+import { StandingDecor } from './StandingDecor';
 import type { World3D } from '../World3D';
 import { MIN_CAST_LEN } from './worldDefs';
 
 /** O que TerrainBaker usa de World3D. */
 export type TerrainBakerHost = Pick<World3D,
-  'activeRustles' | 'appliedMoonShadow' | 'emit' | 'features' | 'ground' | 'mirror' | 'moonCastRotY' | 'moonDimmed' | 'params' | 'probe' | 'scene' | 'shadows' | 'sorter' | 'tiles'
+  'appliedMoonShadow' | 'camTarget' | 'emit' | 'features' | 'ground' | 'mirror' | 'moonCastRotY' | 'moonDimmed' | 'params' | 'probe' | 'scene' | 'shadows' | 'sorter' | 'tiles'
 >;
 
 export class TerrainBaker {
@@ -47,15 +49,12 @@ export class TerrainBaker {
     this.host.tiles.massGrid = null;
     this.host.tiles.stairTiles = [];
     this.host.tiles.lavaSpots.length = 0;
-    this.host.tiles.grassQuads.clear();
-    this.host.tiles.decorQuads.clear();
     this.host.tiles.greenTiles.length = 0; // as moitas da janela velha não existem mais
     this.host.tiles.solidBuckets.clear();
     this.host.tiles.sunkenTiles.clear();
     this.host.mirror.clearWater();
     this.host.tiles.riverQuads.clear();
     this.host.tiles.riverSurfaceGeo = undefined;
-    this.host.activeRustles.clear();
     // Both caches are keyed on tiles that no longer exist.
     this.host.probe.fireCastLists.clear();
     this.host.probe.fireListRadius = -1;
@@ -76,7 +75,15 @@ export class TerrainBaker {
     this.host.ground.bakeStoneEdges(t, mats);
     this.host.ground.bakeEarthEdges(t, mats);
     this.host.features.bakeLavaAndPit(t, mats, groundFrame);
-    this.host.features.bakeDecor(t, mats);
+    // A DECORAÇÃO não deita: só o chão puro fica no chão, e o resto fica em pé (render3d/standingDecor.ts).
+    const decor = this.host.features.bakeDecor(t);
+    this.host.tiles.standing ??= new StandingDecor({
+      addMesh: (mesh) => this.addTerrainMesh(mesh),
+      actors: () => this.host.mirror?.actorBodies ?? [],
+      focus: () => this.host.camTarget,
+      stand: () => this.host.params.stand,
+    });
+    this.host.tiles.standing.bake(decor, t.solidSet, mats.standing);
     this.host.features.bakeSolids(t, mats);
     this.host.features.bakeMistAndShadows(t, mats, wetTiles);
     this.fillMoonCastField();
@@ -161,6 +168,13 @@ export class TerrainBaker {
   public addTerrainMesh(mesh: THREE.Mesh): void {
     this.host.scene.add(mesh);
     this.host.tiles.terrainMeshes.push(mesh);
+    // O que fica EM PÉ aparece na água (WaterMirror): a mata, a pedra, a serra, a escada, a decoração da margem. O
+    // chão não: visto de baixo ele é verso, e a água não se reflete em si mesma.
+    const mats = this.host.tiles.terrainMats;
+    const m = mesh.material;
+    if (mats && (Array.isArray(m) || m === mats.trees || m === mats.solid || m === mats.rock || m === mats.stair || m === mats.standing)) {
+      this.host.mirror.addScenery(mesh);
+    }
   }
 
   /**
@@ -186,8 +200,8 @@ export class TerrainBaker {
    * run, and a virtual camera far to the south bakes the correct order for every frame.
    */
   public fillMoonCastField(): void {
-    const alpha = this.host.params.moonShadowAlpha;
-    const length = this.host.params.moonShadowLength;
+    const alpha = bakedShadowAlpha(this.host.params.moonShadowAlpha);
+    const length = bakedShadowLength(this.host.params.moonShadowLength);
     const field = this.host.tiles.moonCastField;
     field.begin();
     if (alpha > 0.02) {
@@ -199,12 +213,16 @@ export class TerrainBaker {
         // vindo por aqui, que é para o que este campo foi feito — ela é um objeto solto, e a
         // silhueta dela é o desenho da copa.
         if (isMassFrame(tile.frame)) continue;
+        // A silhueta é a da árvore que se VÊ: sai do pé dela (fora do centro do tile), recortada da forma que ela
+        // veste, e uma árvore alta deita uma sombra do dobro do comprimento (ver solidCastArt).
+        const art = solidCastArt(tile);
+        const reach = length * art.height;
         // A sombra deita no chão da árvore e para na beira dele: passar dali é flutuar no ar.
-        const clamped = this.host.emit.clampCastAtSunken(tile.x, tile.z, this.host.moonCastRotY, length);
+        const clamped = this.host.emit.clampCastAtSunken(tile.x, tile.z, this.host.moonCastRotY, reach);
         field.add(
-          tile.x, tile.z, frameUvWindow('forest-tileset', tile.frame),
-          CAST_WIDTH_FACTOR, clamped >= MIN_CAST_LEN ? clamped : length, this.host.moonCastRotY, alpha,
-          frameFootPad('forest-tileset', tile.frame),
+          art.x, art.z, art.uv,
+          CAST_WIDTH_FACTOR, clamped >= MIN_CAST_LEN ? clamped : reach, this.host.moonCastRotY, alpha,
+          art.footPad,
           tile, // handed back below with the slot the sort assigned — the handoff's handle
           reliefLevelAt(tile.x, tile.z) * RELIEF_HEIGHT,
         );
@@ -219,20 +237,12 @@ export class TerrainBaker {
   }
 
   /**
-   * Erase one FLAT decor quad (low grass, foliage, litter) from the merged decor mesh — the
-   * shovel turning the soil under a dug hole. The four vertices fold onto a point (a degenerate
-   * triangle rasterizes nothing), nothing reallocates. The active rustle (if any) dies with it,
-   * and it MUST: updateRustles rewrites absolute corner positions every frame, so a live
-   * rustle would resurrect the collapsed quad on its next tick. Caller also clears the tile in
-   * the chunk data — a later rebake reads from there, not from this mesh.
+   * Erase one decor tile — the shovel turning the soil under a dug hole. All decor stands
+   * (StandingDecor.clearTile folds its quad onto a point and kills its rustle; nothing
+   * reallocates). Caller also clears the tile in the chunk data — a later rebake reads from
+   * there, not from this mesh.
    */
   public removeDecorTile(worldX: number, worldY: number): void {
-    const key = `${worldX},${worldY}`;
-    const vertStart = this.host.tiles.decorQuads.get(key);
-    if (vertStart === undefined) return; // no decor here, or already dug away
-    this.host.tiles.decorQuads.delete(key);
-    this.host.tiles.grassQuads.delete(key);
-    this.host.activeRustles.delete(key);
-    collapseQuad(this.host.tiles.decorGeo, vertStart);
+    this.host.tiles.standing?.clearTile(worldX, worldY);
   }
 }

@@ -2,7 +2,7 @@
 // mundo, e o farfalhar da decoração quando alguém passa por cima.
 
 import * as THREE from 'three';
-import { TILESET_FRAME_SIZE, TIMINGS } from '@/game/constants';
+import { TILESET_FRAME_SIZE } from '@/game/constants';
 import { Billboard3D, type Billboard3DOptions } from '../Billboard3D';
 import { makeCastMaskMaterial, makeCastMesh } from '../CastShadow3D';
 import { makeShadowBlob } from '../groundShadow';
@@ -109,7 +109,7 @@ export interface GroundEllipse {
 }
 
 /** O que WorldObjects usa de World3D. */
-export type WorldObjectsHost = Pick<World3D, 'activeRustles' | 'casts' | 'mirror' | 'scene' | 'shadows' | 'tiles'>;
+export type WorldObjectsHost = Pick<World3D, 'casts' | 'mirror' | 'scene' | 'shadows' | 'tiles'>;
 
 export class WorldObjects {
   public constructor(private readonly host: WorldObjectsHost) {}
@@ -241,47 +241,8 @@ export class WorldObjects {
     return mesh;
   }
 
-  /** Wobble the low-grass decor quad on this tile, exactly like the 2D rustle. */
+  /** The 2D rustle on this tile's plant: it stands now, so its tip sways and comes back (StandingDecor.rustle). */
   public rustleDecor(worldX: number, worldY: number): void {
-    const key = `${worldX},${worldY}`;
-    const vertStart = this.host.tiles.grassQuads.get(key);
-    if (vertStart === undefined) return;
-    // O centro do QUAD, lido do buffer: o tufo pode ter andado dentro do tile (o espalhamento da decoração), e girar
-    // em volta do centro do tile o devolveria ao meio no primeiro pisão. A média dos cantos sobrevive ao giro.
-    const pos = this.host.tiles.decorGeo.attributes.position as THREE.BufferAttribute;
-    let x = 0;
-    let z = 0;
-    for (let i = 0; i < 4; i++) { x += pos.getX(vertStart + i) / 4; z += pos.getZ(vertStart + i) / 4; }
-    this.host.activeRustles.set(key, { vertStart, x, z, t: 0 });
-  }
-
-  public updateRustles(dt: number): void {
-    if (this.host.activeRustles.size === 0) return;
-    const pos = this.host.tiles.decorGeo.attributes.position as THREE.BufferAttribute;
-    const cycle = (TIMINGS.grassRustleDurationMs * 2) / 1000;
-
-    for (const [key, r] of this.host.activeRustles) {
-      r.t += dt / cycle;
-      const done = r.t >= 1;
-      // Yoyo with Sine.easeOut both ways, like the 2D tween.
-      const half = done ? 0 : (r.t < 0.5 ? r.t * 2 : (1 - r.t) * 2);
-      const k = Math.sin((half * Math.PI) / 2);
-      const angle = (-8 * Math.PI / 180) * k;
-      const sx = (1 - 0.12 * k) * 0.5;
-      const sz = (1 + 0.08 * k) * 0.5;
-      const cos = Math.cos(angle);
-      const sin = Math.sin(angle);
-      // Quad corners in build order: (-,-) (+,-) (+,+) (-,+)
-      const corners: ReadonlyArray<readonly [number, number]> = [
-        [-sx, -sz], [sx, -sz], [sx, sz], [-sx, sz],
-      ];
-      for (let i = 0; i < 4; i++) {
-        const [lx, lz] = corners[i];
-        pos.setX(r.vertStart + i, r.x + lx * cos - lz * sin);
-        pos.setZ(r.vertStart + i, r.z + lx * sin + lz * cos);
-      }
-      if (done) this.host.activeRustles.delete(key);
-    }
-    pos.needsUpdate = true;
+    this.host.tiles.standing?.rustle(worldX, worldY);
   }
 }

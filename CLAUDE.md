@@ -284,23 +284,23 @@ o mundo do overworld é feito de **tiles**, e um tile só sabia ser um quad chap
 
 ## Renderização: as leis que doem
 
-- **Nada pode adicionar ou remover uma luz THREE em runtime.** O three assa a *contagem* de luzes
-  na chave de cache de todo shader: um `scene.add(pointLight)` no meio do jogo recompila o mundo
-  inteiro (~550ms travados). Fogo **empresta** de um pool fixo (`FIRE_LIGHT_SLOTS`); mesh pode
-  nascer e morrer, luz não. `perf-burn` guarda isso.
+- **Nada pode adicionar ou remover uma luz THREE em runtime.** O three assa a *contagem* de luzes na chave de todo
+  shader: um `scene.add(pointLight)` no meio do jogo recompila o mundo (~550ms). Fogo **empresta** de um pool fixo
+  (`FIRE_LIGHT_SLOTS`); mesh pode nascer e morrer, luz não. `perf-burn` guarda isso.
+- **A LUZ NO AR, A SOMBRA DAS NUVENS E O CÉU NA ÁGUA são pós e uniforms, nunca luz THREE** (`render3d/AirLight.ts`, `atmosphere.ts`). O ar e os corpos leem as sombras de chão numa MÁSCARA vista de cima: sombra de chão nova usa `tintShadowMaterial` (a cor é `hd3d.shadowTint`) e entra em `AirLight.renderMask`, senão não faz facho nem escurece quem pisa nela. Todo billboard em pé aparece na água (`WaterMirror`).
 - **`prewarmShaders()` roda com o render target do composer ligado** — o mundo nunca é desenhado
   no canvas, e o three assa o color space do alvo na chave do programa. E ele **DESENHA**, não só
   compila: no ANGLE (Chrome/Windows) o shader só termina no primeiro draw (o rio travava 312ms).
 - **A luz pontual do CHÃO sai do `GroundLightMap`** (uma conta por célula, não por pixel): mexer na
   conta de luz do `pixelArtLight` exige mexer nele também. E **nada de `THREE.Points`** (`ParticleBatch`).
 - **NÃO HÁ TONE MAPPING.** O mundo é desenhado num render target, e o three só monta o ACES quando
-  o alvo é a tela — então o linear vai cru pro canvas e **`hd3d.exposure` não faz nada**. Sem ombro
-  segurando o alto, 1.0 é corte seco: subir luz estoura o branco antes de clarear a sombra (é para
-  isso que existe o `lightCap`). Quem levanta um quadro é a CURVA, `hd3d.lift` no `FinishShader`.
-- **O MUNDO TEM DUAS HORAS DO DIA, e o SOL é a mesma luz que a lua** (`skyPreset.ts`, o delta que
-  `hd3d.daylight` aplica sobre a noite): cor de luz, de céu ou de partícula que você cravar num
-  arquivo só existe numa das duas — e some, ou fica preta, na outra. Ela é knob ou é dois valores.
-- **Nenhum sprite pode vazar do seu tile.** Profundidade vem do shader, nunca de escalar arte.
+  o alvo é a tela — então o linear vai cru pro canvas e **`hd3d.exposure` não faz nada**. Quem levanta
+  um quadro é a CURVA (`hd3d.lift`); só o alto ROLA até o branco (`hd3d.shoulder`). O claro-escuro do dia é um PAR:
+  mais luz (`ambient`/`moon`/`lightCap` juntos) E curva mais reta. Mexer num sem o outro escurece ou lava o dia.
+- **O MUNDO TEM TRÊS TABELAS DE HORA, e o SOL é a mesma luz que a lua** (`skyPreset.ts`: a noite é o padrão,
+  `DAY_SKY` e `GOLDEN_SKY` são deltas pesados por `daylight` e `golden`): cor de luz, de céu ou de partícula cravada
+  num arquivo só existe numa delas — e some, ou fica preta, nas outras. Ela é knob ou é um valor por tabela.
+- **Nenhum sprite pode vazar do seu tile.** Profundidade vem do shader, nunca de escalar arte. **A MATA é a exceção desenhada** (`render3d/forest.ts`, pedido do autor): a COLISÃO é da grade (um tile, uma árvore, no dado), mas cada árvore sai do centro em pixel inteiro e veste uma forma da família `forest-trees` (frames 78..119; as altas são duas células na mesma coluna do atlas, só com dois tiles em pé ao norte). Forma nova de árvore entra lá, nunca centrada à mão; a sombra lê o `look` do tile (`solidCastArt`). **Só o chão puro fica deitado** (o tile de capim e de terra, e o que É chão: trilha, estrada, poça, água, trinca, folha caída). TODA a decoração do mapa fica EM PÉ (`render3d/standingDecor.ts`): a planta se curva (`aFlex`, = `WIND_STIR_FRAMES`), o rígido fica parado. Nunca plantar vegetação nova por cima (dois matos, em pé e chapado, poluem: o autor reprovou).
 - **TODA MALHA DE CHÃO PINTA COM `groundShadeAt`** (bioma × mancha × sombra de copa × sombra de canto): uma que pinte por conta própria faz um risco reto onde encosta no chão comum. `chao-sem-risco` mede. **A cor do bioma é RAMPA da folha, não multiplicação** (`render3d/biomeRamp.ts`): o `biomeTintAt` é só dos materiais de terreno; sprite INTEIRO tingido pelo bioma usa `biomeWashAt`, senão a flor e o tronco viram a cor do capim.
 - **Tudo em que o herói pisa declara `depthLayer: 'ground'`** (`Billboard3D`), senão dois quads
   coplanares piscam. Quads deitados (buracos, água, flor aberta) são isentos.

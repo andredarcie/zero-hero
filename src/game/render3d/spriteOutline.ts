@@ -26,6 +26,50 @@ export const OUTLINE_VERTEX_GLSL = /* glsl */ `
     vZhFrameA = ( mapTransform * vec3( 0.0, 0.0, 1.0 ) ).xy;
     vZhFrameB = ( mapTransform * vec3( 1.0, 1.0, 1.0 ) ).xy;
   #endif
+  // O sprite espelhado (setFlipX) tem a escala em x negativa: a "direita" da arte passa a ser a esquerda da tela.
+  vZhFlip = modelMatrix[0][0] < 0.0 ? -1.0 : 1.0;
+`;
+
+/**
+ * A LUZ DE CONTORNO (`hd3d.rim`) — o fio claro na borda de quem é o assunto do quadro, do lado de onde vem a luz.
+ *
+ * O anel escuro (acima) separa o personagem do chão; este é o par dele, e é o que cola o personagem na LUZ do mundo:
+ * um sprite é pintado com uma luz só, para sempre, e sem isto o herói ao pôr do sol e o herói ao meio-dia são o mesmo
+ * desenho. O texel OPACO que tem um vizinho vazio do lado da luz ganha um fio dela — do sol ou da lua (de lado, e por
+ * cima quando a luz vem de trás ou do alto), e da chama mais perto, na cor dela, quando há uma: o vizinho sentado à
+ * fogueira fica com a borda acesa virada para o fogo.
+ *
+ * É um texel de arte, na grade da arte, dentro do quad — nunca um pixel a mais. Entra como luz emitida (depois do teto
+ * de luz), pesada pela cor da própria arte: o fio num casaco azul é azul claro, não branco.
+ */
+export const RIM_FRAGMENT_GLSL = /* glsl */ `
+  #ifdef USE_MAP
+  if ( diffuseColor.a >= 0.5 ) {
+    vec2 zhRt = 1.0 / vec2( textureSize( map, 0 ) );
+    vec2 zhRlo = min( vZhFrameA, vZhFrameB );
+    vec2 zhRhi = max( vZhFrameA, vZhFrameB );
+    vec2 zhAxis = sign( vZhFrameB - vZhFrameA );
+    vec2 zhStepX = vec2( zhRt.x * zhAxis.x * vZhFlip, 0.0 );
+    vec2 zhUvR = vMapUv + zhStepX;
+    vec2 zhUvL = vMapUv - zhStepX;
+    vec2 zhUvT = vMapUv + vec2( 0.0, zhRt.y * zhAxis.y );
+    // Vazio = fora do quadro da folha, ou um texel transparente.
+    float zhOpenR = ( zhUvR.x < zhRlo.x || zhUvR.x > zhRhi.x ) ? 1.0 : 1.0 - step( 0.5, texture2D( map, zhUvR ).a );
+    float zhOpenL = ( zhUvL.x < zhRlo.x || zhUvL.x > zhRhi.x ) ? 1.0 : 1.0 - step( 0.5, texture2D( map, zhUvL ).a );
+    float zhOpenT = ( zhUvT.y < zhRlo.y || zhUvT.y > zhRhi.y ) ? 1.0 : 1.0 - step( 0.5, texture2D( map, zhUvT ).a );
+    float zhSunRim = max( ( uRimSide.x >= 0.0 ? zhOpenR : zhOpenL ) * abs( uRimSide.x ), zhOpenT * uRimSide.y );
+    vec3 zhRim = uRimSun * zhSunRim;
+    vec2 zhToFire = uRimFire.xy - vZhFootXZ;
+    float zhFd = length( zhToFire );
+    if ( zhFd < uRimFire.z && zhFd > 0.05 ) {
+      vec2 zhFn = zhToFire / zhFd;
+      float zhReach = 1.0 - zhFd / uRimFire.z;
+      float zhFireRim = max( ( zhFn.x >= 0.0 ? zhOpenR : zhOpenL ) * abs( zhFn.x ), zhOpenT * max( -zhFn.y, 0.0 ) );
+      zhRim += uRimFireColor * zhFireRim * zhReach;
+    }
+    totalEmissiveRadiance += zhRim * ( 0.4 + 0.6 * diffuseColor.rgb ) * opacity;
+  }
+  #endif
 `;
 
 /**
