@@ -11,6 +11,7 @@ import { EASEL_ART_TEXTURE, EASEL_BLANK_TEXTURE, paintTableTexture, publishEasel
 import { FX_DOT_TEXTURE, world3d } from '@/game/render3d/World3D';
 import { adventureState, type PaintQuestSave } from '@/game/runtime/adventureState';
 import { PaintingOverlay } from '@/game/runtime/PaintingOverlay';
+import { PainterCracks } from './PainterCracks';
 import { PainterGarden, SIZE_PLANT } from './PainterGarden';
 import { PainterStudio, SIZE_TABLE, SIZE_EASEL, EASEL_SPOTS } from './PainterStudio';
 import { PainterTalk } from './PainterTalk';
@@ -27,6 +28,8 @@ import { PainterTalk } from './PainterTalk';
 export interface PainterHost {
   scene: Engine.Scene;
   held: () => HeldItemKind | 'none';
+  /** É dele: nas costas ou entre as ferramentas guardadas (Inventory.owns). */
+  owns: (kind: HeldItemKind) => boolean;
   heldCount: (kind: HeldItemKind) => number;
   takeIntoHand: (kind: HeldItemKind, units: number) => void;
   removeFromHand: (kind: HeldItemKind, units: number) => void;
@@ -95,9 +98,11 @@ export class PainterQuest {
     }
     this.restoreArt();
     this.garden.restorePlots();
+    this.cracks.build(npc);
   }
 
   public destroy(): void {
+    this.cracks.destroy();
     this.overlay?.destroy();
     this.overlay = undefined;
     this.table?.destroy();
@@ -190,9 +195,9 @@ export class PainterQuest {
     this.host.itemGet(kind, () => {});
   }
 
-  /** Perdeu de vista? Se a coisa não está na mão nem no chão, ela tem outra. */
+  /** Perdeu de vista? Se a coisa não está com ele nem no chão, ela tem outra. */
   public resupply(kind: HeldItemKind, at: { worldX: number; worldY: number }, units = 1): void {
-    if (this.host.held() === kind || this.host.onGround(kind)) return;
+    if (this.host.owns(kind) || this.host.onGround(kind)) return;
     this.give(kind, units, at);
   }
 
@@ -260,6 +265,8 @@ export class PainterQuest {
   public readonly garden = new PainterGarden(this);
   /** A mesa das tintas e o cavalete. (ver PainterStudio) */
   public readonly studio = new PainterStudio(this);
+  /** As quatro covas rachadas, o único chão que a pá cava. (ver PainterCracks) */
+  public readonly cracks = new PainterCracks(this);
   /** As conversas de cada etapa. (ver PainterTalk) */
   private readonly talker = new PainterTalk(this);
 

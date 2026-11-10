@@ -26,7 +26,7 @@ const GLANCE_HOLD_MS = 1500;
 /** O que ForagingWork usa de GameScene (e a cena do motor, que ele passa a quem monta objetos do mundo). */
 export type ForagingWorkHost = Engine.Scene & Pick<GameScene,
   'actions' | 'adventure' | 'bumps' | 'camera' | 'cutsceneActive' | 'dialog' | 'dialogCam' | 'hand'
-  | 'heldItem' | 'itemManager' | 'movementController' | 'npcManager' | 'orders' | 'playerWorld' | 'props'
+  | 'heldItem' | 'inventory' | 'itemManager' | 'movementController' | 'npcManager' | 'orders' | 'playerWorld' | 'props'
   | 'save' | 'scale' | 'seenItems' | 'sparkle' | 'steps' | 'tileSize' | 'time' | 'world3d'
 >;
 
@@ -54,7 +54,7 @@ export class ForagingWork {
     const kind = this.host.itemManager?.kindAt(wx, wy);
     if (!isMushroomKind(kind)) return false;
     if (this.foraging) return true;
-    // A FACA PRECISA ESTAR NA MÃO (uma coisa de cada vez). Sem ela, o herói pensa nela.
+    // A FACA PRECISA ESTAR NAS COSTAS (a guardada já veio: ToolSwing.equipToolFor). Sem ela, o herói pensa nela.
     if (this.host.heldItem !== 'knife') {
       this.host.bumps.thinkOfNeed(wx, wy, true);
       return true;
@@ -144,12 +144,12 @@ export class ForagingWork {
 
   /**
    * A FACA ESTÁ COM A SHUI? Ela é derivada, não guardada: depois do presente, a faca que não está
-   * na mão, nem no chão, nem num altar, voltou para ela (é o que o corte faz). Um booleano no save
-   * seria uma segunda verdade, e a faca largada num canto do mapa provaria que ele mente.
+   * com o herói (nas costas ou guardada), nem no chão, nem num altar, voltou para ela. Um booleano no
+   * save seria uma segunda verdade, e a faca largada num canto do mapa provaria que ele mente.
    */
   public knifeWithShui(): boolean {
     if (!this.host.adventure || !adventureState().giftsGiven.has(FORAGER_DIALOG)) return false;
-    if (this.host.heldItem === 'knife') return false;
+    if (this.host.inventory.owns('knife')) return false;
     if (this.host.props.altars.some((altar) => altar.carrying === 'knife')) return false;
     return !(this.host.itemManager?.snapshot().some((it) => it.kind === 'knife') ?? false);
   }

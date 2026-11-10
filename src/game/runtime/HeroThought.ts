@@ -159,17 +159,21 @@ export class HeroThought {
     });
   }
 
-  /** Projeta o balão. `anchor` é a posição VISUAL do herói, em tiles. */
+  /**
+   * Projeta o balão. `anchor` é a posição VISUAL do herói, em tiles. `uiTile` é o tile no zoom de 100%: o balão é
+   * interface e não encolhe nem cresce com o zoom do jogador (pedido do autor); só o lugar dele segue o mundo.
+   */
   public render(
     tileSize: number,
     camera: WorldCamera,
     timeMs: number,
     anchor: { readonly x: number; readonly y: number },
+    uiTile = tileSize,
   ): void {
     if (!this.bubble.visible) return;
     const screen = camera.tileToScreen(anchor.x, anchor.y, tileSize);
-    const bob = Math.round(Math.sin(timeMs / BOB_MS) * Math.max(1, Math.round(tileSize / 26)));
-    const px = (tileSize * SIZE) / PLATE_W;
+    const bob = Math.round(Math.sin(timeMs / BOB_MS) * Math.max(1, Math.round(uiTile / 26)));
+    const px = (uiTile * SIZE) / PLATE_W;
     this.plate.setDisplaySize(PLATE_W * px, PLATE_H * px);
     // O ícone mantém a proporção dele: item que não é quadrado não pode sair espremido.
     const side = ICON_SIZE * px;

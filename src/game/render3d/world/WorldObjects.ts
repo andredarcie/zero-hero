@@ -246,7 +246,13 @@ export class WorldObjects {
     const key = `${worldX},${worldY}`;
     const vertStart = this.host.tiles.grassQuads.get(key);
     if (vertStart === undefined) return;
-    this.host.activeRustles.set(key, { vertStart, x: worldX, z: worldY, t: 0 });
+    // O centro do QUAD, lido do buffer: o tufo pode ter andado dentro do tile (o espalhamento da decoração), e girar
+    // em volta do centro do tile o devolveria ao meio no primeiro pisão. A média dos cantos sobrevive ao giro.
+    const pos = this.host.tiles.decorGeo.attributes.position as THREE.BufferAttribute;
+    let x = 0;
+    let z = 0;
+    for (let i = 0; i < 4; i++) { x += pos.getX(vertStart + i) / 4; z += pos.getZ(vertStart + i) / 4; }
+    this.host.activeRustles.set(key, { vertStart, x, z, t: 0 });
   }
 
   public updateRustles(dt: number): void {

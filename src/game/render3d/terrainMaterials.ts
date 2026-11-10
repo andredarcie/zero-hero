@@ -44,7 +44,8 @@ export const makeTerrainMaterials = (tileset: THREE.Texture): TerrainMaterials =
   const tileAa: TexelAaUniforms = { size: { value: new THREE.Vector2() } };
   syncTexelAaUniforms(tileAa, tileset); // the sheet's pixel size; every base texture is loaded by now
   const ground = new THREE.MeshLambertMaterial({ map: tileset, vertexColors: true });
-  patchPixelMaterial(ground, { quantize: true, texelAa: tileAa });
+  // A cor do bioma troca a RAMPA da folha (biomeRamp.ts), em vez de multiplicar a arte inteira.
+  patchPixelMaterial(ground, { quantize: true, texelAa: tileAa, biome: 'ground' });
   // O MAR, que é o mesmo chão com movimento (worldFx 'seaFlow'): a corrente escorrendo dentro
   // do frame, a arrebentação na praia e o glint do rio. Material separado e NÃO um flag no do
   // chão porque o efeito é um programa a mais — e todo tile de terra do mundo pagaria por ele.
@@ -79,13 +80,13 @@ export const makeTerrainMaterials = (tileset: THREE.Texture): TerrainMaterials =
   const decor = new THREE.MeshLambertMaterial({
     map: tileset, transparent: true, alphaTest: 0.35, depthWrite: false, vertexColors: true,
   });
-  patchPixelMaterial(decor, { quantize: true, texelAa: tileAa, wind: 'stir' });
+  patchPixelMaterial(decor, { quantize: true, texelAa: tileAa, wind: 'stir', biome: 'decor' });
   const solid = new THREE.MeshLambertMaterial({ map: tileset, alphaTest: 0.5 });
   patchPixelMaterial(solid, { quantize: true, normalUp: true, texelAa: tileAa, wind: 'lean' });
   // AS ÁRVORES EM PÉ: o `solid` com a cor do bioma no vértice (world/biomes, `treeTint`). Material
   // próprio porque o `solid` também veste a alvenaria, cuja malha não traz cor.
   const trees = new THREE.MeshLambertMaterial({ map: tileset, alphaTest: 0.5, vertexColors: true });
-  patchPixelMaterial(trees, { quantize: true, normalUp: true, texelAa: tileAa, wind: 'lean' });
+  patchPixelMaterial(trees, { quantize: true, normalUp: true, texelAa: tileAa, wind: 'lean', biome: 'trees' });
   trees.name = 'terrain-trees';
   // A MONTANHA. Dois motivos para ela não usar `solid`, e os dois são o cubo:
   //   · vertexColors, porque `normalUp` acende TODA face como se ela olhasse para cima (é a lei

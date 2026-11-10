@@ -29,6 +29,9 @@ export const makeFinishShader = (w: number, h: number): THREE.ShaderMaterialPara
     uSightAt: { value: new THREE.Vector2(0.5, 0.5) },
     uSightR: { value: new THREE.Vector2(0.2, 0.2) },
     uGrain: { value: 0.02 },
+    // A DISTÂNCIA SEM BORRAR (ver o bloco no shader): quanto o longe perde cor e puxa para a cor do ar.
+    uHaze: { value: 0 },
+    uHazeColor: { value: new THREE.Color(0, 0, 0) },
     uGrade: { value: 0.5 },
     // The split-tone the grade lerps between, per region (see updateBiomeGrade): cool woodland by
     // default, amber where the ground runs molten.
@@ -62,6 +65,8 @@ export const makeFinishShader = (w: number, h: number): THREE.ShaderMaterialPara
     uniform vec2 uSightAt;
     uniform vec2 uSightR;
     uniform float uGrain;
+    uniform float uHaze;
+    uniform vec3 uHazeColor;
     uniform float uGrade;
     uniform vec3 uShadowTint;
     uniform vec3 uHighTint;
@@ -83,7 +88,9 @@ export const makeFinishShader = (w: number, h: number): THREE.ShaderMaterialPara
       // far more than the front, and blurring the near edge as hard just hides the ground the
       // player is walking on. uNear scales the near side's ramp.
       float dy = vUv.y - uFocusY;
-      float far = smoothstep(uBand, uBand + 0.30, dy);          // above the band = distance
+      // O desfoque começa mais LONGE da faixa do herói (2026-11-10): pixel art borrada lê como imagem estragada, não
+      // como distância. Quem diz "longe" agora é a perspectiva atmosférica abaixo; o desfoque só derrete o fundo.
+      float far = smoothstep(uBand + 0.08, uBand + 0.42, dy);   // above the band = distance
       float near = smoothstep(uBand, uBand + 0.46, -dy) * uNear; // below = foreground
       float t = max(far, near);
       // Quantise the radius to half a pixel: a continuously-varying blur makes the pixel art
@@ -103,6 +110,19 @@ export const makeFinishShader = (w: number, h: number): THREE.ShaderMaterialPara
         col += frameAt(vUv + vec2(-1.0, -0.6) * px) * 0.12;
         col += frameAt(vUv + vec2( 0.0,  1.4) * px) * 0.11;
         col += frameAt(vUv + vec2( 0.0, -1.4) * px) * 0.11;
+      }
+
+      // ── A DISTÂNCIA SEM BORRAR: a perspectiva atmosférica ─────────────────────
+      // Acima da faixa do herói o quadro perde cor e se inclina para a cor do AR (o skyColor: poeira dourada de dia,
+      // o escuro de noite) — os pixels continuam nítidos, só mais distantes. O que fica na faixa e abaixo dela não muda.
+      if (uHaze > 0.0) {
+        // Começa bem acima da faixa: um vizinho a três tiles do herói ainda é primeiro plano, não distância.
+        float zhFar = smoothstep(uFocusY + uBand * 1.5, 1.08, vUv.y);
+        if (zhFar > 0.0) {
+          float zhHl = dot(col, vec3(0.299, 0.587, 0.114));
+          col = mix(col, vec3(zhHl), zhFar * uHaze * 0.5);
+          col = mix(col, uHazeColor, zhFar * uHaze * 0.32);
+        }
       }
 
       // ── cinematic grade: split-tone (cool shadows / warm highlights), then

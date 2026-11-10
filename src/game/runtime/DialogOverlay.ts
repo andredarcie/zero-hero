@@ -11,6 +11,7 @@ import { TalkingBody } from '@/game/runtime/TalkingBody';
 
 import { BOOK_FONT, PARCHMENT_ON, WOOD_PANEL } from '@/game/runtime/uiStyle';
 import { DialogLineWriter, type DialogOption } from './DialogLineWriter';
+import { VERSE_INDENT_EM, widestVerse } from './poemLayout';
 
 // A CAIXA DE FALA TRADICIONAL: uma barra no RODAPÉ, UMA mensagem por vez.
 //
@@ -81,6 +82,20 @@ const CSS = `
   scrollbar-width: thin; scrollbar-color: #3d342a transparent;
   position: relative;
 }
+/* O POEMA (runtime/poemLayout): cada verso é UMA linha — não quebra no meio (a letra encolhe antes, ver
+   fitVerses) —, os que rimam (o 2º e o 4º da quadra) entram recuados, e o bloco tem a largura do verso mais longo.
+   Só se nem a letra menor couber, a sobra do verso desce com recuo fundo, como nos livros. */
+#${ROOT_ID} .zh-stanza { width: max-content; max-width: 100%; }
+#${ROOT_ID} .zh-verse { white-space: nowrap; line-height: 1.42; }
+#${ROOT_ID} .zh-verse.zh-rhyme { padding-left: ${VERSE_INDENT_EM}em; }
+#${ROOT_ID} .zh-dlg-body.zh-wrap .zh-stanza { width: auto; }
+#${ROOT_ID} .zh-dlg-body.zh-wrap .zh-verse { white-space: normal; padding-left: 2.4em; text-indent: -2.4em; }
+#${ROOT_ID} .zh-dlg-body.zh-wrap .zh-verse.zh-rhyme { padding-left: ${2.4 + VERSE_INDENT_EM}em; }
+/* O recuo pendurado é da LINHA do verso: a palavra e a letra (inline-block) o herdariam, e cada letra se desenharia
+   2,4em fora do próprio lugar — a estrofe sumia da caixa. */
+#${ROOT_ID} .zh-word { text-indent: 0; }
+/* No telefone em pé a caixa é a largura toda: o bloco do poema fica no meio dela. */
+#${ROOT_ID}.zh-tall .zh-stanza { margin-inline: auto; }
 /* CADA LETRA É UMA PEÇA, já no lugar desde o começo da fala: a palavra nunca pula de linha no meio
    da datilografia. O jeito de entrar é de quem fala (data-letters). */
 #${ROOT_ID} .zh-word { display: inline-block; white-space: nowrap; }
@@ -203,6 +218,15 @@ const CSS = `
 
 /** O maior texto que cabe inteiro na caixa de um celular em pé (medido com a fala mais longa do jogo). */
 const TALL_TEXT_SCALE_MAX = Number(1.25);
+/**
+ * A caixa do poema, em em: o que ela tem além do verso (o retrato, o vão, as bordas, o canto do ▼ e uma folga para a
+ * palavra em destaque, que é negrito), e o mínimo dela (um dístico curto não vira uma caixinha, e a janela de escolha
+ * de 14em cabe em cima).
+ */
+const POEM_CHROME_EM = 9.6;
+const POEM_MIN_EM = 22;
+/** Abaixo desta largura de tela a caixa é a tela toda: o poema já é a largura dela. */
+const POEM_FIT_MIN_SCREEN = 560;
 
 export class DialogOverlay {
   private readonly root: HTMLDivElement;
@@ -357,12 +381,20 @@ export class DialogOverlay {
     // Ancorada pelo PÉ da tela (e não pelo topo da caixa) para o entalhe do telefone caber:
     // `env(safe-area-inset-bottom)` empurra a caixa para cima onde existe barra de gestos.
     const bottomGap = Math.round(window.innerHeight - (rect.top + rect.height) + margin);
-    this.dock.style.left = `${Math.round(rect.left + margin)}px`;
-    this.dock.style.width = `${Math.round(rect.width - margin * 2)}px`;
     this.dock.style.bottom = `calc(${bottomGap}px + env(safe-area-inset-bottom, 0px))`;
     this.dock.style.height = `${boxHeight}px`;
     // A tipografia acompanha o canvas: a mesma conversa lida de um telefone e de um monitor.
     this.dock.style.fontSize = `${fontSize}px`;
+    // A CAIXA DO POEMA (runtime/poemLayout): a largura do verso mais longo da conversa, no meio da tela — a mesma
+    // do começo ao fim da conversa, para a moldura não mudar de tamanho entre uma estrofe e outra.
+    const full = rect.width - margin * 2;
+    let width = full;
+    if (!isTallDialog(rect.width, rect.height) && rect.width >= POEM_FIT_MIN_SCREEN) {
+      const verses = widestVerse(this.dock, this.script.lines.map((line) => line.text));
+      if (verses > 0) width = Math.min(full, Math.max(fontSize * POEM_MIN_EM, verses + fontSize * POEM_CHROME_EM));
+    }
+    this.dock.style.left = `${Math.round(rect.left + (rect.width - width) / 2)}px`;
+    this.dock.style.width = `${Math.round(width)}px`;
 
     this.scrim.style.left = `${Math.round(rect.left)}px`;
     this.scrim.style.top = `${Math.round(rect.top)}px`;

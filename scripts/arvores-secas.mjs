@@ -25,15 +25,25 @@ const H = worldChunksY * CH;
 
 // constants.SOLID_UPPER_FRAMES
 const SOLID_UPPER = new Set([3, 4, 14, 15, 16, 17, 18, 21, 22, 25, 36, 37, 39, 40, 73, 74]);
-const GREEN_FRAMES = new Set([3, 4, 14, 15]);
+// As VERDES de verdade. O 3 já esteve aqui, e é uma árvore MORTA (o quadro 21 também): as secas "trocadas por verde"
+// viravam árvore morta de enfeite, que barra e não se corta (o autor viu, 2026-11-09).
+const GREEN_FRAMES = new Set([4, 14, 15]);
 const SEA = 33;
+// As árvores mortas de enfeite (tiles 3/21) que viraram árvores secas de verdade. As que o herói não alcança a pé —
+// (36,0), (2,14), (4,14), (1,15), (3,21) — viraram pinheiro verde: secas, ninguém as cortaria.
+const ARVORES_MORTAS = [
+  [36, 10], [4, 16], [5, 19], [4, 28], [54, 29], [54, 32], [35, 42], [33, 43], [38, 44], [51, 42], [19, 53],
+];
 
-// As duas últimas são as da ponte do morel (scripts/ponte-do-morel.mjs).
-const KEEP = [[43, 30], [40, 29], [39, 3], [45, 2], [21, 28], [14, 28], [17, 5], [8, 19], [7, 24], [11, 33]];
+// As duas últimas da primeira linha são as da ponte do morel (scripts/ponte-do-morel.mjs). A segunda linha são as
+// árvores mortas de enfeite que viraram secas de verdade (pedido do autor, 2026-11-09: "não quero árvore seca de
+// decoração"), as que o herói alcança a pé.
+const KEEP = [[43, 30], [40, 29], [39, 3], [45, 2], [21, 28], [14, 28], [17, 5], [8, 19], [7, 24], [11, 33],
+  ...ARVORES_MORTAS];
 const REPLACED = [
   [50, 1], [52, 1], [56, 1], [50, 3], [52, 3], [56, 3], [58, 3], [50, 10], [52, 10], [56, 10], [58, 10],
   [48, 5], [48, 6], [48, 7], [37, 1], [38, 1], [46, 1], [18, 6], [16, 4],
-  [6, 16], [4, 14], [4, 16], [5, 19], [3, 21], [2, 14],
+  [6, 16], [4, 14], [3, 21], [2, 14],
   [8, 36], [8, 37], [8, 38], [8, 39], [8, 40], [9, 40], [10, 40], [11, 40],
 ];
 // A porta de um recanto do lago: verde, ela o selaria para sempre, então segue seca.

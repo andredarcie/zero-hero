@@ -3,6 +3,7 @@
 
 import * as Engine from '@/game/engine';
 import { ASSET_KEYS, HERO_FRAMES, SCENE_DEPTHS, UNIT_PACK_KINDS } from '@/game/constants';
+import { isToolKind } from '@/game/runtime/Inventory';
 import { getDay, getTimeOfDay, setDay, setTimeOfDay } from '@/game/runtime/timeOfDay';
 import { NpcManager } from '@/game/entities/NpcManager';
 import { ItemManager } from '@/game/entities/ItemManager';
@@ -195,11 +196,12 @@ export class RunBoot {
     this.host.seenItems.clear();
     if (this.host.adventure) {
       const st = adventureState();
-      // UM SAVE DA MOCHILA ANTIGA: a mão fica com o que estava escolhido, e o resto pousa em
-      // volta do herói — nada se perde, só deixa de caber nas costas.
-      const kept = st.inventory.find((it) => it.kind === st.selected) ?? st.inventory[0];
+      // As costas voltam com o que estava nelas, e as ferramentas guardadas voltam guardadas. O resto (um save da
+      // mochila antiga) pousa em volta do herói — nada se perde, só deixa de caber nas costas.
+      const kept = st.inventory.find((it) => it.kind === st.selected) ?? st.inventory.find((it) => !isToolKind(it.kind));
       for (const it of st.inventory) {
         if (it === kept) { this.host.inventory.add(it.kind, it.count); continue; }
+        if (this.host.inventory.keep(it.kind)) continue;
         const units = UNIT_PACK_KINDS.has(it.kind) ? [it.count] : Array.from({ length: it.count }, () => 1);
         for (const n of units) this.host.groundItems.dropNear(it.kind, n, startWorldX, startWorldY);
       }
@@ -224,6 +226,7 @@ export class RunBoot {
       castGroundShadow: true,
       reflected: true, // o espelho d'água (World3D.renderReflection)
       groundShadow: { rx: 0.34, rz: 0.32, alpha: 0.34, zBias: 0.1 },
+      outline: true, // o assunto do quadro: o anel escuro o separa do chão (render3d/spriteOutline.ts)
     })
       .setPosition(startWorldX, startWorldY)
       .setDisplaySize(1, 1);

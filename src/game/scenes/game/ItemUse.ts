@@ -152,6 +152,14 @@ export class ItemUse {
     // Dry bush — a flaming item sets it alight; it chars to ash and opens the tile.
     const bush = this.host.query.getDryBushAt(wx, wy);
     if (bush?.blocking) {
+      // O MACHADO também o derruba (pedido do autor: "faça todo ser possível de cortar"); o fogo continua valendo.
+      if (this.host.swing.holdsAnAxe && !bush.isBurning) {
+        this.host.swing.swingHeld(wx, wy);
+        this.host.time.delayedCall(CHOP_IMPACT_MS, () => {
+          if (bush.chop()) this.host.swing.axeBite(wx, wy);
+        });
+        return true;
+      }
       bush.shake();
       // O GRAVETO APAGADO É O ÚNICO CASO EM QUE O HERÓI PENSA ALTO. Ele bateu no arbusto com a
       // coisa certa na mão e não aconteceu nada — e a distância entre o que ele tem e o que ele

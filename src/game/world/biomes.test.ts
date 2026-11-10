@@ -67,6 +67,12 @@ describe('biomas', () => {
     }
   });
 
+  it('nenhum bioma desenha árvore morta (3, 21): árvore seca é prop, e o machado a derruba', () => {
+    for (const [x, y] of tiles()) {
+      for (const frame of PINES) expect([3, 21], `pinheiro ${frame} em ${x},${y}`).not.toContain(decorFrameAt(frame, x, y));
+    }
+  });
+
   it('o mato alto vira mato ou rasteiro do próprio bioma', () => {
     for (const [x, y] of tiles()) {
       for (const frame of TALL) {

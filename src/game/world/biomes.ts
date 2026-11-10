@@ -24,14 +24,22 @@
 export type BiomeId = 'ash' | 'meadow' | 'stars' | 'woods' | 'moss' | 'garden' | 'fields';
 export type Rgb = readonly [number, number, number];
 
-interface BiomeDef {
+/**
+ * AS CORES DE REFERÊNCIA DA ARTE: o capim médio do chão (frame 5) e a oliva da copa do pinheiro (frame 4). O bioma diz
+ * em que cor cada uma delas VIRA aqui; o multiplicador que o vértice carrega é a razão entre as duas (ver
+ * render3d/biomeRamp.ts, onde a rampa da folha é trocada e o resto da arte quase não muda).
+ */
+export const GRASS_REF = '#4a5e3a';
+export const CANOPY_REF = '#626439';
+
+interface BiomeSpec {
   /**
-   * Multiplica a cor do chão e da decoração (1 = a arte como ela é). A grama é verde e quase não tem
-   * azul: baixar o azul não muda nada, e só um azul MAIOR que 1 puxa para o turquesa ou o prateado.
+   * A cor-alvo do CAPIM (sRGB): o chão e o tufo da decoração vestem a rampa dela. Escolhida na família do tileset
+   * (verde-oliva apagado), nunca um verde de outra paleta.
    */
-  tint: Rgb;
-  /** A mesma ideia nas árvores, mais fraca: o tronco e a copa não podem virar outra planta. */
-  treeTint: Rgb;
+  grass: string;
+  /** A cor-alvo da COPA: os pinheiros do mapa vestem a rampa dela (a cerejeira rosa, o dourado do outono). */
+  canopy: string;
   /**
    * Quanto chão vira terra nua (o corte do `groundEarthiness`, ver constants.ts): MENOR = mais terra.
    * O padrão do mundo era 0.66 (~19% de terra).
@@ -44,6 +52,28 @@ interface BiomeDef {
   /** O que os pinheiros viram (sempre outra árvore SÓLIDA: colisão não muda); ausente = ficam. */
   trees?: readonly number[];
 }
+
+interface BiomeDef extends BiomeSpec {
+  /** O multiplicador do chão e da decoração: `grass` ÷ `GRASS_REF`, em linear (o que o vértice carrega). */
+  tint: Rgb;
+  /** O mesmo nas árvores: `canopy` ÷ `CANOPY_REF`. */
+  treeTint: Rgb;
+}
+
+const toLinear = (hex: string): Rgb => {
+  const n = parseInt(hex.replace('#', ''), 16);
+  const ch = (v: number): number => {
+    const c = v / 255;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  return [ch((n >> 16) & 255), ch((n >> 8) & 255), ch(n & 255)];
+};
+const ratio = (hex: string, ref: string): Rgb => {
+  const a = toLinear(hex);
+  const b = toLinear(ref);
+  return [a[0] / b[0], a[1] / b[1], a[2] / b[2]];
+};
+const define = (s: BiomeSpec): BiomeDef => ({ ...s, tint: ratio(s.grass, GRASS_REF), treeTint: ratio(s.canopy, CANOPY_REF) });
 
 // Os frames do `forest-tileset` (3 colunas, id = linha*3 + coluna): 0 moita, 1 arbusto florido,
 // 3 árvore morta, 4 pinheiro, 7/8 tufos de capim, 10 florzinhas vermelhas, 11 florzinhas lilases,
@@ -66,22 +96,28 @@ export const BIOME_DECOR = {
 export const ANCIENT_GROVE = { treeA: 73, treeB: 74, bush: 75, grass: 76 } as const;
 const F = BIOME_DECOR;
 
+// AS CORES (2026-11-10): cada bioma era um multiplicador sobre a arte inteira, e isso não troca uma cor por outra —
+// a cerejeira saía marrom e o pinheiro dos campos, com a fruta laranja multiplicada pelo dourado, parecia em brasa.
+// Agora cada um diz a cor-alvo do capim e da copa, todas na família apagada do tileset (o valor perto da referência,
+// o matiz é o que muda), e o shader troca só a rampa da folha (render3d/biomeRamp.ts).
 export const BIOMES: Readonly<Record<BiomeId, BiomeDef>> = {
-  // árvores: carvão
-  ash: { tint: [0.86, 0.62, 0.52], treeTint: [0.74, 0.58, 0.52], earthCut: 0.4, small: [F.cinders, 13, F.cinders, 12, 13, F.cinders, 7], tall: [13, F.cinders], trees: [3, 21, 3] },
-  // árvores: cerejeira rosada (o pinheiro de flor lilás, com o rosado por cima; o de fruto laranja
-  // não vira rosa, a laranja da arte puxa tudo para o outono)
-  meadow: { tint: [1.2, 1.12, 0.66], treeTint: [1.34, 0.96, 1.12], earthCut: 0.82, small: [F.daisies, F.poppies, 10, 11, F.daisies, 1, F.poppies, 10], trees: [16, 16, 15] },
+  // árvores: carvão — o pinheiro continua pinheiro, no tom queimado. Ele virava árvore MORTA aqui (3, 21), e o vale
+  // ficava cheio de árvore seca que barra e não se corta (o autor, 2026-11-09: "não quero isso"). Árvore seca de
+  // verdade é prop (dryTree), e o machado a derruba.
+  ash: define({ grass: '#4b4434', canopy: '#4d4a40', earthCut: 0.4, small: [F.cinders, 13, F.cinders, 12, 13, F.cinders, 7], tall: [13, F.cinders] }),
+  // árvores: cerejeira rosada (o pinheiro de flor lilás, a copa na rampa rosa-poeira; a flor lilás da arte fica)
+  meadow: define({ grass: '#5c6c34', canopy: '#7c5c66', earthCut: 0.82, small: [F.daisies, F.poppies, 10, 11, F.daisies, 1, F.poppies, 10], trees: [16, 16, 15] }),
   // árvores: azul de geada. Sem pedrinha no chão: as pedras moram no lago de lava (pedido do autor)
-  stars: { tint: [0.95, 0.92, 1.7], treeTint: [0.9, 1, 1.62], earthCut: 0.5, small: [F.bluebells, F.crystals, 8, 11, F.bluebells, 7, F.crystals], tall: [8, F.bluebells], trees: [17, 4] },
+  stars: define({ grass: '#4a5c5a', canopy: '#4f6a70', earthCut: 0.5, small: [F.bluebells, F.crystals, 8, 11, F.bluebells, 7, F.crystals], tall: [8, F.bluebells], trees: [17, 4] }),
   // árvores: verde-escuro de mata fechada
-  woods: { tint: [0.6, 0.82, 0.55], treeTint: [0.6, 0.88, 0.54], earthCut: 0.72, small: [F.leaves, F.fern, 0, 8, F.leaves, 0] },
+  woods: define({ grass: '#38532f', canopy: '#46602f', earthCut: 0.72, small: [F.leaves, F.fern, 0, 8, F.leaves, 0] }),
   // árvores: turquesa úmido
-  moss: { tint: [0.62, 0.84, 1.6], treeTint: [0.6, 0.95, 1.5], earthCut: 0.76, small: [F.fern, F.mossBloom, F.fern, 1, 0, F.mossBloom], trees: [16, 4, 18] },
+  moss: define({ grass: '#3a5646', canopy: '#45614f', earthCut: 0.76, small: [F.fern, F.mossBloom, F.fern, 1, 0, F.mossBloom], trees: [16, 4, 18] }),
   // o gramado aparado: verde mais claro e vivo, quase sem terra à mostra; árvores no verde natural
-  garden: { tint: [1.1, 1.2, 0.86], treeTint: [1.02, 1.1, 0.92], earthCut: 0.9, small: [F.clover, 0, 10, F.clover, 7, 11] },
-  // árvores: ouro de outono
-  fields: { tint: [1.3, 1.06, 0.52], treeTint: [1.46, 1.02, 0.46], earthCut: 0.58, small: [F.wheat, F.wheat, 8, F.daisies, 7, F.wheat], trees: [15, 4] },
+  garden: define({ grass: '#516938', canopy: '#626a3b', earthCut: 0.9, small: [F.clover, 0, 10, F.clover, 7, 11] }),
+  // árvores: ouro de outono (o ocre na copa; a fruta laranja da arte fica laranja, não vira brasa)
+  // O capim oliva-amarelado e a copa ferrugem: os dois do mesmo valor seriam ocre sobre ocre, e o pomar sumia no chão.
+  fields: define({ grass: '#59612f', canopy: '#8a5f30', earthCut: 0.58, small: [F.wheat, F.wheat, 8, F.daisies, 7, F.wheat], trees: [15, 4] }),
 };
 
 /** As sementes: a casa (ou o marco) de cada bioma. Um bioma pode ter mais de uma. */
@@ -171,10 +207,26 @@ const mix = (x: number, y: number, pick: (b: BiomeDef) => Rgb): [number, number,
   return out;
 };
 
-/** A cor do chão (e da decoração) neste ponto, já misturada com os biomas vizinhos. */
+/**
+ * O multiplicador do chão (e da decoração) neste ponto, já misturado com os biomas vizinhos. É o que o VÉRTICE do
+ * terreno carrega: o shader dele troca só a rampa da folha (render3d/biomeRamp.ts). Quem multiplica uma arte inteira
+ * por ele (um sprite solto, o editor) usa o `biomeWashAt`, senão a flor e a pedra viram a cor do capim.
+ */
 export const biomeTintAt = (x: number, y: number): [number, number, number] => mix(x, y, (b) => b.tint);
-/** A mesma, nas árvores. */
+/** O mesmo, nas árvores do mapa (a copa). */
 export const biomeTreeTintAt = (x: number, y: number): [number, number, number] => mix(x, y, (b) => b.treeTint);
+
+/**
+ * O TOM LAVADO: o brilho inteiro do bioma e só um pouco do matiz dele — o que um sprite INTEIRO aguenta levar sem
+ * virar outra coisa (a margarida solta, a folha caída, o carvalho, o tile do editor). O multiplicador cheio é feito
+ * para a folha; numa arte inteira ele tingia a flor branca e o tronco junto.
+ */
+const wash = (m: readonly [number, number, number], hue: number): [number, number, number] => {
+  const l = 0.2126 * m[0] + 0.7152 * m[1] + 0.0722 * m[2];
+  return [l + (m[0] - l) * hue, l + (m[1] - l) * hue, l + (m[2] - l) * hue];
+};
+export const biomeWashAt = (x: number, y: number): [number, number, number] => wash(biomeTintAt(x, y), 0.35);
+export const biomeTreeWashAt = (x: number, y: number): [number, number, number] => wash(biomeTreeTintAt(x, y), 0.3);
 
 /** O corte de terra nua deste tile, misturado (ver `earthCut`). */
 export const biomeEarthCutAt = (x: number, y: number): number => {

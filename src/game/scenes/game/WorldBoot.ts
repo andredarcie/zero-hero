@@ -29,6 +29,7 @@ import { HeroThought } from '@/game/runtime/HeroThought';
 import { PlacementHints } from '@/game/runtime/PlacementHints';
 import { PauseTouchButton, isTouchDevice } from '@/game/runtime/PauseMenu';
 import { OldRoad } from '@/game/objects/OldRoad';
+import { Trails } from '@/game/objects/Trails';
 import { GardenMist } from '@/game/objects/GardenMist';
 import { BigTrees } from '@/game/objects/BigTrees';
 import { WoodFence } from '@/game/objects/WoodFence';
@@ -189,7 +190,7 @@ export class WorldBoot {
       this.host.camp.catCare.build();
       this.host.valley.waterfall = new Waterfall(this.host);
       this.host.valley.koiPond = new KoiPond(this.host, () => ({ x: this.host.playerWorld.worldX, y: this.host.playerWorld.worldY }));
-      this.host.valley.bigTrees = new BigTrees(this.host, () => ({ x: this.host.playerWorld.worldX, y: this.host.playerWorld.worldY }));
+      this.host.valley.bigTrees = new BigTrees(this.host);
       this.host.valley.woodFence = new WoodFence();
       this.host.valley.lumberYard = new LumberYard();
       this.host.valley.oldForge = new OldForge();
@@ -211,6 +212,7 @@ export class WorldBoot {
       // Um jogo fechado entre o último pedido e a entrega da chave: ela chega agora.
       if (allQuestsDone() && !this.host.arc.has('gardenKey')) this.host.time.delayedCall(900, () => this.host.gardenUnlock.giveGardenKey(undefined));
       this.host.valley.oldRoad = new OldRoad();
+      this.host.valley.trails = new Trails();
       const garden = getHearths()[0];
       if (garden && !this.host.arc.has('mist')) this.host.valley.gardenMist = new GardenMist(this.host, { x: garden.worldX, y: garden.worldY });
       this.host.forage.mushroomKin = this.host.forage.makeMushroomKin();
@@ -252,8 +254,9 @@ export class WorldBoot {
     } else {
       // O ESC TEM UM DONO SÓ: a pausa (sentado na fogueira, ele só levanta).
       this.host.input.keyboard?.on('keydown-ESC', () => {
-        // Sentado na fogueira, o ESC so levanta: ele levantava E abria a pausa no mesmo toque.
-        if (this.host.camp.rest.isResting) { this.host.camp.rest.standUp(); return; }
+        // Sentado na fogueira, o ESC so levanta: ele levantava E abria a pausa no mesmo toque. Dormindo, o ESC pausa
+        // (o sono continua depois): levantar da cama e da manha.
+        if (this.host.camp.rest.canGetUp) { this.host.camp.rest.getUp(); return; }
         this.host.pause.openPauseMenu();
       });
       if (isTouchDevice()) {

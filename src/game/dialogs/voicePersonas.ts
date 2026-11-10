@@ -135,6 +135,8 @@ export const planSpeech = (text: string, persona: VoicePersona, baseFreq: number
     if (i === chars.length - 1) return;
     if (',;:'.includes(char)) plan[i].delayMs += persona.commaMs;
     if (isStop(char) && !isStop(next)) plan[i].delayMs += persona.stopMs;
+    // O fim do verso respira como uma vírgula, mesmo sem pontuação (a frase que continua no verso de baixo).
+    if (char === '\n' && !',;:'.includes(prev) && !isStop(prev)) plan[i].delayMs += persona.commaMs;
   });
 
   // Agrupa as sílabas em frases: é a posição na frase que dá a queda e a inflexão final.

@@ -138,6 +138,11 @@ export interface Billboard3DOptions {
    * uma parede mais perto ainda oclui normalmente.
    */
   renderOrder?: number;
+  /**
+   * O CONTORNO de 1 texel (ver spriteOutline.ts): o anel escuro que separa um PERSONAGEM do chão granulado. Só para
+   * quem é o assunto do quadro (o herói, os vizinhos, o gato) — nunca para cenário, que é o fundo.
+   */
+  outline?: boolean;
 }
 
 export class Billboard3D {
@@ -537,6 +542,7 @@ const makeBillboardMaterial = (
       worldFx: opts.worldFx,
       mirrorSurface: opts.mirrorSurface,
       maskProbe,
+      outline: opts.outline,
     });
   }
   if (opts.fog === false) mat.fog = false;

@@ -172,6 +172,21 @@ describe('Resting', () => {
     expect(night).toBe(1);
   });
 
+  it('dormindo, o jogador não levanta: nem seta, nem botão — só a manhã (pedido do autor)', () => {
+    const r = rig();
+    r.rest.lieDown(54, 48, { fixedBed: true, atCamp: true });
+    expect(r.rest.canGetUp).toBe(false);
+    r.press('ArrowLeft');
+    r.rest.getUp();
+    expect(r.rest.isSleeping).toBe(true);
+    // Sentado, sim.
+    const s = rig();
+    s.rest.sit(10, 9);
+    expect(s.rest.canGetUp).toBe(true);
+    s.rest.getUp();
+    expect(s.rest.isResting).toBe(false);
+  });
+
   it('dormir: o colchão deita, a noite passa e ele acorda quando clareia', () => {
     const r = rig();
     r.rest.lieDown(54, 48, { fixedBed: true });

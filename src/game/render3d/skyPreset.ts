@@ -99,7 +99,11 @@ export const DAY_SKY: Partial<World3DParams> = {
   // Fundo e fog são a mesma cor e os dois passam pela curva, então o hex aqui é o que se vê — sem
   // tone mapping não há a tradução torta que um pipeline com ACES imporia.
   skyColor: '#c7b389',
-  fogDensity: 0.026,
+  // 0,026 ÷ 1,285 (2026-11-10): a câmera recuou pelo dolly zoom (worldParams.camHeight), e o fog conta da câmera.
+  fogDensity: 0.0202,
+  // A perspectiva atmosférica (finishShader): de dia o longe se perde na poeira dourada — é o que dá ar ao quadro sem
+  // borrar a pixel art (o desfoque, que fazia esse papel, cedeu).
+  haze: 0.85,
 
   // ── 3. A SOMBRA ────────────────────────────────────────────────────────────
   // A lua era preenchimento e INSINUAVA (0.22 de escuro, 2,1 alturas de comprido); o sol CRAVA.
@@ -117,7 +121,9 @@ export const DAY_SKY: Partial<World3DParams> = {
   // preto o resultado é exatamente o leite que a v2 tinha. `saturation` existe pela mesma razão —
   // `pow` comprime razões entre canais, ou seja DESSATURA, e este número compra a cor de volta.
   grade: 0.65,
-  saturation: 1.32,
+  // 1.32 → 1.24 (2026-11-10): com a rampa do bioma (biomeRamp.ts) a cor do chão já é escolhida, e a saturação alta
+  // fazia cada flor e cada copa gritar mais que o herói. A curva ainda come tinta; este ainda a devolve.
+  saturation: 1.24,
   contrast: 1.14,
   // Vinheta, grão e bloom são os três desenhos do ESCURO. O grão é ruído de pouca luz e a vinheta
   // fecha um quadro que agora é aberto (fica um sopro dela: sem nenhuma, o quadro deixa de ser uma

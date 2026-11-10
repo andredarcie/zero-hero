@@ -156,6 +156,7 @@
     "sharpFull": "Máxima",
     "sharpThrifty": "Econômica",
     "blur": "Desfoque",
+    "zoom": "Zoom",
     "hand": "Mão",
     "handRight": "Direita",
     "handLeft": "Esquerda",
@@ -226,6 +227,13 @@
     "skipIntroTouch": "Toque de novo para pular",
     "attackTitle": "Mão (Z)",
     "useTitle": "Usar (X)"
+  },
+  "hud": {
+    "zoom": "Zoom",
+    "zoomIn": "Aproximar",
+    "zoomOut": "Afastar",
+    "zoomHint": "Ajuste o zoom e aperte OK",
+    "zoomDone": "OK"
   },
   "fungi": {
     "basket": "Cesta",

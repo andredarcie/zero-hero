@@ -26,7 +26,7 @@ const FIND_STEP_MS = 300;
 /** O que CampLife usa de GameScene (e a cena do motor, que ele passa a quem monta objetos do mundo). */
 export type CampLifeHost = Engine.Scene & Pick<GameScene,
   'actions' | 'adventure' | 'arc' | 'camera' | 'cameraLook' | 'camp' | 'carry' | 'cinema' | 'cutsceneActive'
-  | 'debris' | 'dialog' | 'groundItems' | 'heldItem' | 'hero' | 'itemManager' | 'movementController'
+  | 'debris' | 'dialog' | 'groundItems' | 'heldItem' | 'hero' | 'inventory' | 'itemManager' | 'movementController'
   | 'npcManager' | 'pause' | 'playerWorld' | 'query' | 'questSetup' | 'save' | 'seenDialogKeys' | 'sparkle'
   | 'steps' | 'tileSize' | 'valley' | 'verbs' | 'world3d'
 >;
@@ -154,7 +154,7 @@ export class CampLife {
 
   /** A foice da Morte cai onde ela esteve (ver Resting), a menos que o herói já tenha uma. */
   public dropDeathScythe(at: { x: number; y: number }): void {
-    const owned = this.host.heldItem === 'scythe' || (this.host.itemManager?.snapshot() ?? []).some((i) => i.kind === 'scythe');
+    const owned = this.host.inventory.owns('scythe') || (this.host.itemManager?.snapshot() ?? []).some((i) => i.kind === 'scythe');
     const tile = owned ? null : this.host.groundItems.dropNear('scythe', 1, at.x, at.y);
     if (tile) this.host.sparkle.spawnGrowSparkle(tile[0], tile[1]);
   }

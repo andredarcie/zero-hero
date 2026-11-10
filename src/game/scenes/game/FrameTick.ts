@@ -9,7 +9,7 @@ export type FrameTickHost = Pick<GameScene,
   'actions' | 'bumps' | 'camera' | 'camp' | 'chunkManager' | 'cutsceneActive' | 'dialog' | 'dialogCam' | 'fire'
   | 'forage' | 'forge' | 'garden' | 'hand' | 'hero' | 'itemManager' | 'life' | 'machines' | 'movementController'
   | 'npcManager' | 'orders' | 'playerWorld' | 'props' | 'query' | 'questSetup' | 'save' | 'steps' | 'streamChunks'
-  | 'tileSize' | 'time' | 'torch' | 'verbs' | 'view'
+  | 'tileSize' | 'time' | 'torch' | 'uiTileSize' | 'verbs' | 'view'
 >;
 
 export class FrameTick {
@@ -46,7 +46,7 @@ export class FrameTick {
     if (this.host.camp.rest.isResting) {
       if (this.host.camp.rest.tick()) return;
       this.host.fire.syncCampfiresToClock();
-      if (this.host.npcManager && this.host.camera) this.host.npcManager.render(this.host.tileSize, this.host.camera);
+      if (this.host.npcManager && this.host.camera) this.host.npcManager.render(this.host.tileSize, this.host.camera, this.host.uiTileSize);
       this.host.camp.catCare.update(delta);
       this.host.view.renderProps();
       return;
@@ -143,7 +143,7 @@ export class FrameTick {
     // As marcas de posicionamento seguem o corpo NO MESMO frame em que ele vira.
     this.host.machines.syncPlacementHints();
     profiler.begin('update.npcs');
-    if (this.host.npcManager && this.host.camera) this.host.npcManager.render(this.host.tileSize, this.host.camera);
+    if (this.host.npcManager && this.host.camera) this.host.npcManager.render(this.host.tileSize, this.host.camera, this.host.uiTileSize);
     this.host.dialog.greetNearbyNpcs();
     this.host.camp.catCare.update(delta);
     profiler.end('update.npcs');

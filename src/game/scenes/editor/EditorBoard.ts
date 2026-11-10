@@ -3,7 +3,7 @@
 
 import * as Engine from '@/game/engine';
 import { ASSET_KEYS, CHUNK_COLUMNS, CHUNK_ROWS, groundFrameAt, SOLID_GROUND_FRAMES, SOLID_UPPER_FRAMES } from '@/game/constants';
-import { biomeTintAt, decorFrameAt } from '@/game/world/biomes';
+import { biomeWashAt, decorFrameAt } from '@/game/world/biomes';
 import type { EditorScene } from '../EditorScene';
 import { CAMERA_PAD, WORLD_TILE } from './editorDefs';
 
@@ -14,7 +14,7 @@ import { CAMERA_PAD, WORLD_TILE } from './editorDefs';
  */
 const biomeTint = (tile: Engine.Tilemaps.Tile | null, wx: number, wy: number): void => {
   if (!tile) return;
-  const [r, g, b] = biomeTintAt(wx, wy);
+  const [r, g, b] = biomeWashAt(wx, wy);
   const k = 1 / Math.max(r, g, b, 1);
   tile.tint = (Math.round(r * k * 255) << 16) | (Math.round(g * k * 255) << 8) | Math.round(b * k * 255);
 };

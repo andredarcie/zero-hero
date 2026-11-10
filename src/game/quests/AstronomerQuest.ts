@@ -34,6 +34,8 @@ import { AstronomerForge } from './AstronomerForge';
 export interface AstronomerHost {
   scene: Engine.Scene;
   held: () => HeldItemKind | 'none';
+  /** É dele: nas costas ou entre as ferramentas guardadas (Inventory.owns). */
+  owns: (kind: HeldItemKind) => boolean;
   takeIntoHand: (kind: HeldItemKind, units: number) => void;
   removeFromHand: (kind: HeldItemKind, units: number) => void;
   onGround: (kind: HeldItemKind) => boolean;
@@ -261,7 +263,7 @@ export class AstronomerQuest {
       case 'iron':
         if (this.host.held() === 'iron') { this.forge.deliverIron(base, at); return true; }
         say(tLines(`npc.astronautHint.${this.forge.ironStep()}`), () => {
-          if (this.forge.ironStep() === 'ore' && this.host.held() !== 'pickaxe' && !this.host.onGround('pickaxe')) this.give('pickaxe', at);
+          if (this.forge.ironStep() === 'ore' && !this.host.owns('pickaxe') && !this.host.onGround('pickaxe')) this.give('pickaxe', at);
         });
         return true;
       case 'glass':

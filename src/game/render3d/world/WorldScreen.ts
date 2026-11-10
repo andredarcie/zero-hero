@@ -14,7 +14,8 @@ import type { World3D } from '../World3D';
 // O PISO DA LARGURA da vista (ver effectiveFov): a tangente do meio-ângulo horizontal. 0,34 são
 // ~5,5 tiles de largura na profundidade do herói (o desktop 16:10 vê ~9); e o teto do FOV vertical
 // que a tela em pé pode pedir para alcançá-lo.
-const PORTRAIT_MIN_HALF_TAN_X = 0.34;
+// 0,34 ÷ 1,285 (2026-11-10): a câmera recuou pelo dolly zoom (worldParams.camHeight), e a mesma tangente veria 7 tiles.
+const PORTRAIT_MIN_HALF_TAN_X = 0.2646;
 const PORTRAIT_FOV_CAP = 74;
 // Ambient particle counts (additive Points — brasas rising off the fire, dust in the air,
 // fireflies drifting in lit clearings, low mist wisps veiling the dark ground).
@@ -167,6 +168,7 @@ export class WorldScreen {
     u.uVignette.value = this.host.params.vignette;
     u.uLift.value = Math.max(0.05, this.host.params.lift);
     u.uGrain.value = this.host.params.grain;
+    u.uHaze.value = Math.max(0, this.host.params.haze);
     u.uGrade.value = this.host.params.grade;
     u.uSaturation.value = this.host.params.saturation;
     u.uContrast.value = this.host.params.contrast;

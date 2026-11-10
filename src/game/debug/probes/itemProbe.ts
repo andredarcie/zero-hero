@@ -14,8 +14,17 @@ export const itemProbe = (s: GameScene) => {
       // A porta de autoria da cena é um setter privado de propósito: só o debug escreve por ela.
       s['heldItem'] = kind;
     },
-    /** Pega `kind` como o jogo pega (o que estava na mão vai para o chão). */
+    /** Pega `kind` como o jogo pega (material sobre material: o da mão vai para o chão; ferramenta é guardada). */
     take: (kind: HeldItemKind, units = 1): void => s.hand.takeIntoHand(kind, units),
+    /** É dele: nas costas ou entre as ferramentas guardadas. */
+    owns: (kind: HeldItemKind): boolean => s.inventory.owns(kind),
+    /** As ferramentas guardadas, fora das costas. */
+    kept: (): string[] => s.inventory.keptTools(),
+    /** O verbo que uma ferramenta guardada daria no tile da frente ('hand' = Z, 'use' = X), e qual ferramenta. */
+    toolVerb: (button: 'hand' | 'use') => {
+      const f = s.verbs.facingTile();
+      return s.verbs.toolFor(f.x, f.y, button);
+    },
     /** O herói apanha `kind` do chão onde está, pelo caminho do jogo (a cerimônia da primeira vez inclusa). */
     collect: (kind: HeldItemKind): void => s.hand.onCollectItem({ kind, worldX: s.playerWorld.worldX, worldY: s.playerWorld.worldY }),
     /** Esvazia a mão (o item some, não cai). */

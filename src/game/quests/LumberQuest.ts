@@ -26,6 +26,8 @@ import { LumberWork, STICKS } from './LumberWork';
 export interface LumberHost {
   scene: Engine.Scene;
   held: () => HeldItemKind | 'none';
+  /** É dele: nas costas ou entre as ferramentas guardadas (Inventory.owns). */
+  owns: (kind: HeldItemKind) => boolean;
   takeIntoHand: (kind: HeldItemKind, units: number) => void;
   onGround: (kind: HeldItemKind) => boolean;
   takeFromGround: (kind: HeldItemKind) => boolean;
@@ -182,7 +184,7 @@ export class LumberQuest {
       case 'gather':
         say(step('gather').map((line) => ({ ...line, text: line.text.replace('{n}', String(STICKS - this.save.laid)) })), () => {
           // Nada se perde: se o machado não está na mão nem no chão, ele tem outro.
-          if (this.host.held() !== 'axe' && !this.host.onGround('axe')) this.giveAxe(at);
+          if (!this.host.owns('axe') && !this.host.onGround('axe')) this.giveAxe(at);
         });
         return true;
       case 'ready':

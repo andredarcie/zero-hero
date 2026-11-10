@@ -5,6 +5,7 @@
 import type { Season } from '@/game/runtime/seasons';
 import { ValleyWeather } from '@/game/entities/ValleyWeather';
 import { OldRoad } from '@/game/objects/OldRoad';
+import { Trails } from '@/game/objects/Trails';
 import { GardenMist } from '@/game/objects/GardenMist';
 import { BigTrees } from '@/game/objects/BigTrees';
 import { WoodFence } from '@/game/objects/WoodFence';
@@ -22,6 +23,8 @@ import { ValleyFinds } from '@/game/objects/ValleyFinds';
 export class ValleySet {
   /** A estrada antiga da espada ao jardim do fim (objects/OldRoad). */
   public oldRoad?: OldRoad;
+  /** As trilhas falhas até a Shui e até a Sisi (world/trails, objects/Trails). */
+  public trails?: Trails;
   /** A névoa do jardim alto, até o vento levá-la (objects/GardenMist, playMistClearing). */
   public gardenMist?: GardenMist;
   /** A casa de cada vizinho, ao lado de onde ele fica. */

@@ -118,7 +118,7 @@ export class SwordSlash {
     dx: number,
     dy: number,
     tileSize: number,
-    item?: { texture: string; frame: number; onFire?: boolean; flipX?: boolean },
+    item?: { texture: string; frame: number; onFire?: boolean; flipX?: boolean; flipY?: boolean },
   ): void {
     this.scene.tweens.killTweensOf(this.sprite);
     this.scene.tweens.killTweensOf(this.chop$); // a chop still in the air would fight for the sprite
@@ -155,18 +155,21 @@ export class SwordSlash {
     // Single-edged tools (the axe) need mirroring so the cutting edge leads the swing instead
     // of raking with the back of the blade.
     const flipX = item?.flipX ?? false;
+    // A arte que tem a parte que TRABALHA embaixo (a pá: o cabo em T em cima, o metal embaixo) vira de ponta-cabeça:
+    // o golpe leva o alto do desenho para a frente, e sem isto quem cavava era o cabo (o autor viu).
+    const flipY = item?.flipY ?? false;
 
     // A BURNING item keeps its own warm tint at full strength: it is a light source, not a lit
     // surface, so the night must not dim it. Everything else stands in the world's light.
     const litTint = swingLitTint(this.lightLevel);
     // hide trails until first onUpdate (they mirror the main sprite's texture/frame)
     const trailTint = onFire ? 0xff5500 : litTint;
-    this.trails.forEach(t => t.setTexture(texture, frame).setFlipX(flipX).setAlpha(0).setVisible(false).setTint(trailTint));
+    this.trails.forEach(t => t.setTexture(texture, frame).setFlip(flipX, flipY).setAlpha(0).setVisible(false).setTint(trailTint));
 
     this.bladeTint = onFire ? 0xffaa44 : litTint;
     this.sprite
       .setTexture(texture, frame)
-      .setFlipX(flipX)
+      .setFlip(flipX, flipY)
       .setTint(this.bladeTint)
       .setPosition(this.slashHandleX, this.slashHandleY)
       .setDisplaySize(size * 1.20, size * 1.20) // starts 20% bigger for impact pop
@@ -237,13 +240,13 @@ export class SwordSlash {
     this.bladeTint = this.onFire ? 0xffaa44 : litTint;
     this.sprite
       .setTexture(texture, ITEM_FRAMES.swordIdle)
-      .setFlipX(false)
+      .setFlip(false, false)
       .setTint(this.bladeTint)
       .setAlpha(1)
       .setVisible(true);
     this.trails.forEach(t => t
       .setTexture(texture, ITEM_FRAMES.swordIdle)
-      .setFlipX(false)
+      .setFlip(false, false)
       .setTint(this.onFire ? 0xff5500 : litTint));
     this.applySpin();
 

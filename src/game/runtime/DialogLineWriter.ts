@@ -8,6 +8,7 @@ import { planSpeech, type SpokenChar } from '@/game/dialogs/voicePersonas';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { t } from '@/game/i18n/i18n';
 import type { DialogOverlay } from './DialogOverlay';
+import { MIN_VERSE_SCALE, isIndentedVerse, versePauseAfter } from './poemLayout';
 
 const CHAR_DELAY_MS = 28;
 /** Palavra em maiúsculas é o nome da coisa que importa (BALDE, TOCHA): ela entra com mais peso. */
@@ -37,6 +38,11 @@ export class DialogLineWriter {
   /** O texto e o "e agora?" da linha em curso — a fala pode ser do roteiro OU injetada pelo caixa. */
   private currentText = '';
   private currentOnDone?: () => void;
+  /** Quantos versos a caixa tem, e em qual a datilografia está (ver poemLayout.versePauseAfter). */
+  private verseCount = 1;
+  private verseRow = 0;
+  /** O bloco dos versos: a largura do verso mais longo (ver fitVerses). */
+  private stanzaEl?: HTMLDivElement;
 
   public constructor(private readonly host: DialogLineWriterHost) {}
 
@@ -51,6 +57,8 @@ export class DialogLineWriter {
     this.currentIsNarrator = line.speaker === 'narrator';
     this.currentText = line.text;
     this.currentOnDone = onDone;
+    this.verseCount = line.text.split('\n').length;
+    this.verseRow = 0;
     this.showLineFrame(line);
 
     // A narração é a voz do jogo, e não de alguém: aparece no mesmo passo, em silêncio.
@@ -79,38 +87,85 @@ export class DialogLineWriter {
         this.settleLine();
         return;
       }
-      this.typeNextChar(spoken?.delayMs ?? CHAR_DELAY_MS);
+      let next = spoken?.delayMs ?? CHAR_DELAY_MS;
+      // O FIM DO VERSO RESPIRA, com voz ou sem ela, e mais depois do verso que rima no meio da quadra: a rima cai.
+      if (this.chars[this.charIndex - 1] === '\n') {
+        next += versePauseAfter(this.verseCount, this.verseRow);
+        this.verseRow++;
+      }
+      this.typeNextChar(next);
     });
   }
 
-  /** Monta a fala inteira, invisível: o lugar de cada letra já é o definitivo. */
+  /**
+   * Monta a fala inteira, invisível: o lugar de cada letra já é o definitivo. O POEMA (runtime/poemLayout): cada verso
+   * é uma linha própria, os que rimam numa quadra entram recuados, e o bloco tem a largura do verso mais longo.
+   */
   private buildLetters(): void {
     this.letters = [];
     const body = this.host.bodyEl;
     body.textContent = '';
     body.style.setProperty('--voice', this.host.script.npcColorHex);
     body.dataset.letters = this.host.persona.letters;
-    const words = this.currentText.split(' ');
+    const stanza = document.createElement('div');
+    stanza.className = 'zh-stanza';
+    body.appendChild(stanza);
+    this.stanzaEl = stanza;
+    // A quebra entre versos, como o espaço, não é letra: só guarda o lugar, para a letra N continuar sendo o
+    // caractere N da fala (a voz a conta assim).
     let index = 0;
-    words.forEach((word, position) => {
-      const box = document.createElement('span');
-      box.className = EMPHASIS.test(word.replace(/[^\p{L}]/gu, '')) ? 'zh-word zh-em' : 'zh-word';
-      for (const char of word) {
-        const letter = document.createElement('span');
-        letter.className = 'zh-ch';
-        letter.textContent = char;
-        letter.style.setProperty('--i', String(index));
-        box.appendChild(letter);
-        this.letters.push(letter);
-        index++;
-      }
-      body.appendChild(box);
-      if (position < words.length - 1) {
-        body.appendChild(document.createTextNode(' '));
+    const verses = this.currentText.split('\n');
+    verses.forEach((verse, row) => {
+      if (row > 0) {
         this.letters.push(null);
         index++;
       }
+      const line = document.createElement('div');
+      line.className = isIndentedVerse(verses.length, row) ? 'zh-verse zh-rhyme' : 'zh-verse';
+      stanza.appendChild(line);
+      const words = verse.split(' ');
+      words.forEach((word, position) => {
+        const box = document.createElement('span');
+        box.className = EMPHASIS.test(word.replace(/[^\p{L}]/gu, '')) ? 'zh-word zh-em' : 'zh-word';
+        for (const char of word) {
+          const letter = document.createElement('span');
+          letter.className = 'zh-ch';
+          letter.textContent = char;
+          letter.style.setProperty('--i', String(index));
+          box.appendChild(letter);
+          this.letters.push(letter);
+          index++;
+        }
+        line.appendChild(box);
+        if (position < words.length - 1) {
+          line.appendChild(document.createTextNode(' '));
+          this.letters.push(null);
+          index++;
+        }
+      });
     });
+    this.fitVerses();
+  }
+
+  /**
+   * A ESTROFE INTEIRA À VISTA, UM VERSO POR LINHA: se o verso mais longo não cabe na largura, ou os versos não cabem
+   * na altura (o texto "Enorme"), a letra encolhe (até MIN_VERSE_SCALE); só se nem assim couber na largura, os versos
+   * podem quebrar, e a sobra desce com recuo fundo (o CSS de `.zh-wrap`). Sem layout (o DOM dos testes) não mede nada.
+   */
+  private fitVerses(): void {
+    const body = this.host.bodyEl;
+    const stanza = this.stanzaEl;
+    if (!stanza) return;
+    stanza.style.fontSize = '';
+    body.classList.remove('zh-wrap');
+    const style = window.getComputedStyle(body);
+    const roomW = body.clientWidth - parseFloat(style.paddingLeft || '0') - parseFloat(style.paddingRight || '0');
+    const roomH = body.clientHeight - parseFloat(style.paddingTop || '0') - parseFloat(style.paddingBottom || '0');
+    if (roomW <= 0 || roomH <= 0) return;
+    const scale = Math.min(1, roomW / stanza.scrollWidth, roomH / stanza.scrollHeight);
+    if (scale >= 1) return;
+    stanza.style.fontSize = `${Math.max(MIN_VERSE_SCALE, scale)}em`;
+    if (stanza.scrollWidth > roomW + 1) body.classList.add('zh-wrap');
   }
 
   private revealLetter(index: number): void {

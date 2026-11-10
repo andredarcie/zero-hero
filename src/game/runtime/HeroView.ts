@@ -154,10 +154,16 @@ const TILES_PER_FRAME = TIMINGS.walkCycleTiles / 4;
  * unidades de PASSADA em vez de deixar a distância decidir.
  */
 export const TILES_PER_FOOTFALL = TILES_PER_FRAME * 2;
-/** Peak of the bounce, in tiles — about one pixel on a 16px sprite. Keep it small. */
-const BOB_LIFT_TILES = 0.055;
-/** Fraction of a footfall spent rising. Well under half: the hero pops up and sinks back. */
-const BOB_RISE = 0.35;
+/**
+ * Peak of the bounce, in tiles — under one pixel on a 16px sprite. Keep it small. Era 0,055: com o passo mais calmo
+ * (ver TIMINGS.moveDurationMs) o pulo alto ainda lia como corrida.
+ */
+const BOB_LIFT_TILES = 0.045;
+/**
+ * Fraction of a footfall spent rising. Era 0,35 (sobe de estalo e afunda), o salto de quem corre; 0,45 sobe e desce
+ * quase no mesmo tempo, o balanço de quem passeia.
+ */
+const BOB_RISE = 0.45;
 
 /**
  * Advance the walk cycle — what the engine's animation component used to do for the sprite.

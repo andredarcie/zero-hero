@@ -176,12 +176,12 @@ export class SwordChop {
     this.host.bladeTint = litTint;
     this.host.sprite
       .setTexture(item.texture, item.frame)
-      .setFlipX(false)
+      .setFlip(false, false)
       .setTint(litTint)
       .setAlpha(1)
       .setVisible(true);
     this.host.trails.forEach(t =>
-      t.setTexture(item.texture, item.frame).setFlipX(false).setTint(litTint).setAlpha(0).setVisible(false));
+      t.setTexture(item.texture, item.frame).setFlip(false, false).setTint(litTint).setAlpha(0).setVisible(false));
     this.applyChop();
 
     const reared = axe ? hand(AXE_HAND_REAR, AXE_HAND_LIFT) : hand(CHOP_HAND_REAR, CHOP_HAND_LIFT);

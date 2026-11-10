@@ -101,3 +101,47 @@ export const setThriftyPixels = (value: boolean): void => {
   thrifty = value ? 1 : 0;
   write(SHARPNESS_KEY, thrifty);
 };
+
+/**
+ * O ZOOM DO JOGADOR (a régua da HUD, ver ZoomSlider): o quanto a câmera chega perto do herói.
+ *
+ * É um fator sobre a DISTÂNCIA da câmera, nunca sobre o fov — a lei do `worldParams`: a altura e o recuo andam
+ * pelo mesmo fator, senão a câmera gira e a arte que tem a razão entre os dois assada nela mente em silêncio.
+ * 1 = o enquadramento autorado; acima aproxima (a distância vira 1/zoom), abaixo afasta. A faixa é curta de
+ * propósito: o mundo foi composto para o enquadramento autorado (a névoa da borda, a luz), e o zoom só o
+ * aproxima ou afasta um pouco. Fora do `read` daqui, que trabalha em 0..1.
+ */
+export const ZOOM_MIN = 0.75;
+export const ZOOM_MAX = 1.5;
+/** O passo dos botões: 10%, para o número da régua cair sempre redondo (100%, 110%…). */
+export const ZOOM_STEP = 0.1;
+/**
+ * A chave mudou quando o 100% mudou de sentido (2026-11-09: o padrão virou o 90% de antes). Um zoom guardado na
+ * chave velha (`zh.zoom`) media a partir do enquadramento antigo e, lido sobre o novo, se somava a ele: quem tinha
+ * deixado 90% para achar o padrão passou a ver 81%, mais longe do que escolheu. Na chave nova todo mundo começa no
+ * 100% de hoje.
+ */
+const ZOOM_KEY = 'zh.camZoom';
+
+const clampZoom = (value: number): number => Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, value));
+
+const readZoom = (): number => {
+  try {
+    const raw = localStore().getItem(ZOOM_KEY);
+    const value = raw === null ? 1 : Number(raw);
+    return Number.isFinite(value) ? clampZoom(value) : 1;
+  } catch {
+    return 1;
+  }
+};
+
+let cameraZoom = readZoom();
+
+export const getCameraZoom = (): number => cameraZoom;
+
+/** Guarda o zoom (preso à faixa) e devolve o valor que ficou. */
+export const setCameraZoom = (value: number): number => {
+  cameraZoom = clampZoom(Math.round(value * 1000) / 1000);
+  write(ZOOM_KEY, cameraZoom);
+  return cameraZoom;
+};

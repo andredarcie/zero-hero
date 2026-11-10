@@ -2,16 +2,18 @@
 // orgânica, e a beira mordida do calçamento.
 
 import * as THREE from 'three';
-import { CHUNK_COLUMNS, CHUNK_ROWS, SEA_TILE_FRAMES, terrainVariant, STONE_FLOOR_FRAMES } from '@/game/constants';
+import { CHUNK_COLUMNS, CHUNK_ROWS, GROUND_DETAIL_FRAMES, GROUND_TILE_FRAME, SEA_TILE_FRAMES, terrainVariant, STONE_FLOOR_FRAMES } from '@/game/constants';
 import { RELIEF_HEIGHT, reliefLevelAt } from '@/game/world/relief';
-import { biomeTintAt } from '@/game/world/biomes';
 import { buildVineGeometry } from '../vineTexture';
-import { buildFlatTileGeometry, buildReliefContourGeometry, buildShoreGeometry, CLIFF_WALL_SET, DUNGEON_WALL_SET, groundShadeAt, makeReliefField, STONE_EDGE_MIN, STONE_EDGE_VAR, STONE_EDGE_WOBBLE, STONE_LIP_Y, tileKey, tileShoreCorners } from '../terrainGeometry';
+import { buildFlatTileGeometry, buildReliefContourGeometry, buildShoreGeometry, CLIFF_WALL_SET, DUNGEON_WALL_SET, groundShadeAt, groundTintAt, makeReliefField, STONE_EDGE_MIN, STONE_EDGE_VAR, STONE_EDGE_WOBBLE, STONE_LIP_Y, tileKey, tileShoreCorners } from '../terrainGeometry';
 import type { TerrainMaterials } from '../terrainMaterials';
 import type { TerrainTile, TerrainSort } from './TerrainSorter';
 import type { World3D } from '../World3D';
 import { RIVER_SURFACE_LIFT, WATER_DEPTH_TILES } from './worldDefs';
 
+
+/** As pinturas de terra nua (constants.groundFrameAt): é a beira delas que o capim morde. */
+const EARTH_FRAMES: ReadonlySet<number> = new Set(GROUND_DETAIL_FRAMES);
 
 /** O que TerrainGround usa de World3D. */
 export type TerrainGroundHost = Pick<World3D,
@@ -79,9 +81,11 @@ export class TerrainGround {
   /** O chão (de baixo e do planalto), o leito do rio, a superfície do rio e do mar, e a margem. Devolve a água toda. */
   public bakeGroundAndWater(t: TerrainSort, mats: TerrainMaterials, groundFrame: ReadonlyMap<number, number>): TerrainTile[] {
     const { groundTiles, highGroundTiles, bedTiles, seaTiles, solidSet } = t;
-    this.host.terrain.addTerrainMesh(new THREE.Mesh(buildFlatTileGeometry(groundTiles, 0, solidSet, undefined, undefined, biomeTintAt), mats.ground));
+    // O bioma × a mancha larga × a sombra de copa (groundTintAt): a mesma cor que o beiço e a margem vestem.
+    const tint = groundTintAt(solidSet);
+    this.host.terrain.addTerrainMesh(new THREE.Mesh(buildFlatTileGeometry(groundTiles, 0, solidSet, undefined, undefined, tint), mats.ground));
     if (highGroundTiles.length > 0) {
-      this.host.terrain.addTerrainMesh(new THREE.Mesh(buildFlatTileGeometry(highGroundTiles, (x, z) => reliefLevelAt(x, z) * RELIEF_HEIGHT, solidSet, undefined, undefined, biomeTintAt), mats.ground));
+      this.host.terrain.addTerrainMesh(new THREE.Mesh(buildFlatTileGeometry(highGroundTiles, (x, z) => reliefLevelAt(x, z) * RELIEF_HEIGHT, solidSet, undefined, undefined, tint), mats.ground));
     }
 
     // The sunken riverbed (the same dirt, dropped a level) + the earthen banks that
@@ -183,5 +187,39 @@ export class TerrainGround {
       this.host.terrain.addTerrainMesh(new THREE.Mesh(outward.lip, mats.ground));
     }
 
+  }
+
+  /**
+   * A TERRA NUA NÃO ACABA EM ESCADINHA (2026-11-10): a mancha de terra é decidida por tile inteiro, e a beira dela era
+   * a escada da grade — degraus retos a 45°. O capim agora MORDE a beira da terra por um contorno orgânico, o mesmo
+   * caminho do calçamento (`buildShoreGeometry` deitado, só o beiço): a mancha arredonda, e o grão do capim avança
+   * sobre ela em texel inteiro. Só o capim morde (nunca a pedra), e só no nível de cada um.
+   */
+  public bakeEarthEdges(t: TerrainSort, mats: TerrainMaterials): void {
+    const { groundTiles, reliefNear, solidSet } = t;
+    const byLevel = new Map<number, Array<{ x: number; z: number; frame: number }>>();
+    for (const g of [...groundTiles.filter((g) => reliefLevelAt(g.x, g.z) === 0), ...reliefNear.filter((n) => n.level > 0)]) {
+      const level = reliefLevelAt(g.x, g.z);
+      const list = byLevel.get(level);
+      if (list) list.push(g);
+      else byLevel.set(level, [g]);
+    }
+    for (const [level, floor] of byLevel) {
+      const earth = floor.filter((g) => EARTH_FRAMES.has(g.frame));
+      if (earth.length === 0) continue;
+      const frames = new Map<number, number>();
+      for (const g of floor) frames.set(tileKey(g.x, g.z), g.frame);
+      const field = this.host.tiles.reliefField;
+      const lip = buildShoreGeometry(
+        new Set(earth.map((g) => tileKey(g.x, g.z))), earth,
+        (x, z) => (frames.get(tileKey(x, z)) === GROUND_TILE_FRAME ? GROUND_TILE_FRAME : null), 0,
+        {
+          min: 0.05, variance: 0.3, round: 0.2, wobble: 2.4, y: level * RELIEF_HEIGHT + STONE_LIP_Y, flatOnly: true,
+          keep: (px, pz) => !field || field(px, pz) === level, shadeAt: groundShadeAt(solidSet),
+        },
+      );
+      lip.walls.dispose();
+      this.host.terrain.addTerrainMesh(new THREE.Mesh(lip.lip, mats.ground));
+    }
   }
 }

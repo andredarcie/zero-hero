@@ -12,7 +12,10 @@ import type { World3D } from '../World3D';
 const BIOME_LAVA_RADIUS = 11; // tiles
 // Tinted shadows, the A Short Hike way: the dark is a COLOUR (violet-blue), never just
 // darker — it's what makes the fire pool's warmth read as warmth.
-const GRADE_WOOD_SHADOW = new THREE.Vector3(0.88, 0.91, 1.14);
+// A noite longe do fogo puxa para o AZUL FRIO de pouca cor (2026-11-10) — mas pelo grade, nunca pela luz: uma luz
+// azul forte já pintou as árvores de turquesa (relato do autor, ver ambientColor). Aqui é só a sombra que esfria, e o
+// fogo (que vive no alto do quadro) fica quente por contraste.
+const GRADE_WOOD_SHADOW = new THREE.Vector3(0.84, 0.9, 1.22);
 const GRADE_WOOD_HIGH = new THREE.Vector3(1.12, 1.02, 0.86); // warm amber highlights
 /**
  * O MESMO bosque ao meio-dia. Ele precisa de par próprio — e não do de cima com `grade` mais alto
@@ -65,6 +68,13 @@ export interface World3DParams {
    * passada nem roda). Ver renderReflection.
    */
   reflection: number;
+  /**
+   * A RAMPA DO BIOMA (render3d/biomeRamp.ts): 1 = a folha troca de rampa e o resto quase não muda; 0 = a cor do bioma
+   * multiplicando a arte inteira, como era. Knob de comparação, sem recompilar.
+   */
+  biomeRamp: number;
+  /** O CONTORNO dos personagens (render3d/spriteOutline.ts): a força do anel, 0 = sem contorno. */
+  outline: number;
   /**
    * A HORA DO DIA: 0 = a noite autorada (o padrão do jogo), 1 = o dia de sol.
    *
@@ -221,6 +231,11 @@ export interface World3DParams {
   dofNear: number;
   /** Vignette darkening at the corners (0 = off) and film-grain amount. */
   vignette: number;
+  /**
+   * A PERSPECTIVA ATMOSFÉRICA (finishShader): acima da faixa do herói o quadro perde cor e puxa para a cor do ar
+   * (`skyColor`). 0 = desligada. É ela, e não o desfoque, que diz "longe" sem borrar a pixel art.
+   */
+  haze: number;
   /**
    * A CURVA DE TELA — o expoente com que o quadro pronto é levantado. 1 = a rampa reta que este
    * jogo sempre teve (a noite, intocada); menores levantam sombra e meio-tom sem mexer no branco.

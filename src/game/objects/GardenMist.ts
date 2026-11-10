@@ -19,8 +19,18 @@ import { createCanvas } from '@/game/platform/platform';
 
 const CLOUD = 'garden-mist-cloud';
 const SHEET = 'garden-mist-sheet';
-/** Fria, cinza-azulada: a neblina da mata antiga, não o brilho do sol. */
-const TINT = 0x95aaa8;
+/**
+ * Fria e clara: a neblina da mata antiga, não o brilho do sol. Mais azul do que parece de propósito (2026-11-10): ela é
+ * iluminada, e o sol dourado do dia mais o split-tone quente a puxavam para um amarelo-esverdeado de fumaça. Este azul
+ * é o que sobra branco depois do ouro.
+ */
+const TINT = 0x9cb3d2;
+/**
+ * O VÉU, não a parede: a névoa deixa ver as silhuetas atrás dela — é isso que guarda o mistério (2026-11-10). Ela era
+ * quase opaca (0,82 a 1) e escondia o jardim inteiro por igual.
+ */
+const CLOUD_ALPHA = 0.5;
+const SHEET_ALPHA = 0.46;
 /** A moldura do jardim, em tiles a partir da fogueira (o interior e a sebe; ao sul, até a sebe do portão). */
 const REACH = { x0: -6, x1: 5, y0: -6, y1: 4 };
 /** O raio em que a névoa começa a rarear: a borda dela some aos poucos, sem contorno de bloco. */
@@ -126,7 +136,7 @@ export class GardenMist {
         const width = 3.4 + noise(x, y, 3) * 1.8;
         const fade = fadeAt(Math.hypot(px - center.x, py - 1.5 - center.y));
         if (fade <= 0.02) continue;
-        const alpha = Math.min(1, (0.82 + noise(x, y, 4) * 0.2) * fade);
+        const alpha = Math.min(1, (CLOUD_ALPHA + noise(x, y, 4) * 0.16) * fade);
         const bb = overlay(w3.objects.addBillboard(CLOUD, 0, { centered: true, depthWrite: false, alphaTest: 0.01 })
           .setTint(TINT)
           .setDisplaySize(width, width * 0.6));
@@ -142,7 +152,7 @@ export class GardenMist {
         const bb = overlay(w3.objects.addBillboard(SHEET, 0, { flat: true, flatY: 0.18, depthWrite: false, alphaTest: 0.01 })
           .setTint(TINT)
           .setDisplaySize(4.6, 4.6));
-        this.puffs.push({ bb, x, y, lift: 0, alpha: 0.72 * fade, phase: n * 2.3, gone: 0 });
+        this.puffs.push({ bb, x, y, lift: 0, alpha: SHEET_ALPHA * fade, phase: n * 2.3, gone: 0 });
       }
     }
     this.tick(0);
@@ -171,9 +181,13 @@ export class GardenMist {
     this.clock += deltaMs / 1000;
     const t = this.clock;
     for (const p of this.puffs) {
-      const drift = 0.35;
-      const x = p.x + Math.sin(t * 0.21 + p.phase) * drift + p.gone * (7 + (p.phase % 3));
-      const y = p.y + Math.cos(t * 0.17 + p.phase * 0.7) * drift * 0.6 - p.gone * 1.5;
+      // CAMADAS EM RITMOS DIFERENTES (2026-11-10): a nuvem mais alta anda mais e mais depressa que o lençol rente ao
+      // chão, como num vale de verdade — é o desencontro entre as camadas que dá profundidade ao véu.
+      const layer = Math.min(1, p.lift / 1.45);
+      const drift = 0.25 + 0.45 * layer;
+      const pace = 0.14 + 0.16 * layer;
+      const x = p.x + Math.sin(t * pace + p.phase) * drift + p.gone * (7 + (p.phase % 3));
+      const y = p.y + Math.cos(t * pace * 0.8 + p.phase * 0.7) * drift * 0.6 - p.gone * 1.5;
       p.bb.setPosition(x, y);
       if (p.lift > 0) p.bb.setElevation(p.lift + p.gone * 0.8 + Math.sin(t * 0.3 + p.phase) * 0.08);
       const breathe = 0.85 + 0.15 * Math.sin(t * 0.4 + p.phase);

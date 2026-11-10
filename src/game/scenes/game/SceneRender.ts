@@ -25,7 +25,7 @@ export type SceneRenderHost = Pick<GameScene,
   'bumps' | 'camera' | 'cameraLookBlend' | 'cameras' | 'carry' | 'children' | 'chunkManager' | 'cutsceneActive'
   | 'dialog' | 'dialogCam' | 'forage' | 'forge' | 'game' | 'hero' | 'heroBillboard' | 'itemManager' | 'life'
   | 'movementController' | 'npcManager' | 'playerWorld' | 'props' | 'scale' | 'steps' | 'tileSize' | 'time'
-  | 'torch' | 'tweens' | 'valley' | 'verbs' | 'world3d'
+  | 'torch' | 'tweens' | 'uiTileSize' | 'valley' | 'verbs' | 'world3d'
 >;
 
 export class SceneRender {
@@ -59,6 +59,7 @@ export class SceneRender {
     // The projected size of one tile at screen centre IS the legacy "tileSize"
     // every remaining 2D-side FX scales itself by.
     this.host.tileSize = w3.projection.tileScreenSize();
+    this.host.uiTileSize = this.host.tileSize / w3.cam.zoomFactor;
     // E o heroi mede EXATAMENTE um tile — aqui, todo frame, junto do numero de que ele depende.
     this.host.hero.sizePx = this.host.tileSize;
 
@@ -155,6 +156,7 @@ export class SceneRender {
     // menos de um chunk desde que o zoom desceu). A formula velha so responde antes de o mundo 3D
     // existir, no primeiro `handleResize` do boot.
     this.host.tileSize = this.host.world3d?.projection.tileScreenSize() ?? this.computeTileSize(width, height);
+    this.host.uiTileSize = this.host.tileSize / (this.host.world3d?.cam.zoomFactor ?? 1);
 
     if (this.host.camera) {
       this.host.camera.screenCenterX = Math.floor(width / 2);
@@ -195,7 +197,7 @@ export class SceneRender {
     this.host.carry.positionBackItem();
     this.host.steps.updateFootprints();
     this.host.itemManager?.render(this.host.tileSize, this.host.camera);
-    this.host.npcManager?.render(this.host.tileSize, this.host.camera);
+    this.host.npcManager?.render(this.host.tileSize, this.host.camera, this.host.uiTileSize);
     this.renderProps();
   }
 
@@ -218,12 +220,13 @@ export class SceneRender {
         ?? { x: this.host.playerWorld.worldX, y: this.host.playerWorld.worldY };
       // O balao de pensamento monta no MESMO ponto do aviso de apanhar, e pelo mesmo motivo: a
       // ancora e o corpo DESENHADO. O relogio dele corre no update (ver HeroThought.tick).
-      this.host.bumps.heroThought?.render(this.host.tileSize, this.host.camera, this.host.time.now, at);
+      const ui = this.host.uiTileSize;
+      this.host.bumps.heroThought?.render(this.host.tileSize, this.host.camera, this.host.time.now, at, ui);
       this.host.forage.bagStash?.render(this.host.tileSize, this.host.camera, at, this.host.game.loop.delta);
       const oven = this.host.props.furnaces[0];
-      if (oven) this.host.forge.furnaceAsk?.render(this.host.tileSize, this.host.camera, this.host.time.now, { x: oven.worldX, y: oven.worldY });
+      if (oven) this.host.forge.furnaceAsk?.render(this.host.tileSize, this.host.camera, this.host.time.now, { x: oven.worldX, y: oven.worldY }, ui);
       const prompt = this.host.verbs.currentPrompt(at);
-      this.host.verbs.actionPrompt?.render(prompt?.view ?? null, this.host.tileSize, this.host.camera, this.host.time.now, prompt?.at ?? at);
+      this.host.verbs.actionPrompt?.render(prompt?.view ?? null, this.host.tileSize, this.host.camera, this.host.time.now, prompt?.at ?? at, ui);
     }
     // Bombs are world-anchored billboards; nothing to reproject here.
   }

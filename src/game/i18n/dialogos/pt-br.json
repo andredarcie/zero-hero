@@ -1,5 +1,11 @@
 {
-  "_leia": "TODAS AS FALAS DOS PERSONAGENS, em português. Edite aqui: o jogo lê este arquivo (src/game/i18n/i18n.ts junta ele ao locales/pt-br.json). Cada personagem tem a 'filosofia' (só referência: o jogo não lê) e as 'falas', pelo caminho que o código pede (ex.: 'wizard.intro'). Cada fala é uma linha; '[narrador] ' no começo faz dela narração. {n} é trocado por um número. O inglês (en.json) tem de ter os mesmos caminhos e o mesmo número de linhas em cada fala.",
+  "_leia": "TODAS AS FALAS DOS PERSONAGENS, em português. Edite aqui: o jogo lê este arquivo (src/game/i18n/i18n.ts junta ele ao locales/pt-br.json). Cada personagem tem a 'filosofia' (só referência: o jogo não lê) e as 'falas', pelo caminho que o código pede (ex.: 'wizard.intro'). Cada fala é uma linha; '[narrador] ' no começo faz dela narração. {n} é trocado por um número. Uma barra-n (\\n) dentro da fala quebra o verso; numa seção com 'verso' as falas são poema, e o src/game/i18n/versos.test.ts confere a métrica e a rima. O inglês (en.json) tem de ter os mesmos caminhos e o mesmo número de linhas em cada fala.",
+  "_verso": {
+    "metro": { "min": 6, "max": 9 },
+    "estrofe": 4,
+    "rimam": [2, 4],
+    "nota": "TODA FALA É VERSO, e o PADRÃO DE ESCRITA mora em docs/escrita-em-verso.md: ler antes de escrever qualquer verso. Acima de tudo, lida UMA vez em voz alta, uma pessoa sem leitura de filosofia entende; quando a rima e a clareza brigam, troca-se a rima. Ordem direta, palavras do dia a dia, uma frase inteira a cada dois versos, a escola como conselho prático preso à vida do personagem, e a missão dizendo direção, item e quantidade. Forma: UMA ESTROFE POR CAIXA, a quadra (o 2º verso rimando com o 4º) ou o dístico (os dois rimando) na fala curta, na encaixada e na de quem se alterna com outro falante; de 6 a 9 sílabas poéticas por verso, no ritmo da fala. A rima é de OUVIDO: é aberto não rima com ê fechado, nem ó com ô. O src/game/i18n/versos.test.ts confere o metro e a rima pela grafia; o resto, o ouvido."
+  },
   "heroi": {
     "nome": "Zero",
     "filosofia": {
@@ -24,43 +30,37 @@
     "falas": {
       "wizard": {
         "intro": [
-          "[narrador] A guerra acabou.",
-          "A espada foi a sua balsa. Já atravessou. Não precisa levá-la nas costas.",
-          "Agora encontre o que vem depois.",
-          "Cuide de quem mora aqui. Então o jardim se abre.",
-          "Você não dorme de verdade desde que a guerra começou.",
-          "Seu acampamento ainda está lá, a leste do lago. Vá descansar.",
-          "[narrador] Z fala e pega · X usa"
+          "[narrador] A guerra enfim acabou;\nsó a estrada sobrou.",
+          "A espada serviu na guerra;\nagora, deixe na terra.",
+          "Nada fica como está;\na sua vida também muda.\nCuide de quem mora aqui:\no jardim abre a quem ajuda.",
+          "Na guerra, você não dormia;\nagora, o sono tem lugar.\nSeu acampamento é a leste\ndo lago: lá dá pra sonhar.",
+          "Agora, vá descansar:\nsó respire, devagar.",
+          "[narrador] Com Z, você fala e pega;\ncom X, usa o que carrega."
         ],
         "guide": [
-          "Não há mais o que combater.",
-          "O guerreiro não era você. Era só o que você fazia.",
-          "Eu só aponto o caminho. O sentido, você faz andando."
+          "Não tem mais com quem lutar;\na guerra, pode largar.",
+          "Você não é o guerreiro:\nisso era só o que você fazia.\nEu só mostro o caminho;\no sentido, você é que cria."
         ],
         "again": [
-          "Ela volta. Durma de novo.",
-          "Eu só aponto o caminho. O sentido, você faz andando."
+          "Ela volta. Não tenha medo:\ndurma até nascer o dia.\nEu só mostro o caminho;\no sentido, você é que cria."
         ],
         "gate": [
-          "O jardim está aberto.",
-          "Vá até a fogueira no meio."
+          "O jardim abriu. Sem receio,\nvá até a fogueira do meio."
         ],
         "after": [
-          "Você encontrou. Um lugar para sentar.",
-          "Sofrer vem de querer o que não fica. Aqui, só respire."
+          "Você achou um lugar\npara sentar, mais nada.\nSofre quem se agarra ao que passa.\nRespire: acabou a estrada."
         ],
         "tent": [
-          "Não há mais o que combater.",
-          "O guerreiro não era você. Era só o que você fazia.",
-          "Descanse no seu acampamento, a leste do lago. Eu só aponto o caminho; o sentido, você faz andando."
+          "Não tem mais com quem lutar;\na guerra, pode largar.",
+          "Você não é o guerreiro:\nisso era só o que você fazia.\nEu só mostro o caminho;\no sentido, você é que cria.",
+          "Descanse no acampamento:\nfica a leste do lago. Vá.\nA noite agora é sua,\ne, como tudo, passará."
         ]
       },
       "npc.wizard": {
         "name": "Sati",
         "lines": [
-          "Não há mais o que combater.",
-          "O guerreiro não era você. Era só o que você fazia.",
-          "Eu só aponto o caminho. O sentido, você faz andando."
+          "Não tem mais com quem lutar;\na guerra, pode largar.",
+          "Você não é o guerreiro:\nisso era só o que você fazia.\nEu só mostro o caminho;\no sentido, você é que cria."
         ]
       }
     }
@@ -78,47 +78,43 @@
       "npc.radiationSuit": {
         "name": "Shui",
         "lines": [
-          "Eu observo os fungos deste vale. Eles não têm pressa.",
-          "O que se vê é só o fruto. O fungo vive escondido, em fios, debaixo da terra.",
-          "Seis tipos crescem aqui. Preciso de quatro, o resto é só se quiser. Leve a minha faca e a minha cesta.",
-          "Não force: corte por onde ele já se abre, e a faca nunca cega. Escove, não lave."
+          "Eu fico olhando os fungos:\nnão têm pressa, e têm razão.\nO cogumelo é só o fruto;\no resto vive no chão.",
+          "Seis tipos crescem no vale;\neu tenho quatro pra colher.\nLeve a faca e a cesta;\nos outros, colha por prazer.",
+          "Não force: corte na base,\ne a faca não perde o fio.\nEscove a terra, não lave;\nvá com calma, como o rio."
         ]
       },
       "npc.radiationSuitDone": {
         "name": "Shui",
         "lines": [
-          "Quatro já bastam. Quem sabe o que basta já tem tudo.",
-          "Seja como a água: mole, e ainda assim vence a pedra.",
-          "Os outros, só se quiser. Só nunca coma o vermelho."
+          "Quatro bastam. Quem sabe\nparar na hora vive em paz.\nA água é mole, e fura a pedra:\nsem forçar, ela é capaz.",
+          "Os outros, colha por prazer;\nmas o vermelho, não vá comer."
         ]
       },
       "npc.radiationSuitAll": [
-        "Todos os seis! Você andou com o vale, não contra ele.",
-        "O vermelho não serve para nada. Por isso vive tanto. Nunca coma."
+        "Os seis! Você seguiu o vale,\nsem nadar contra a correnteza.\nO vermelho não serve pra nada,\npor isso dura: essa é a beleza."
       ],
       "npc.radiationSuitHint": {
         "porcini": [
-          "Aqui do meu lado esquerdo, esse cogumelo: corte ele para aprender como se faz."
+          "Aqui, do meu lado esquerdo,\ntem um: corte pra aprender.\nRente ao chão, devagar;\nnão precisa correr."
         ],
         "morel": [
-          "Ao norte, numa ilha: um chapéu de favo de mel. Dois gravetos fazem uma ponte; o machado é do Marco."
+          "Na ilha ao norte tem um,\nmas pra chegar não tem barco:\ndois gravetos fazem ponte,\ne o machado está com o Marco."
         ],
         "puffball": [
-          "A nordeste, no mato alto: uma bola branca sem chapéu. Mato alto cai com foice ou fogo."
+          "A nordeste, no mato alto,\numa bola branca, sem chapéu.\nPara passar, use a foice,\nou fogo, que sobe ao céu."
         ],
         "inkCap": [
-          "Bem ao norte, atrás de arbustos secos: alto e branco, desgrenhado. Arbusto seco queima."
+          "Bem ao norte, atrás de um arbusto\nseco, um branco e descabelado.\nPonha fogo no arbusto,\ne o caminho fica liberado."
         ],
         "chanterelle": [
-          "Ao norte, cercado de lava: um funil dourado. Pedra afunda e vira chão. Lava acende graveto."
+          "Ao norte, cercado de lava,\num fungo em funil, dourado.\nPedra na lava vira chão;\ngraveto pega fogo encostado."
         ],
         "flyAgaric": [
-          "No canto noroeste, atrás de mato morto: vermelho, com pintas brancas. Leve um machado. Não coma."
+          "A noroeste, atrás do mato\nseco, tem um vermelho pintado.\nLeve um machado. E não coma:\né veneno, tome cuidado."
         ]
       },
       "finds.door.radiationSuit": [
-        "Melhor não entrar. Tem fungo em tudo.",
-        "A varanda é sua. Levo chá."
+        "Melhor não entrar: tem fungo\nem tudo, até no sofá.\nSenta na varanda, à vontade,\nque eu já levo um chá pra lá."
       ]
     }
   },
@@ -135,100 +131,90 @@
       "npc.painter": {
         "name": "Sisi",
         "lines": [
-          "Tudo o que eu pinto sai cinza. A cor não vem pronta: a gente tira da terra.",
-          "Tome a pá: cave quatro buracos, aqui por perto."
+          "Eu pinto, e tudo sai cinza;\no mundo não responde, e eu sigo.\nPegue a pá e cave as trincas\naqui na frente, comigo."
         ]
       },
       "npc.painterDone": {
         "name": "Sisi",
         "lines": [
-          "Fica aqui, o seu quadro.",
-          "O mundo continua cinza. A cor é a minha revolta.",
-          "Criar é viver duas vezes.",
-          "No meio do inverno, achei em mim um verão invencível."
+          "O seu quadro fica aqui,\ne a cor agora é visível.\nNo meio do inverno, achei\nem mim um verão invencível.",
+          "O cinza vai voltar, eu sei,\ne eu pinto mesmo assim.\nCriar é viver duas vezes;\no cinza não é o fim."
         ]
       },
       "npc.painterStep": {
         "dig": [
-          "Faltam {n}. Pá na terra."
+          "Ainda {n} pra cavar:\nsó nas trincas, sem errar."
         ],
         "seeds": [
-          "Quatro buracos! A pá fica aqui do meu lado.",
-          "Sementes sortidas: uma em cada buraco."
+          "Quatro buracos! A pá\nfica aqui, encostada.\nAgora, uma semente\nem cada buraco, bem plantada."
         ],
         "sow": [
-          "Faltam {n}. Uma semente em cada buraco."
+          "Uma semente em cada cova:\nmais {n}, e a cor se renova."
         ],
         "bucket": [
-          "Plantadas! Tome o balde.",
-          "Busque água na lagoa, a oeste, e regue as quatro.",
-          "Ir e voltar, ir e voltar. Dá para ser feliz assim."
+          "Plantadas! O balde é seu.\nTem água a oeste, na lagoa.\nRegue as quatro, uma a uma,\ne vá devagar, numa boa.",
+          "Vai e volta, sem parar;\nmesmo assim, dá pra gostar."
         ],
         "water": [
-          "Faltam {n}. Encha o balde na lagoa e regue."
+          "Ainda {n} pra regar:\nencha o balde e vá devagar."
         ],
         "wait": [
-          "Agora é esperar.",
-          "Ou durma uma noite: elas amanhecem prontas."
+          "Agora é só esperar.\nOu durma uma noite, e então\nas flores amanhecem prontas\npra você colher com a mão."
         ],
         "harvest": [
-          "Floresceram!",
-          "Colha com as mãos, as quatro. Depois, para a mesa."
+          "Floresceram! Colha as quatro\ncom a mão, sem ferramenta.\nDepois, leve todas pra mesa:\né lá que a tinta se inventa."
         ],
         "bring": [
-          "As flores vão para a mesa."
+          "Leve as flores para a mesa:\nlá, viram tinta e beleza."
         ],
         "easel": [
-          "Pincel na mão. Pinte o mundo que você quiser."
+          "Pincel na mão: pode pintar\no mundo que você inventar."
         ]
       },
       "npc.painterMake": {
         "intro": [
-          "Que flores! Veja como se faz."
+          "Que flores! Olhe como eu faço\na tinta, passo a passo."
         ],
         "urucum": [
-          "Urucum: esfrego as sementes na água e o pó vermelho solta."
+          "Urucum: na água, a semente\nsolta um pó vermelho e quente."
         ],
         "anil": [
-          "Anil: as folhas fermentam na água. Bato, e o azul nasce no ar."
+          "Anil: a folha fermenta;\neu bato, e o azul se apresenta."
         ],
         "curcuma": [
-          "Cúrcuma: a raiz seca e moída vira pó amarelo."
+          "Cúrcuma: a raiz secada,\nmoída, sai amarelada."
         ],
         "garanca": [
-          "Garança: a raiz moída, em água morna. Fervida, o vermelho escurece."
+          "Garança: a raiz moída\nescurece quando é fervida."
         ],
         "binder": [
-          "Pedra-ume fixa a cor. Goma arábica faz dela tinta."
+          "Pedra-ume prende a cor;\ncom goma, é tinta de pintor."
         ],
         "brush": [
-          "Obrigada pelas tintas! Vou armar o quadro.",
-          "Tome o pincel: agora é você quem cria.",
-          "Pinte sem esperar nada. É isso que te deixa livre."
+          "Obrigada pelas tintas!\nVou armar o quadro, e então\no pincel é seu: quem pinta\nagora é a sua mão.",
+          "Pinte sem esperar resposta:\na mão livre pinta o que gosta."
         ]
       },
       "npc.painterReview": {
         "form": {
-          "sparse": "Poucos traços, e já diz tudo.",
-          "middle": "Olha só o que você fez nessa tela!",
-          "full": "Não sobrou um canto em branco!"
+          "sparse": "Poucos traços, e diz tudo;\no branco em volta fica mudo.",
+          "middle": "Olha só o que você fez\nnessa tela, de uma vez!",
+          "full": "Não sobrou canto vazio:\na tela inteira é um rio."
         },
         "color": {
-          "all": "As quatro cores juntas. Nem eu teria essa coragem.",
-          "urucum": "Esse laranja parece fim de tarde.",
-          "anil": "Esse azul parece água funda.",
-          "curcuma": "Esse amarelo aquece a tela inteira.",
-          "garanca": "Esse vermelho tem coração."
+          "all": "Usou as quatro cores: coragem\nque eu não tive na paisagem.",
+          "urucum": "Laranja de fim de tarde:\no sol baixinho, que arde.",
+          "anil": "Esse azul é água funda:\na tela inteira se inunda.",
+          "curcuma": "Esse amarelo é calor:\naquece a tela e o pintor.",
+          "garanca": "Vermelho com coração:\nbate na tela, e não em vão."
         },
         "thanks": [
-          "Você tem mão de pintor.",
-          "Eu só via cinza. A gente inventou a cor.",
-          "O pincel eu guardo. O quadro fica aqui."
+          "Você tem mão de pintor.\nObrigada, de coração.\nO mundo não deu a cor:\nnós dois fizemos, com a mão.",
+          "O quadro fica comigo;\neu guardo o pincel, amigo."
         ]
       },
       "finds.door.painter": [
-        "Aqui dentro está tudo molhado de tinta.",
-        "Senta na varanda. Levo chá."
+        "Aqui dentro, tudo é tinta\nfresca, que não secou ainda.\nSenta lá fora: eu levo o chá,\ne da varanda a vista é linda."
       ]
     }
   },
@@ -245,59 +231,51 @@
       "npc.businessMan": {
         "name": "Marco",
         "lines": [
-          "Perdi o negócio, a lenha, tudo. Minhas mãos tremem.",
-          "O resto não depende de mim. Uma fogueira, sim. Ali, naquela terra. Tome o machado.",
-          "Corte um galho morto e leve ao cepo. Ponha em pé e rache. As duas metades vão para a terra. Quatro vezes.",
-          "Árvore seca é rara por aqui. Ande e procure."
+          "Perdi o negócio e a lenha;\na mão treme sem parar.\nO que eu não controlo, deixo;\ndo que é meu, eu vou cuidar.",
+          "O machado está ali, na terra.\nCorte um galho que esteja morto,\nponha de pé no cepo\ne rache, direito ou torto.",
+          "Faça isso quatro vezes,\ne deixe as metades no chão.\nÁrvore seca é rara;\nprocure com atenção."
         ]
       },
       "npc.businessManDone": {
         "name": "Marco",
         "lines": [
-          "Ainda sinto o cheiro da fumaça.",
-          "Não é o que acontece que pesa. É o que a gente pensa disso.",
-          "A Thea olha o céu; eu, o fogo. É tudo a mesma natureza.",
-          "Obrigado, amigo. O machado é seu."
+          "Sinto o cheiro da fumaça,\ne a mão, enfim, sossega.\nO que dói não é o que acontece:\né o que a gente pensa, e carrega.",
+          "A Thea olha o céu; eu, o fogo:\né tudo a mesma natureza.\nObrigado, amigo. O machado\nagora é seu, com certeza."
         ]
       },
       "npc.businessManStep": {
         "gather": [
-          "Faltam {n}. Galho morto, cepo, terra. Árvore seca é rara: procure."
+          "Ainda {n} pra fazer:\ncorte, rache, deixe no chão.\nÁrvore seca é rara;\nolhe bem, com atenção."
         ],
         "ready": [
-          "Quatro. Isso já é uma fogueira, só falta o fogo.",
-          "Vá lá e acenda."
+          "Quatro! Isso já dá fogueira;\nsó falta o fogo, mais nada.\nVá lá e acenda: a lenha\njá está pronta e rachada."
         ],
         "light": [
-          "Vá lá e acenda."
+          "Vá lá e acenda a fogueira;\na lenha está pronta, inteira."
         ]
       },
       "npc.businessManNight": {
         "split": {
-          "clean": "Rachou limpo. Mão boa.",
-          "rough": "Rachou torto, mas rachou. Machado se aprende batendo."
+          "clean": "Rachou limpo! Que mão boa:\nnem a lenha se magoa.",
+          "rough": "Rachou torto, mas rachou:\nfez o que dava, e isso bastou."
         },
         "fire": {
-          "first": "E acendeu de primeira.",
-          "worked": "O fogo deu trabalho. Todo fogo dá."
+          "first": "E acendeu de primeira:\nfaísca firme e certeira.",
+          "worked": "O fogo deu trabalho, eu sei;\ntodo fogo dá: é a lei."
         },
         "story": [
-          "Senta. Olha o fogo comigo.",
-          "Fogo não é uma coisa. É uma coisa acontecendo.",
-          "O calor faz o galho soltar gás. É o gás que queima, não a madeira.",
-          "O gás encontra o ar, e essa queima solta mais calor. Que solta mais gás. É por isso que ele não para sozinho.",
-          "E essa luz? É fuligem. Grãos minúsculos, tão quentes que brilham.",
-          "A árvore passou a vida inteira guardando sol. A fogueira só devolve.",
-          "Fogo forte faz do que cai nele mais chama. O que atrapalha vira lenha."
+          "Senta. Olha o fogo comigo,\ncomo quem olha um amigo.",
+          "O fogo não é uma coisa:\né uma coisa acontecendo.\nO calor tira um gás do galho,\ne é o gás que está ardendo.",
+          "O gás queima com o ar,\ne o calor solta mais gás.\nPor isso o fogo não para:\nsozinho, ele é capaz.",
+          "E essa luz? É fuligem:\npó quente, que brilha à volta.\nA árvore guardou sol\na vida inteira; o fogo solta.",
+          "No fogo forte, o que cai\nvira chama, venha o que venha.\nNa vida é igual: o problema\nque aparece vira lenha."
         ],
         "farewell": [
-          "Nunca diga 'perdi'. Diga 'devolvi'. Olha: as mãos pararam de tremer.",
-          "Esta noite ninguém me tira."
+          "Não digo mais “perdi”: digo\n“devolvi”, e a mão respira.\nOlhe: ela não treme mais.\nEsta noite, ninguém me tira."
         ]
       },
       "finds.door.businessMan": [
-        "A porta emperra. A varanda não.",
-        "Senta. Levo um chá."
+        "A porta emperra, mas a varanda\né sua: fique à vontade.\nSenta, que eu levo um chá\ne um pouco de amizade."
       ]
     }
   },
@@ -314,84 +292,69 @@
       "npc.astronaut": {
         "name": "Thea",
         "lines": [
-          "Olá. Minha nave caiu e quebrou.",
-          "Preciso voltar para o meu lar. Preciso da sua ajuda.",
-          "Com o telescópio consertado, eu acho a posição dos astros e sei exatamente para onde mandar um sinal.",
-          "Aí meus amigos vêm me buscar.",
-          "Mas o telescópio também quebrou na queda. Sobrou o tubo.",
-          "Sem tripé e sem lente, não vejo o céu. E todo mundo nasce querendo saber.",
-          "Leve esta picareta. Me traga uma barra de ferro."
+          "Olá. A minha nave caiu\ne quebrou: não dá pra voar.\nVocê me ajuda? Sozinha,\nnão sei como voltar pro meu lar.",
+          "Com o telescópio inteiro,\neu sei onde as estrelas estão.\nAí, mando o sinal certo,\ne os amigos me acharão.",
+          "Mas, na queda, o telescópio\nquebrou: só o tubo sobrou.\nSem tripé e sem a lente,\no céu, pra mim, se apagou.",
+          "Todo mundo quer saber:\na gente nasce assim.\nTome a picareta e traga\numa barra de ferro pra mim."
         ]
       },
       "npc.astronautDone": {
         "name": "Thea",
         "lines": [
-          "O céu continua lá. Olhar para ele é o melhor da vida. Volte de noite.",
-          "Pus um marco de pedras aqui: um lugar para onde voltar.",
-          "O Marco vive de fazer; eu, de olhar. Os dois procuram viver bem.",
-          "Uma andorinha só não faz verão: ser feliz é a vida inteira, não um dia."
+          "O céu continua lá.\nOlhar pra ele é o melhor da vida.\nVolte de noite ao marco\nde pedras: a vista é garantida.",
+          "O Marco vive de fazer;\neu, de olhar e pensar.\nOs dois querem viver bem,\ncada um no seu lugar.",
+          "Uma andorinha não faz verão,\nnem um dia faz felicidade:\nela é a vida inteira,\ne não só uma metade."
         ]
       },
       "npc.astronautHint": {
         "ore": [
-          "Siga para oeste, até o lago de lava. A pedra de veio preto dá carvão, a de veio vermelho, minério. O forno aqui do lado pede um de cada vez."
+          "Vá a oeste, até a lava.\nVeio preto é carvão;\nveio vermelho é minério:\nquebre a pedra, e pegue com a mão.",
+          "Leve ao forno aqui do lado,\num de cada vez, com cuidado."
         ],
         "bloom": [
-          "Leve o carvão e o minério ao forno, aqui do lado. Ele pede o que falta, uma coisa de cada vez."
+          "O forno aqui do lado\njunta o minério e o carvão.\nEle mostra o que falta:\nleve um por vez, na mão."
         ],
         "iron": [
-          "Ponha o bloco quente na bigorna, aqui do lado, e martele."
+          "Na bigorna, aqui do lado,\no bloco quente é martelado."
         ]
       },
       "npc.astronautStep": {
         "tripod": [
-          "Ferro! Isto vira o tripé.",
-          "Falta a lente, e lente é vidro.",
-          "Vidro nasce de areia e cinza: a cinza ajuda a areia a derreter.",
-          "A cinza está ao lado da fogueira. Areia, só na beira do lago grande, lá no sul. As duas no forno."
+          "Ferro! Isso vira o tripé.\nFalta a lente, pra eu ver.\nO vidro é areia e cinza:\na cinza ajuda a derreter.",
+          "A cinza está na fogueira;\na areia, no lago do sul.\nLeve as duas juntas ao forno:\no céu espera, lá no azul."
         ],
         "wait": [
-          "Areia da beira do lago grande, no sul. Cinza da fogueira. As duas no forno."
+          "A areia está no lago do sul;\na cinza, na fogueira ao lado.\nJunte as duas no forno:\né assim que o vidro é criado."
         ],
         "polish": [
-          "Bom vidro. Agora ele vira lente.",
-          "Primeiro a pedra áspera, que dá a curva. Depois a fina, que tira a névoa.",
-          "Esfregue em círculos."
+          "Bom vidro! Agora, ele vira lente:\na pedra áspera dá a curva.\nDepois, a pedra fina tira\na névoa que deixa a lente turva.",
+          "Esfregue em roda, assim,\nem círculos, até o fim."
         ],
         "carry": [
-          "Ficou nítida!",
-          "A areia é a matéria. A lente, a forma. Você, quem fez. E ver, o fim.",
-          "Leve o telescópio ao planalto, a sudoeste. Suba a escada e procure o marco. Lá o céu é mais limpo."
+          "Ficou nítida! Areia, forma,\nquem fez, e pra que serve: ver.\nSabendo essas quatro coisas,\na gente começa a entender.",
+          "Leve o telescópio a sudoeste:\nno planalto, a escada leva ao marco.\nLá em cima, o céu é limpo,\ninteiro, como um arco."
         ],
         "night": [
-          "De dia não se vê nada.",
-          "Sente ao lado dele e espere a noite."
+          "De dia, não se vê nada.\nSente ao lado dele, sem pressa,\ne espere a noite chegar:\né quando o céu começa."
         ],
         "reunion": [
-          "Vi o fogo lá de cima. Sobrou marshmallow?"
+          "Vi o fogo lá de cima.\nSobrou marshmallow? Que clima!"
         ],
         "goodbye": [
-          "Com o céu de volta, a nave me achou.",
-          "Obrigada por tudo.",
-          "Um amigo é um outro eu.",
-          "Mas preciso voltar para o meu planeta. Minha casa fica ali em cima.",
-          "Quando olhar para o céu, acene."
+          "A nave me achou, pelo céu.\nPor tudo, muito obrigada.\nUm amigo é um outro eu:\nlevo você na jornada.",
+          "Agora, volto pro meu planeta:\nminha casa é lá em cima.\nQuando olhar para o céu,\nacene: o céu nos aproxima."
         ],
         "farewell": [
-          "Você achou os quatro.",
-          "Foi o espanto com a lua e as estrelas que fez a gente começar a pensar.",
-          "A luz que você viu já estava a caminho muito antes de você nascer.",
-          "Só faltava alguém olhar.",
-          "As estrelas de antes do amanhecer são outras. Durma, e acorde para elas."
+          "Achou os quatro! Esse espanto\nde olhar o céu e perguntar:\nfoi assim que a gente, um dia,\ncomeçou a pensar.",
+          "A luz que você viu saiu\nda estrela antes de você nascer.\nViajou esse tempo todo;\nsó faltava alguém pra ver.",
+          "De madrugada, o céu é outro,\ncom estrelas de outra estação.\nDurma, e acorde bem cedo\npra ver outra constelação."
         ],
         "anvil": [
-          "A barra! Ninguém nasce ferreiro: vira malhando.",
-          "Vou construir o tripé."
+          "A barra! Ninguém nasce ferreiro:\na gente aprende martelando.\nAgora, eu monto o tripé;\nvocê fica aí, olhando."
         ]
       },
       "finds.door.astronaut": [
-        "A varanda tem a melhor vista depois da nave. Senta lá.",
-        "Levo chá."
+        "A varanda tem a melhor vista,\ndepois da janela da nave.\nSenta lá, que eu levo um chá,\ne o tempo passa, suave."
       ]
     }
   },
@@ -407,33 +370,22 @@
       "death": {
         "name": "Morte",
         "visit": [
-          "Não se levante. Não vim te buscar.",
-          "Eu te conheço. Andei atrás de você a guerra inteira.",
-          "Você era um guerreiro. Por onde passava, eu tinha trabalho.",
-          "Agora dorme sob as estrelas, e a espada ficou na estrada.",
-          "Glória, honra, vitória: eram os seus deuses. E eles morreram.",
-          "Agora nada vale nada. E ninguém virá te dizer o que vale.",
-          "Durma. Eu sei esperar."
+          "Não se levante. Não vim\nte buscar. Eu te conheço:\nandei atrás de você\nna guerra, desde o começo.",
+          "Por onde você passava,\nnunca me faltou trabalho.\nHoje dorme sob estrelas,\na espada dorme no orvalho.",
+          "Eram seus deuses: a glória,\na honra, a vitória. Morreram.\nJá nada vale mais nada,\ne outros deuses não nasceram.",
+          "Ninguém te diz o que vale.\nO vazio é todo seu.\nAgora durma, sem pressa:\nquem sabe esperar sou eu."
         ],
         "visit2": [
-          "De novo aqui. Eu disse que sabia esperar.",
-          "Você carregou ordens a vida inteira, como um camelo carrega peso.",
-          "No deserto, o camelo vira leão. E o leão diz: não.",
-          "Não aos velhos deuses. Mas o leão ainda não cria nada.",
-          "Agora uma pergunta. Não minta para mim.",
-          "E se esta vida, exatamente como é, voltasse sem fim? Cada dor, cada noite, esta conversa.",
-          "Você me amaldiçoaria? Ou diria: nunca ouvi nada mais divino?",
-          "Durma com isso."
+          "De novo aqui. Esperei.\nVocê só obedeceu:\nfoi camelo, levou carga;\nescolher, nunca escolheu.",
+          "No deserto, o camelo\nvira leão, e diz: não.\nDiz não aos deuses antigos,\nmas derrubar não é criação.",
+          "Não minta: e se esta vida\nvoltasse, igual, sem fim?\nCada dor, cada conversa,\nde novo e de novo, assim?",
+          "Você me amaldiçoaria,\nou diria: “Sim, eu quero”?\nNão responda agora. Durma.\nDurma com isso. Eu espero."
         ],
         "visit3": [
-          "Última noite. Depois desta, não venho mais.",
-          "O leão vira criança. A criança brinca, esquece e começa de novo.",
-          "Ela diz sim. Cria os próprios valores, brincando.",
-          "Ninguém te deu um sentido. Você está fazendo um, com as mãos.",
-          "Não queira nada diferente. Nem para trás, nem para frente. Ame o que é.",
-          "Torna-te quem você é.",
-          "É preciso ter caos dentro de si para dar à luz uma estrela que dança.",
-          "Adeus, criança."
+          "Esta é a última noite;\neu não volto mais. Promessa.\nO leão vira criança:\nbrinca, esquece e recomeça.",
+          "Diz sim. Cria os seus valores\nbrincando, sem permissão.\nNinguém te deu um sentido:\nvocê faz um, com a mão.",
+          "Não queira nada mudado,\nnem lá atrás, nem à frente.\nAme tudo como é,\ninteiro, eternamente.",
+          "Só quem tem caos por dentro\ndá à luz a estrela que dança.\nTorne-se quem você é.\nDurma bem. Adeus, criança."
         ]
       }
     }
@@ -442,9 +394,7 @@
     "nota": "Quem fecha o último pedido diz isto no fim da própria fala, e entrega a chave do Jardim Alto.",
     "falas": {
       "garden.key": [
-        "Você se mostrou um grande amigo de todos: da vila e da natureza.",
-        "Agora pode caminhar livremente pelo Jardim Alto, respeitando a natureza.",
-        "Tome a chave."
+        "Você foi amigo de todos,\nda vila e da natureza.\nTome a chave do Jardim Alto,\ne ande por lá com leveza."
       ]
     }
   },
@@ -457,12 +407,9 @@
     },
     "falas": {
       "ending.lines": [
-        "[narrador] O marshmallow fica dourado.",
-        "[narrador] A espada fica na estrada.",
-        "[narrador] Ninguém escolheu por ele.",
-        "[narrador] Sem fome, sem frio, entre amigos. Nem um deus tem mais.",
-        "[narrador] A morte não é nada para nós: quando ela está, nós não estamos.",
-        "[narrador] Nenhum lugar para ir. Enfim."
+        "[narrador] O marshmallow doura no fogo;\na espada ficou na estrada.\nNinguém escolheu por ele:\nele se fez do nada.",
+        "[narrador] Sem fome, sem frio, com amigos,\num deus não tem mais que a gente.\nE a morte? Quando ela chega,\na gente já está ausente.",
+        "[narrador] Nenhum lugar para ir.\nEnfim, é bom só existir."
       ]
     }
   },
@@ -470,57 +417,46 @@
     "nota": "Não é NPC: são as coisas do vale lidas com o Z (achados, acampamento).",
     "falas": {
       "finds.helmet": [
-        "[narrador] Um elmo enferrujado.",
-        "[narrador] Nasceu uma flor dentro."
+        "[narrador] Um capacete enferrujado,\ne dentro dele, uma flor.\nNasceu sem pedir licença,\nonde antes só havia dor."
       ],
       "finds.bottle": [
-        "[narrador] Uma garrafa com um bilhete.",
-        "[narrador] “Cheguei. Aqui é bom. Venha.”",
-        "[narrador] Sem nome."
+        "[narrador] Uma garrafa com um bilhete:\n“Cheguei. Aqui é bom. Venha também.”\nNão tem nome, não tem data:\nnão se sabe de quem."
       ],
       "finds.sword": [
-        "[narrador] Esta lâmina derrubou a escuridão.",
-        "[narrador] E devolveu a luz ao mundo.",
-        "[narrador] Ele já não é isto. É o que fizer agora."
+        "[narrador] Com esta espada, ele venceu\na escuridão, e a luz voltou.\nMas ninguém é só o que fez:\né o que faz depois que acabou."
       ],
       "finds.smithy": [
-        "[narrador] A forja velha.",
-        "[narrador] O ferreiro foi embora há muito tempo.",
-        "[narrador] O forno ainda puxa bem."
+        "[narrador] A forja velha. O ferreiro\nfoi embora faz muitos anos.\nO forno ainda funciona,\nà espera de novos planos."
       ],
       "finds.sign": [
-        "[narrador] Jardim Alto.",
-        "[narrador] Fechado para preservação ambiental."
+        "[narrador] Jardim Alto: fechado\npara a preservação ambiental.\nNinguém pode entrar ali\nsem permissão especial."
       ],
       "finds.signOpen": [
-        "[narrador] Jardim Alto.",
-        "[narrador] Fechado para preservação ambiental.",
-        "[narrador] Alguém riscou o \"fechado\"."
+        "[narrador] Jardim Alto: fechado\npara a preservação ambiental.\nNinguém pode entrar ali\nsem permissão especial.",
+        "[narrador] Alguém riscou o “fechado”:\no caminho está liberado."
       ],
       "finds.door.empty": [
-        "[narrador] Ninguém em casa.",
-        "[narrador] A varanda continua aqui."
+        "[narrador] Ninguém em casa. A varanda\nfica aberta pra quem vem:\nsenta, descansa um pouco,\nsem pedir nada a ninguém."
       ],
       "camp": {
         "ring": [
-          "[narrador] Pedras de fogueira. Frias."
+          "[narrador] Pedras de fogueira, frias:\nesperam por outros dias."
         ],
         "rack": [
-          "[narrador] Cogumelos secando. Lembrança da Shui."
+          "[narrador] Cogumelos secando ao ar:\nlembrança da Shui, pra guardar."
         ],
         "easel": [
-          "[narrador] O quadro da Sisi."
+          "[narrador] O quadro que a Sisi fez:\no cinza e a cor, de uma vez."
         ],
         "woodpile": [
-          "[narrador] Lenha seca do Marco."
+          "[narrador] Lenha seca, que o Marco deu.\nAgora, o fogo é seu."
         ],
         "chart": [
-          "[narrador] O mapa de estrelas da Thea."
+          "[narrador] O mapa de estrelas, feito\npela Thea, do seu jeito."
         ]
       },
       "cat.barrel": [
-        "[narrador] Um barril deitado, com palha dentro.",
-        "[narrador] Quem mora aqui não precisa de mais nada."
+        "[narrador] Um barril deitado, com palha.\nQuem mora nele é feliz:\nnão precisa de mais nada,\ntem o sol, e é o que quis."
       ]
     }
   },
@@ -537,56 +473,45 @@
       "npc.blackCat": {
         "name": "Sinope",
         "lines": [
-          "Um herói. Que novidade.",
-          "Quer me dar alguma coisa? Então saia do meu sol."
+          "Um herói. Que novidade.\nQuer me dar algo? Então,\nsaia da frente do sol:\nnão quero mais nada, não."
         ]
       },
       "cat.talk": {
         "1": [
-          "Um herói. Que novidade.",
-          "Quer me dar alguma coisa? Então saia do meu sol."
+          "Um herói. Que novidade.\nQuer me dar algo? Então,\nsaia da frente do sol:\nnão quero mais nada, não."
         ],
         "2": [
-          "Aprendi a viver olhando um rato.",
-          "Não procura cama, não tem medo do escuro, não quer banquete."
+          "Aprendi a viver vendo um rato.\nEle não quer ter cama,\nnão tem medo do escuro,\nnão quer festa, nem quer fama."
         ],
         "3": [
-          "Vi uma criança beber água com as mãos.",
-          "Joguei fora a minha tigela. Ela me venceu em simplicidade."
+          "Vi uma criança beber água\ncom a mão. Joguei fora a tigela:\na criança me ganhou\nna simplicidade dela."
         ],
         "4": [
-          "Os deuses não precisam de nada. Quem precisa de pouco é quase um deus.",
-          "Quanto você carrega, herói?"
+          "Os deuses não precisam de nada;\nquem quer pouco chega perto.\nVocê, herói, carrega tanto:\nlarga um pouco, que dá certo."
         ],
         "5": [
-          "De onde eu sou? Do mundo."
+          "De onde eu sou? Do mundo inteiro:\ncidadão, nunca estrangeiro."
         ],
         "6": [
-          "Me chamam de cão. Sou gato. Tanto faz o nome.",
-          "Ronrono para quem me dá, bufo para quem não dá, e arranho os maus."
+          "Me chamam de cão. Sou gato:\ntanto faz, nome não é nada.\nPra quem me dá, eu ronrono;\npra quem é ruim, dou unhada."
         ],
         "7": [
-          "Andei de dia com uma lanterna, procurando um homem.",
-          "Achei muitos heróis. Um homem, nenhum."
+          "Andei de dia, com lanterna,\nprocurando um homem de bem.\nAchei heróis aos montes;\nhomem mesmo, ninguém."
         ],
         "8": [
-          "Um conselho: falsifique a moeda.",
-          "Glória, honra, costume: risque tudo e veja o que sobra."
+          "Honra, glória, costume:\né tudo falso, pode riscar.\nO que sobra é você,\nsem ter nada a provar."
         ],
         "9": [
-          "Eu peço comida às estátuas.",
-          "Treino para não receber."
+          "Peço comida às estátuas,\npra treinar a não receber.\nQuem não espera nada, não sofre:\né a pedra que me ensina a viver."
         ],
         "10": [
-          "Platão disse que o homem é um bípede sem penas.",
-          "Depenei uma galinha e levei para ele: eis o homem de Platão."
+          "Platão disse que o homem é\num bicho de dois pés, sem penas.\nDepenei uma galinha:\npronto, o homem dele, apenas."
         ],
         "11": [
-          "O que a filosofia me deu? Estar pronto para qualquer sorte."
+          "Filosofia me ensinou\na estar pronto pra tudo. E estou."
         ],
         "12": [
-          "O lenhador perdeu tudo e aprendeu a precisar de pouco.",
-          "Um aluno do meu aluno ensinou isso a muita gente."
+          "O lenhador perdeu tudo\ne aprendeu a viver com pouco.\nVeio do aluno do meu aluno;\ne me chamavam de louco!"
         ]
       }
     }

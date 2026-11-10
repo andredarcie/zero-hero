@@ -74,6 +74,7 @@ export class TerrainBaker {
     for (const g of t.groundTiles) groundFrame.set(tileKey(g.x, g.z), g.frame);
     const wetTiles = this.host.ground.bakeGroundAndWater(t, mats, groundFrame);
     this.host.ground.bakeStoneEdges(t, mats);
+    this.host.ground.bakeEarthEdges(t, mats);
     this.host.features.bakeLavaAndPit(t, mats, groundFrame);
     this.host.features.bakeDecor(t, mats);
     this.host.features.bakeSolids(t, mats);

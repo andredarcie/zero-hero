@@ -140,17 +140,17 @@ export class LumberWork {
     }, this.host.save.laid);
   }
 
-  /** As duas metades pulam do cepo para as costas, e o machado fica à esquerda do herói. */
+  /**
+   * As duas metades pulam do cepo para as costas, e o machado vai para as ferramentas guardadas: ele fica com o
+   * herói (Inventory). O machado que estava no chão volta para ele antes.
+   */
   private finishSplit(): void {
     const tile = this.host.blockTile;
     const hero = this.host.host.hero();
     this.host.standingStick?.destroy();
     this.host.standingStick = undefined;
     this.host.save.standing = false;
-    if (this.host.host.held() === 'axe') this.host.host.removeFromHand('axe', 1);
-    else this.host.host.takeFromGround('axe');
-    this.host.host.dropAt('axe', hero.x - 1, hero.y);
-    this.host.host.sparkle(hero.x - 1, hero.y);
+    if (!this.host.host.owns('axe') && this.host.host.takeFromGround('axe')) this.host.host.takeIntoHand('axe', 1);
     if (tile) this.host.host.fling('splitWood', tile.x, tile.y, hero.x, hero.y);
     this.host.host.takeIntoHand('splitWood', 1);
     this.host.host.itemGet('splitWood', () => {});

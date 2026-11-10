@@ -1,6 +1,7 @@
-// A PAUSA: abrir o menu (o jogo para por baixo) e fechar (ele volta).
+// A PAUSA: abrir o menu (o jogo para por baixo) e fechar (ele volta); e o ajuste do zoom, que abre das opções.
 
 import { PauseMenu } from '@/game/runtime/PauseMenu';
+import { ZoomSetup } from '@/game/runtime/ZoomSetup';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import type * as Engine from '@/game/engine';
 import type { GameScene } from '../GameScene';
@@ -8,7 +9,7 @@ import { PauseTouchButton } from '@/game/runtime/PauseMenu';
 
 /** O que PauseControl usa de GameScene (e a cena do motor, que ele passa a quem monta objetos do mundo). */
 export type PauseControlHost = Engine.Scene & Pick<GameScene,
-  'actions' | 'cutsceneActive' | 'dialog' | 'dialogCam' | 'hand' | 'save' | 'scene'
+  'actions' | 'cutsceneActive' | 'dialog' | 'dialogCam' | 'hand' | 'save' | 'scene' | 'view' | 'world3d'
 >;
 
 export class PauseControl {
@@ -17,6 +18,8 @@ export class PauseControl {
   // all freeze on the current frame); the DOM keeps working because it lives off-canvas.
   public pauseMenu?: PauseMenu;
   public pauseTouchButton?: PauseTouchButton;
+  /** O ajuste do zoom, aberto das opções por cima do jogo parado (ver ZoomSetup). */
+  public zoomSetup?: ZoomSetup;
 
   public constructor(private readonly host: PauseControlHost) {}
 
@@ -44,13 +47,39 @@ export class PauseControl {
           this.host.scene.start('title');
         }
         : undefined,
+      onZoom: () => this.openZoomSetup(),
     });
     this.host.actions.useBufferMs = 0;
     this.host.scene.pause();
   }
 
+  /**
+   * O AJUSTE DO ZOOM: o menu some, o quadro parado fica, e a régua mexe nele. A cena está pausada e não desenha
+   * sozinha, então cada mudança desenha UM quadro à mão, com o tempo parado (delta 0) e a câmera pulando para o zoom
+   * novo em vez de deslizar — o mundo não anda um passo. O OK devolve as opções, com o valor novo na linha.
+   */
+  private openZoomSetup(): void {
+    if (!this.pauseMenu || this.zoomSetup) return;
+    this.pauseMenu.suspend();
+    this.zoomSetup = new ZoomSetup({
+      redraw: () => {
+        this.host.world3d?.cam.snapZoom();
+        this.host.view.render3D(0, 0);
+      },
+      onDone: () => this.closeZoomSetup(),
+    });
+  }
+
+  private closeZoomSetup(): void {
+    this.zoomSetup?.destroy();
+    this.zoomSetup = undefined;
+    this.pauseMenu?.wake();
+  }
+
   private closePauseMenu(): void {
     if (!this.pauseMenu) return;
+    this.zoomSetup?.destroy();
+    this.zoomSetup = undefined;
     this.pauseMenu.destroy();
     this.pauseMenu = undefined;
     this.pauseTouchButton?.setVisible(true);

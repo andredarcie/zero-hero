@@ -5,7 +5,7 @@ import { world3d } from '@/game/render3d/World3D';
 import { bosqueTrees } from '@/game/objects/BigTrees';
 import type { Season } from '@/game/runtime/seasons';
 import { isLifeHome } from '@/game/world/biomeLife';
-import { biomeTintAt } from '@/game/world/biomes';
+import { biomeWashAt } from '@/game/world/biomes';
 
 import { TILESET as P, hash, texture, type NatureFrame, type NatureSystem } from './kit';
 
@@ -89,7 +89,7 @@ export class LeafLitter implements NatureSystem {
         // Um pouco ao sul do tronco: a parte do chão que a copa cobre e a câmera vê.
         .setPosition(t.x, t.y + (oak ? 0.35 : 0.2));
       // O tom do CHÃO do bioma (folha caída é chão), como o enfeite rasteiro do mapa.
-      const [r, g, b] = biomeTintAt(t.x, t.y);
+      const [r, g, b] = biomeWashAt(t.x, t.y);
       (bb.mesh.material as THREE.MeshLambertMaterial).color.setRGB(r, g, b);
       this.patches.push({ bb, oak });
     }

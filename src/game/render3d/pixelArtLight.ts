@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { biomeRampColorGlsl, biomeRampUniform, type BiomeRampKind } from './biomeRamp';
+import { OUTLINE_FRAGMENT_GLSL, OUTLINE_VERTEX_GLSL, outlineUniforms } from './spriteOutline';
 
 // ── The world's light treatment ───────────────────────────────────────────────
 //
@@ -257,7 +259,9 @@ const LAVA_FLOW_GLSL = /* glsl */ `
   {
     vec2 zhP = floor(vWorldFxPos.xz * 16.0) / 16.0;
     vec2 zhW = zhP + 0.16 * vec2(sin(zhP.y * 3.1 + uFlowTime * 0.23), sin(zhP.x * 2.7 - uFlowTime * 0.19));
-    vec2 zhQ = zhW * 3.4 + vec2(uFlowTime * 0.05, uFlowTime * 0.03);
+    // Placas de ~meio tile (era 3,4 por tile, ~0,3 cada): a trama miúda de rachaduras era a coisa mais agitada do
+    // quadro (2026-11-10). Placa maior, menos fresta, e a lava continua viva nas que sobram.
+    vec2 zhQ = zhW * 2.2 + vec2(uFlowTime * 0.05, uFlowTime * 0.03);
     vec2 zhI = floor(zhQ);
     vec2 zhF = fract(zhQ);
     float zhD1 = 9.0;
@@ -276,7 +280,7 @@ const LAVA_FLOW_GLSL = /* glsl */ `
     float zhEdge = fract(sin(dot(floor(vWorldFxPos.xz * 16.0), vec2(23.7, 91.3))) * 24634.6345) * 0.1;
     float zhSwell = 0.5 + 0.5 * sin(zhW.x * 1.7 + zhW.y * 2.3 + uFlowTime * 0.7);
     float zhCool = smoothstep(0.1, 0.8, vShore);
-    float zhOpen = 0.14 + 0.16 * zhSwell - 0.1 * zhCool + zhEdge * 0.5;
+    float zhOpen = 0.08 + 0.12 * zhSwell - 0.1 * zhCool + zhEdge * 0.5;
     vec3 zhCol = vec3(0.022, 0.011, 0.010);
     zhCol = mix(zhCol, vec3(0.07, 0.016, 0.008), step(0.5 + zhEdge, zhSwell * (1.0 - zhCool)));
     zhCol = mix(zhCol, vec3(0.20, 0.022, 0.006), step(zhCrack, zhOpen * 1.9));
@@ -624,6 +628,13 @@ type PatchOpts = {
    * without a cast) the sample lands at the fragment's own position.
    */
   maskProbe?: THREE.IUniform;
+  /**
+   * A RAMPA DO BIOMA (ver biomeRamp.ts): a cor de vértice deixa de multiplicar a arte inteira e passa a trocar a
+   * rampa da folhagem. Só nas três malhas de terreno que carregam a cor do bioma.
+   */
+  biome?: BiomeRampKind;
+  /** O contorno de 1 texel dos personagens (ver spriteOutline.ts). Só billboard com frame em `repeat/offset`. */
+  outline?: boolean;
 };
 
 /**
@@ -647,7 +658,7 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
   // Three caches compiled programs by this key; without it, materials patched
   // DIFFERENTLY would silently share whichever variant compiled first.
   mat.customProgramCacheKey = () =>
-    `pixelArt|q${opts.quantize ? 1 : 0}n${opts.normalUp ? 1 : 0}f${opts.footDistance ? 1 : 0}a${(opts.footAnchorY ?? 0).toFixed(2)}t${opts.fill ? 1 : 0}w${opts.worldFx ?? '0'}g${opts.quantize && !opts.footDistance ? 1 : 0}x${opts.texelAa ? (opts.texelAa.bounds ? 'u' : 'a') : '0'}m${opts.quantize ? (opts.maskProbe ? 'p' : 'g') : '0'}v${opts.wind ?? '0'}r${opts.mirrorSurface ? 1 : 0}`;
+    `pixelArt|q${opts.quantize ? 1 : 0}n${opts.normalUp ? 1 : 0}f${opts.footDistance ? 1 : 0}a${(opts.footAnchorY ?? 0).toFixed(2)}t${opts.fill ? 1 : 0}w${opts.worldFx ?? '0'}g${opts.quantize && !opts.footDistance ? 1 : 0}x${opts.texelAa ? (opts.texelAa.bounds ? 'u' : 'a') : '0'}m${opts.quantize ? (opts.maskProbe ? 'p' : 'g') : '0'}v${opts.wind ?? '0'}r${opts.mirrorSurface ? 1 : 0}b${opts.biome ?? '0'}o${opts.outline ? 1 : 0}`;
 
   const bornAt = import.meta.env.DEV ? new Error().stack ?? '' : '';
 
@@ -922,6 +933,31 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
              max(vec3(0.0), diffuseColor.rgb * uLightCap - reflectedLight.indirectDiffuse)
            );`,
         );
+    }
+
+    // ── A rampa do bioma (ver biomeRamp.ts) ───────────────────────────────────
+    // Toma o lugar do `color_fragment`, onde o three multiplicava a arte pela cor de vértice.
+    if (opts.biome) {
+      shader.uniforms.uBiomeRamp = biomeRampUniform;
+      shader.fragmentShader = shader.fragmentShader
+        .replace('void main() {', 'uniform float uBiomeRamp;\nvoid main() {')
+        .replace('#include <color_fragment>', biomeRampColorGlsl(opts.biome));
+    }
+
+    // ── O contorno dos personagens (ver spriteOutline.ts) ─────────────────────
+    // Pendurado depois do `map_fragment` (o token fica: o `fill` e o AA de texel ainda o procuram).
+    if (opts.outline) {
+      shader.uniforms.uOutline = outlineUniforms.uOutline;
+      shader.uniforms.uOutlineColor = outlineUniforms.uOutlineColor;
+      shader.vertexShader = shader.vertexShader
+        .replace('void main() {', 'varying vec2 vZhFrameA;\nvarying vec2 vZhFrameB;\nvoid main() {')
+        .replace('#include <uv_vertex>', `#include <uv_vertex>\n${OUTLINE_VERTEX_GLSL}`);
+      shader.fragmentShader = shader.fragmentShader
+        .replace(
+          'void main() {',
+          'uniform float uOutline;\nuniform vec3 uOutlineColor;\nvarying vec2 vZhFrameA;\nvarying vec2 vZhFrameB;\nvoid main() {',
+        )
+        .replace('#include <map_fragment>', `#include <map_fragment>\n${OUTLINE_FRAGMENT_GLSL}`);
     }
 
     // ── Texel-grid AA (see TEXEL_AA_GLSL) ────────────────────────────────────

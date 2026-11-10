@@ -156,6 +156,7 @@
     "sharpFull": "Full",
     "sharpThrifty": "Thrifty",
     "blur": "Blur",
+    "zoom": "Zoom",
     "hand": "Hand",
     "handRight": "Right",
     "handLeft": "Left",
@@ -226,6 +227,13 @@
     "skipIntroTouch": "Tap again to skip",
     "attackTitle": "Hand (Z)",
     "useTitle": "Use (X)"
+  },
+  "hud": {
+    "zoom": "Zoom",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "zoomHint": "Set the zoom and press OK",
+    "zoomDone": "OK"
   },
   "fungi": {
     "basket": "Basket",

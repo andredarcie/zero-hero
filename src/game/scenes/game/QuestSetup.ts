@@ -48,9 +48,11 @@ export class QuestSetup {
     return {
       scene: this.host as Engine.Scene,
       held: () => this.host.heldItem,
+      owns: (kind: HeldItemKind) => this.host.inventory.owns(kind),
       takeIntoHand: (kind: HeldItemKind, units: number) => this.host.hand.takeIntoHand(kind, units),
+      // Tira das costas ou das ferramentas guardadas (a pá e o pincel que voltam à Sisi).
       removeFromHand: (kind: HeldItemKind, units: number) => {
-        if (this.host.torch.heldOnFire) this.host.torch.extinguishTorch();
+        if (this.host.torch.heldOnFire && this.host.heldItem === kind) this.host.torch.extinguishTorch();
         this.host.inventory.remove(kind, units);
         this.host.carry.updateBackItem();
       },

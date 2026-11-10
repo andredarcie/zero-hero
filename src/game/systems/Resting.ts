@@ -11,8 +11,9 @@ import type { HeroView } from '@/game/runtime/HeroView';
 
 /**
  * O DESCANSO: o herói sentado (numa fogueira acesa, num banco com vista, ao lado do telescópio) ou deitado no colchão
- * do acampamento. O corpo baixa, o relógio corre, e qualquer seta levanta. Dormindo, a noite passa e ele acorda quando
- * clareia — e nas noites no acampamento a Morte vem sentar ao lado, uma vez por noite, até as três conversas.
+ * do acampamento. O corpo baixa e o relógio corre. Sentado, qualquer seta levanta. Dormindo, ninguém o levanta: a
+ * noite passa, nas noites no acampamento a Morte vem sentar ao lado (uma vez por noite, até as três conversas), e
+ * ele acorda e levanta sozinho quando clareia.
  *
  * O sistema é dono do ESTADO do descanso (quem senta, onde, se dorme, se a Morte já veio esta noite) e das decisões
  * (quando acordar, quando ela vem, quando a noite chega). O resto é da cena, pelo host: a câmera, os pés, a caneca,
@@ -150,6 +151,16 @@ export class Resting {
 
   public get isResting(): boolean { return this.resting; }
   public get isSleeping(): boolean { return this.sleeping; }
+  /**
+   * O JOGADOR PODE LEVANTAR? Sentado, sim, com qualquer seta, o Z, o X ou o ESC. DORMINDO, NÃO (pedido do autor,
+   * 2026-11-09): o sono é dele — deita, a noite vem, a Morte vem, clareia, e só então ele levanta sozinho (`tick`).
+   */
+  public get canGetUp(): boolean { return this.resting && !this.sleeping && !this.deathVisiting; }
+
+  /** O levantar que o JOGADOR pede (as setas, os botões, o ESC). Dormindo, não faz nada: quem acorda é a manhã. */
+  public getUp(): void {
+    if (this.canGetUp) this.standUp();
+  }
   /** Sentado num banco com vista (a varanda de um vizinho, o tronco do acampamento). */
   public get atFind(): boolean { return this.sittingAtFind; }
   /** O que ele encara sentado; undefined de pé. */
@@ -172,7 +183,7 @@ export class Resting {
     this.stopKeys?.();
     this.stopKeys = host.listenKeys((event) => {
       if (event.repeat || !this.resting) return;
-      if (GET_UP_KEYS.includes(event.code)) this.standUp();
+      if (GET_UP_KEYS.includes(event.code)) this.getUp();
     });
     host.persist();
   }

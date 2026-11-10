@@ -27,7 +27,7 @@ planta carnívora foram REMOVIDOS por inteiro (código, arquivos e conteúdo). `
 
 `npm run playtest -- zerar` joga tudo isso do título aos créditos com o teclado. **O texto do jogo
 mora nos locales — `en.json` e `pt-br.json`, as MESMAS chaves nos dois** —, inclusive o roteiro
-`<id>Done`; o `world.json` guarda retrato, cor e voz. Texto novo entra nos dois arquivos. **AS FALAS DOS PERSONAGENS moram em `src/game/i18n/dialogos/pt-br.json` e `en.json`**, uma seção por personagem com a `filosofia` (escola e LIVROS: só referência) e as `falas` pelo caminho que o código pede; o `i18n.ts` as junta ao locale. Fala de personagem nova entra LÁ, nunca nos `locales/`. **Cada personagem segue UMA escola filosófica, só dele** (nenhuma escola nem pensador principal repetido) sobre o sentido da vida: fala nova tem de caber nela e sair dos livros dela. `node scripts/dialogos.mjs --check` confere isso e que pt-br e en têm a mesma forma. **Os nomes também saem da escola** (`filosofia.nome` diz de onde): Zero (Sartre, começa do nada), Sati (o mago: a atenção plena), Sinope (o gato: a cidade de Diógenes), Shui (Taoísmo, a água), Sisi (Camus, Sísifo), Marco (estoicismo, Marco Aurélio), Thea (Aristóteles, theoria). O código, os comentários, os testes e as seções do `dialogos` ainda usam os nomes antigos (Shui = Shui, Sisi = Sisi, Marco = Marco, Thea = Thea): só o texto do jogo mudou. **Todo texto usa o MÍNIMO de palavras** — só a essência, nada de floreio (pedido do autor).
+`<id>Done`; o `world.json` guarda retrato, cor e voz. Texto novo entra nos dois arquivos. **AS FALAS DOS PERSONAGENS moram em `src/game/i18n/dialogos/pt-br.json` e `en.json`**, uma seção por personagem com a `filosofia` (escola e LIVROS: só referência) e as `falas` pelo caminho que o código pede; o `i18n.ts` as junta ao locale. Fala de personagem nova entra LÁ, nunca nos `locales/`. **Cada personagem segue UMA escola filosófica, só dele** (nenhuma escola nem pensador principal repetido) sobre o sentido da vida: fala nova tem de caber nela e sair dos livros dela. `node scripts/dialogos.mjs --check` confere isso e que pt-br e en têm a mesma forma. **Os nomes também saem da escola** (`filosofia.nome` diz de onde): Zero (Sartre, começa do nada), Sati (o mago: a atenção plena), Sinope (o gato: a cidade de Diógenes), Shui (Taoísmo, a água), Sisi (Camus, Sísifo), Marco (estoicismo, Marco Aurélio), Thea (Aristóteles, theoria). O código, os comentários, os testes e as seções do `dialogos` ainda usam os nomes antigos (Shui = Shui, Sisi = Sisi, Marco = Marco, Thea = Thea): só o texto do jogo mudou. **Todo texto usa o MÍNIMO de palavras** — só a essência, nada de floreio (pedido do autor). **TODA FALA É VERSO** (pedido do autor), e **o PADRÃO DE ESCRITA é o `docs/escrita-em-verso.md`: ler ANTES de escrever qualquer verso** (lida uma vez em voz alta, um leigo entende; ordem direta, palavras do dia a dia, a escola como conselho prático; se a rima e a clareza brigam, troca-se a rima): quadras de 6 a 9 sílabas rimando o 2º e o 4º verso, UMA ESTROFE POR CAIXA (a quadra inteira, `\n` quebra o verso; a caixa recua o 2º e o 4º, não quebra verso e tem a largura do poema: `runtime/poemLayout`), e dístico na fala curta ou encaixada; a regra mora no `_verso` do `dialogos/pt-br.json` e o `src/game/i18n/versos.test.ts` reprova verso fora do metro e rima que não fecha. O inglês é outro poema (8·6·8·6), conferido de ouvido.
 
 ## O save da aventura
 
@@ -84,8 +84,8 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
 ## Os dois botões e a pausa
 
     Z (J / espaço)  →  a MÃO: fala com o NPC à frente, acende/assa na fogueira do fim, abre o
-                       catálogo da bancada/forno, põe e malha no altar, e PEGA / TROCA / POUSA a
-                       coisa do tile da frente (`handAt`). Nada no Z é golpe.
+                       catálogo da bancada/forno, põe e malha no altar, e PEGA / TROCA a coisa do
+                       tile da frente (`handAt`; pousar no chão livre saiu, só o enfeite pousa). Nada no Z é golpe.
     X (K)           →  USA o que está na mão no tile à frente (a tabela `useItemAt`).
     pisar           →  não pega nada: o Z pega ou troca o que está debaixo do herói (`takeUnderfoot`),
                        antes de tudo menos da conversa.
@@ -102,14 +102,14 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
   rodar `serra-world.mjs` de novo REGERA o campo e apaga o que foi feito à mão.
 - **Cada cogumelo tem a sua trilha** (`scripts/trilhas-cogumelos.mjs`: rode `--check` depois de mexer em volta deles).
 - **A CACHOEIRA do acampamento** (`objects/Waterfall.ts` + `scripts/cachoeira.mjs`, as mesmas coordenadas nos dois): beira sólida em (53,55), com o riacho do alto (olho d'água em (52,54), leito em (53,54), sólidos; a água no planalto é desenho deitado `paintStream`, o World3D só faz água no nível baixo); o pé da queda e o laguinho do acampamento são UM lago de 5×3 tiles, (52..56, 56..58), com as carpas de `objects/KoiPond.ts` (mesmo retângulo em `KOI_POND`). A beira de olhar é (51,58). Rode `--check` depois de mexer em volta.
-- **O BOSQUE** (`objects/BigTrees.ts`): carvalhos velhos, bétulas, carvalhinhos e troncos caídos são PROPS do world.json (`oakTree`, `birchTree`, `youngOak`, `fallenLog`), postos e apagados no editor (aba Props). O pé bloqueia pelo próprio prop (`BigTrees.at`, sem colisão pintada); o tronco caído ocupa o tile dele e o da direita. Nada de posição de árvore no código. `scripts/bosque.mjs` só CONFERE (chão plano, nunca sobre árvore do tileset — quadros 3/4/14-18/21/36/37/73/74 —, BFS) e nunca replanta. Os passarinhos de dia são `objects/BirdLife.ts`.
+- **O BOSQUE** (`objects/BigTrees.ts`): carvalhos velhos, bétulas, carvalhinhos e troncos caídos são PROPS do world.json (`oakTree`, `birchTree`, `youngOak`, `fallenLog`), postos e apagados no editor (aba Props). O pé bloqueia pelo próprio prop (`BigTrees.at`, sem colisão pintada); o tronco caído ocupa o tile dele e o da direita. Nada de posição de árvore no código. `scripts/bosque.mjs` só CONFERE (chão plano, nunca sobre árvore do tileset — quadros 3/4/14-18/21/36/37/73/74 —, BFS) e nunca replanta. Os passarinhos de dia são `objects/BirdLife.ts`. O herói atrás de uma árvore aparece de contorno, como atrás da serra (a árvore é desenhada antes da silhueta: `TREE_RENDER_ORDER`); ela não fica translúcida.
 - **O EDITOR mostra as peças que o jogo monta por código** (`editor/EditorFixtures.ts`, camada "Pecas do jogo", tecla O): ele cria os MESMOS objetos sobre um World3D que só anota os billboards. Objeto novo de mapa em lugar fixo entra na lista de `recordFixtures`; ele só pode usar do World3D o `addBillboard` e o `params` (o resto, o gravador não tem). Editor só no `npm run dev` (o `/api/world` não existe no preview).
 - **CADA VIDA MORA NUM BIOMA** (`world/biomeLife.ts`, pedido do autor: a tela poluída com tudo ao mesmo tempo): bicho, planta e luz da natureza, passarinhos e vaga-lumes só nascem no bioma da tabela `LIFE_HOMES` (um, no máximo dois). O NatureLife dá a cada sistema um host que só acha chão/água/árvore no lar dele; quem segue o herói multiplica por `home()`. Coisa nova de natureza ganha uma linha na tabela, nunca o vale inteiro.
 - **A THEA (astronaut) NÃO TEM CASA** (pedido do autor): é a única vizinha sem casa — caiu do céu, e a busca dela é voltar para a casa lá em cima. O forno e a bigorna ao lado dela são a FORJA VELHA de um ferreiro que foi embora (`objects/OldForge.ts`, achado `smithy`, `scripts/forja-velha.mjs`). Nunca dar casa a ela: onde era a casa fica a CRATERA da queda da nave (`objects/CrashSite.ts`, `scripts/cratera-da-nave.mjs`).
 - **A CERCA DE MADEIRA** (`objects/WoodFence.ts`, prop `woodFence` por tile): liga sozinha nos vizinhos; o trecho norte-sul é tábua DEITADA na altura do trilho (o quad em pé não gira); a ponta é pilar de portão. Bloqueia pelo prop. As coisas de dentro (lenha, cavalete, tocos, carrinho, placa) são `objects/LumberYard.ts` + `scripts/quintal-do-lenhador.mjs`, que nunca põe peça nos tiles da quest do Marco. O quintal do lenhador: `scripts/cerca-do-lenhador.mjs`, que exporta o BFS de verdade (`reachable`, conta os quadros sólidos do tileset — o do bosque antigo não contava e deixou 46 tiles presos).
-- **A NATUREZA** (`objects/nature/`, maestro `NatureLife`): esquilo, sapos, libélulas, lebre, peixe, folhas no chão, cogumelos depois da chuva, margaridas, neblina, manchas de sol, sementes, arco-íris, poças, gotas das folhas — um sistema por arquivo, todos lendo o mesmo `NatureFrame`. Billboard novo que nasce TARDE entra no `prewarmShaders` do World3D (senão compila na hora e trava ~0,8 s); o que se pisa deitado usa `depthLayer: 'ground'`. Playtest: `natureza`.
+- **A NATUREZA** (`objects/nature/`, maestro `NatureLife`): esquilo, sapos, libélulas, lebre, peixe, folhas no chão, cogumelos depois da chuva, margaridas, neblina, a sombra das copas (as manchinhas de sol que piscavam saíram a pedido do autor), sementes, arco-íris, poças, gotas das folhas — um sistema por arquivo, todos lendo o mesmo `NatureFrame`. Billboard novo que nasce TARDE entra no `prewarmShaders` do World3D (senão compila na hora e trava ~0,8 s); o que se pisa deitado usa `depthLayer: 'ground'`. Playtest: `natureza`.
 - **Arte nova SEGUE O TILESET** (o autor: "não seguem cores e estilos das árvores já existentes"): a paleta do `forest_tile_set.png` (cores novas só se combinarem com ela), a mesma densidade (16 px por tile, mais pixels e não pixels maiores), textura granulada sem degradê nem contorno, e a cor do bioma (`biomeTreeTintAt`) no material das árvores, como o World3D faz nas do mapa.
-- **Árvore seca é rara de propósito** (`scripts/arvores-secas.mjs`): a quest do Marco pede procurar. Não espalhe mais delas.
+- **Árvore seca é rara de propósito** (`scripts/arvores-secas.mjs`): a quest do Marco pede procurar. Não espalhe mais delas. Mas NUNCA de enfeite: toda árvore seca é prop `dryTree` (o machado derruba); os tiles de árvore morta (3, 21) viraram secas de verdade ou pinheiro, e bioma nenhum desenha árvore morta.
 - **Cogumelo no chão é SÓLIDO e só a faca o solta** (`ForagingOverlay`); a espécie é o tipo do item
   (`fungi.ts`), e cada espécie existe UMA vez no mundo. O pedido da Shui fecha com 4 quaisquer (`need`), e as outras 2 são opcionais: ela continua aceitando e dando dicas. Colhido, vai para a CESTA, que é a única exceção
   à lei de uma coisa de cada vez, e a Shui leva a cesta inteira.
@@ -117,9 +117,9 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
   no celular o grid controla melhor. A posição lógica já é o tile de DESTINO durante o passo.
 - **A parede VIRA o herói** (`PlayerMovementController`): é assim que se mira. Contra tile LIVRE a
   seta anda — não há virar-no-lugar.
-- **O HERÓI CARREGA UMA COISA DE CADA VEZ** (`Inventory` é a mão; a mochila foi removida): o que chega
-  com a mão cheia passa por `takeIntoHand`, que pousa o antigo no chão — nada some.
-- **Overlay 2D preso ao herói se ancora na posição VISUAL** (`visualWorld`), nunca na lógica.
+- **UMA COISA NAS COSTAS, TODA FERRAMENTA GUARDADA** (`Inventory`, sem inventário à vista): material sobre material
+  passa por `takeIntoHand`, que pousa o antigo no chão; a ferramenta guardada que o tile pede vem às costas pelo botão (`toolFor`/`equipToolFor`). A pá só cava nas 4 covas rachadas da Sisi (`PainterCracks`).
+- **Overlay 2D preso ao herói se ancora na posição VISUAL** (`visualWorld`), nunca na lógica. O TAMANHO da interface presa ao mundo (balão de ação, pensamento, "!") é `uiTileSize` (o tile no zoom de 100%): o zoom do jogador mexe só na câmera.
 - **Cutscene é `cutsceneActive`**: o `update` para, o `render3D` (POST_UPDATE) continua — por isso
   vaga-lumes e herói moram lá. Passo roteirizado = `scriptStep`, nunca o controlador.
 - **As estações são exclusivamente MANUAIS** e **não existe dinheiro**: recompensa é item ou nada.
@@ -157,8 +157,8 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
 ## Fogo, e a lei das travas
 
 - **Fogo é o único sistema que o jogador conduz** (`scheduleFireSpread`/`igniteFlammableAt`): um
-  tile em chamas acende os 4 vizinhos. Combustível: mato alto, arbustos secos e **pontes de
-  madeira**. Pedra, água, lava e chão pelado são corta-fogo.
+  tile em chamas acende os 4 vizinhos. Combustível: mato alto, arbustos secos (que o machado também derruba) e
+  **pontes de madeira**. Pedra, água, lava e chão pelado são corta-fogo.
 - **Fogueira APAGADA pega fogo de um vizinho** (é o ponto: acender sem o herói ir lá). **Fogueira
   ACESA nunca espalha** (é sumidouro). **Mato alto barra o herói e conduz fogo.**
 - **O HERÓI PENSA NO QUE FALTA** (pedido do autor, `GameScene.neededAt`): toda vez que ele tenta usar uma coisa que não tem, um balão mostra o DESENHO dela, nunca uma palavra. Trava nova é uma linha ali, e continua tremendo também.
@@ -171,7 +171,7 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
 - **A tela de título é só a mata** (pedido do autor: sem herói, NPC, casa, item ou fogo): `public/assets/ui/title_bg.jpg`
   é uma foto do jogo tirada por `node scripts/capturar-titulo.mjs`; refaça quando o visual do mundo mudar. Por
   cima, a `TitleScene` põe o luar, a névoa, os vaga-lumes e as folhas, o título em pixel e as teclas.
-- **Só se dorme no acampamento** (pedido do autor): o único lugar onde o herói dorme é o colchão fixo dele; nas fogueiras dos vizinhos ele só senta (o X nelas não deita).
+- **Só se dorme no acampamento** (pedido do autor): o único lugar onde o herói dorme é o colchão fixo dele; nas fogueiras dos vizinhos ele só senta (o X nelas não deita). O sono é AUTOMÁTICO: deitado, nada o levanta (sem "Levantar", setas e botões não fazem nada, o ESC só pausa) — a noite vem, a Morte vem, e ele levanta sozinho de manhã (`Resting.canGetUp`/`getUp`).
 - **ÁRVORE VERDE NUNCA SAI DO LUGAR.** O `axe` só corta madeira MORTA (props `dryTree`/`dryShrub`);
   a árvore verde é **tile** assado na malha estática do terreno, escrita UMA vez na GPU, sem índice
   nem remendo. **Nenhum item edita terreno em pé** — o machado de aço que fazia isso foi removido.
@@ -217,7 +217,7 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
   gesto ficava sem nenhuma parte visível. O destino é o vizinho mais perto do herói **que não seja
   o tile dele** (o corpo esconde o que está sob os pés), e apanhar continua sendo o B. Sem material
   — ou sem chão livre em volta — a carta treme, o insumo que falta ACENDE e o painel FICA aberto.
-  Com uma mão só, o insumo se leva um de cada vez e se pousa ao lado da máquina.
+  Com uma mão só, o insumo se leva um de cada vez; o forno da Thea o engole da mão (`feed`).
 - **NO FORNO, CONFIRMAR NÃO ENTREGA: ACENDE** (`startHandSmelt`). A mesa martela e a peça salta no
   mesmo frame — uma martelada é um instante. Fundir é um PROCESSO, e o gesto tem os três tempos na
   tela: a carga voa da mão para a boca, o fole sopra sacudindo a alvenaria, a brasa esguicha e só
@@ -301,7 +301,7 @@ o mundo do overworld é feito de **tiles**, e um tile só sabia ser um quad chap
   `hd3d.daylight` aplica sobre a noite): cor de luz, de céu ou de partícula que você cravar num
   arquivo só existe numa das duas — e some, ou fica preta, na outra. Ela é knob ou é dois valores.
 - **Nenhum sprite pode vazar do seu tile.** Profundidade vem do shader, nunca de escalar arte.
-- **TODA MALHA DE CHÃO PINTA COM `groundShadeAt`** (bioma × sombra de canto): uma que pinte por conta própria faz um risco reto onde encosta no chão comum. `chao-sem-risco` mede.
+- **TODA MALHA DE CHÃO PINTA COM `groundShadeAt`** (bioma × mancha × sombra de copa × sombra de canto): uma que pinte por conta própria faz um risco reto onde encosta no chão comum. `chao-sem-risco` mede. **A cor do bioma é RAMPA da folha, não multiplicação** (`render3d/biomeRamp.ts`): o `biomeTintAt` é só dos materiais de terreno; sprite INTEIRO tingido pelo bioma usa `biomeWashAt`, senão a flor e o tronco viram a cor do capim.
 - **Tudo em que o herói pisa declara `depthLayer: 'ground'`** (`Billboard3D`), senão dois quads
   coplanares piscam. Quads deitados (buracos, água, flor aberta) são isentos.
 - Material com `onBeforeCompile` **precisa** de `customProgramCacheKey`.

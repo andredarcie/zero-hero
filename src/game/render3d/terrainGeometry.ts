@@ -80,15 +80,85 @@ const AO_CORNERS: ReadonlyArray<readonly [number, number]> = [[-1, -1], [1, -1],
  * emendar no chão comum sem risco. Antes o beiço saía sem sombra de canto, e a montanha nem com o bioma:
  * onde os dois se encostavam, a cor saltava numa linha reta.
  */
-export const groundShadeAt = (solids: ReadonlySet<number>) => (px: number, pz: number): readonly [number, number, number] => {
-  const tx = Math.round(px);
-  const tz = Math.round(pz);
-  const ao = tileAoCorners(tx, tz, solids);
-  const u = Math.min(1, Math.max(0, px - (tx - 0.5)));
-  const v = Math.min(1, Math.max(0, pz - (tz - 0.5)));
-  const shade = ao[0] * (1 - u) * (1 - v) + ao[1] * u * (1 - v) + ao[2] * u * v + ao[3] * (1 - u) * v;
-  const t = biomeTintAt(px, pz);
-  return [t[0] * shade, t[1] * shade, t[2] * shade];
+export const groundShadeAt = (solids: ReadonlySet<number>) => {
+  const tint = groundTintAt(solids);
+  return (px: number, pz: number): readonly [number, number, number] => {
+    const tx = Math.round(px);
+    const tz = Math.round(pz);
+    const ao = tileAoCorners(tx, tz, solids);
+    const u = Math.min(1, Math.max(0, px - (tx - 0.5)));
+    const v = Math.min(1, Math.max(0, pz - (tz - 0.5)));
+    const shade = ao[0] * (1 - u) * (1 - v) + ao[1] * u * (1 - v) + ao[2] * u * v + ao[3] * (1 - u) * v;
+    const t = tint(px, pz);
+    return [t[0] * shade, t[1] * shade, t[2] * shade];
+  };
+};
+
+// ── O CHÃO EM DUAS ESCALAS (pedido do autor, 2026-11-10) ──────────────────────────────────────────────────────
+// O chão só tinha a escala FINA: o grão do capim, igual em todo canto. De longe ele lia como um tapete chapado — sem
+// uma mancha mais clara, sem o escuro debaixo da mata. Duas camadas de valor, as duas suaves e LIDAS NO PONTO (nunca
+// por tile), para os vizinhos chegarem ao mesmo tom no mesmo canto e nenhum risco reto nascer:
+//
+//   · a MANCHA larga (~7 tiles): um ruído que clareia e esquenta um lado, escurece e esfria o outro (±7%);
+//   · a SOMBRA DE COPA: o chão a até dois tiles de árvores e paredes escurece aos poucos (até 11%) — a sombra de canto
+//     (AO_MAX) já fecha o encosto; esta é a penumbra larga da mata, que faltava.
+const PATCH_GRAIN = 7;
+const PATCH_AMOUNT = 0.07;
+const CANOPY_MAX = 0.11;
+const patchHash = (x: number, z: number): number => {
+  let h = (x * 73856093) ^ (z * 19349663) ^ 0x2f6b1a;
+  h = (h ^ (h >>> 13)) >>> 0;
+  return (Math.imul(h, 0x5bd1e995) >>> 0) / 4294967295;
+};
+const patchNoise = (x: number, z: number): number => {
+  const fx = x / PATCH_GRAIN; const fz = z / PATCH_GRAIN;
+  const cx = Math.floor(fx); const cz = Math.floor(fz);
+  const tx = fx - cx; const tz = fz - cz;
+  const sx = tx * tx * (3 - 2 * tx); const sz = tz * tz * (3 - 2 * tz);
+  const top = patchHash(cx, cz) * (1 - sx) + patchHash(cx + 1, cz) * sx;
+  const bottom = patchHash(cx, cz + 1) * (1 - sx) + patchHash(cx + 1, cz + 1) * sx;
+  return top * (1 - sz) + bottom * sz;
+};
+
+/**
+ * A COR DO CHÃO antes da sombra de canto: o bioma × a mancha larga × a sombra de copa. É ela que toda malha de chão
+ * veste (`groundShadeAt` multiplica a sombra de canto por cima) — o chão comum, o do planalto, o beiço, a margem e a
+ * decoração rasteira.
+ */
+export const groundTintAt = (solids?: ReadonlySet<number>) => {
+  // A sombra de copa na grade dos CANTOS de tile (um número por canto, lembrado), e interpolada dentro do tile.
+  const memo = new Map<number, number>();
+  const canopyCorner = (ix: number, iz: number): number => {
+    const k = tileKey(ix, iz);
+    let v = memo.get(k);
+    if (v !== undefined) return v;
+    let sum = 0;
+    if (solids) {
+      // o canto (ix - 0.5, iz - 0.5): os tiles num raio de ~2,5 em volta dele
+      for (let dz = -3; dz <= 2; dz++) {
+        for (let dx = -3; dx <= 2; dx++) {
+          if (!solids.has(tileKey(ix + dx, iz + dz))) continue;
+          const d = Math.hypot(dx + 0.5, dz + 0.5);
+          sum += Math.max(0, 1 - (d - 0.7) / 1.9);
+        }
+      }
+    }
+    v = 1 - CANOPY_MAX * Math.min(1, sum / 5);
+    memo.set(k, v);
+    return v;
+  };
+  return (px: number, pz: number): [number, number, number] => {
+    const t = biomeTintAt(px, pz);
+    const k = (patchNoise(px, pz) - 0.5) * 2 * PATCH_AMOUNT;
+    // os cantos de tile são meio-inteiros: o canto (i - 0.5) guarda o índice i
+    const gx = px + 0.5; const gz = pz + 0.5;
+    const ix = Math.floor(gx); const iz = Math.floor(gz);
+    const u = gx - ix; const v = gz - iz;
+    const canopy = canopyCorner(ix, iz) * (1 - u) * (1 - v) + canopyCorner(ix + 1, iz) * u * (1 - v)
+      + canopyCorner(ix + 1, iz + 1) * u * v + canopyCorner(ix, iz + 1) * (1 - u) * v;
+    // a mancha clara esquenta, a escura esfria (a mesma regra da rampa: sombra fria, luz quente)
+    return [t[0] * (1 + k * 1.25) * canopy, t[1] * (1 + k) * canopy, t[2] * (1 + k * 0.4) * canopy];
+  };
 };
 
 const tileAoCorners = (x: number, z: number, solids?: ReadonlySet<number>): number[] =>
@@ -139,6 +209,11 @@ export const buildFlatTileGeometry = (
    * mesmo ponto e chegam à mesma cor, então a passagem de um bioma ao outro é um degradê, nunca um risco.
    */
   tintAt?: (x: number, z: number) => readonly [number, number, number],
+  /**
+   * O ESPALHAMENTO da decoração (ver TerrainFeatures.bakeDecor): quanto o quad anda dentro do próprio tile, em tiles, e
+   * quanto o tom dele varia. Só a malha de DECORAÇÃO passa isto — o chão emenda canto a canto e não pode andar.
+   */
+  scatter?: (x: number, z: number, frame: number) => { dx: number; dz: number; shade: number },
 ): THREE.BufferGeometry => {
   const pos: number[] = [];
   const uv: number[] = [];
@@ -151,7 +226,10 @@ export const buildFlatTileGeometry = (
   tiles.forEach(({ x, z, frame }, i) => {
     const f = tilesetFrameUv(frame);
     const y = typeof yAt === 'number' ? yAt : yAt(x, z);
-    pos.push(x - 0.5, y, z - 0.5, x + 0.5, y, z - 0.5, x + 0.5, y, z + 0.5, x - 0.5, y, z + 0.5);
+    const sc = scatter?.(x, z, frame);
+    const cx = x + (sc?.dx ?? 0);
+    const cz = z + (sc?.dz ?? 0);
+    pos.push(cx - 0.5, y, cz - 0.5, cx + 0.5, y, cz - 0.5, cx + 0.5, y, cz + 0.5, cx - 0.5, y, cz + 0.5);
     uv.push(f.u0, f.v1, f.u1, f.v1, f.u1, f.v0, f.u0, f.v0);
     // Which frame of the atlas this quad may sample, so the texel-AA fetch cannot slide into the
     // next tile's art (pixelArtLight/zhTexelUv). Per vertex because it is ONE mesh: the whole
@@ -159,19 +237,21 @@ export const buildFlatTileGeometry = (
     for (let k = 0; k < 4; k++) bounds.push(f.cu0, f.cv0, f.cu1, f.cv1);
     nrm.push(0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0);
     const ao = tileAoCorners(x, z, solids);
+    const tone = sc?.shade ?? 1;
     if (tintAt) {
       // os cantos na MESMA ordem das posições acima
       [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]].forEach(([dx, dz], k) => {
         const t = tintAt(x + dx, z + dz);
-        col.push(ao[k] * t[0], ao[k] * t[1], ao[k] * t[2]);
+        col.push(ao[k] * t[0] * tone, ao[k] * t[1] * tone, ao[k] * t[2] * tone);
       });
     } else {
-      for (const shade of ao) col.push(shade, shade, shade);
+      for (const shade of ao) col.push(shade * tone, shade * tone, shade * tone);
     }
     if (shore) shr.push(...shore(x, z));
     if (windMask) {
+      // o vento gira o quad em volta do centro DELE (o que andou com o espalhamento), não do tile
       const stir = windMask(frame);
-      for (let k = 0; k < 4; k++) wind.push(stir, x, z);
+      for (let k = 0; k < 4; k++) wind.push(stir, cx, cz);
     }
     const b = i * 4;
     idx.push(b, b + 3, b + 2, b, b + 2, b + 1);
@@ -1564,11 +1644,13 @@ export const buildStairGeometry = (
       quad(T, [at(0, out, top(0), out, 0), at(0, inn, top(0), inn, 0), at(1, inn, top(1), inn, 1), at(1, out, top(1), out, 1)], STAIR_SHADE.cap);
       // a ponta de baixo da mureta
       quad(T, [at(0, out, 0, 0, 0), at(0, inn, 0, 1, 0), at(0, inn, top(0), 1, 1), at(0, out, top(0), 0, 1)], STAIR_SHADE.wall);
-      // OS PILARES, embaixo e em cima: um bloco um nada mais largo e mais alto que a mureta
+      // OS PILARES, embaixo e em cima: um bloco um nada mais largo e mais alto que a mureta — e um nada mais
+      // comprido também, para FORA da escada. Com a face no mesmo plano da ponta da mureta e do espelho do
+      // primeiro degrau (s = 0), as duas brigavam pela frente e o pé do pilar piscava (o autor viu).
       const wide = STAIR_POST.wide;
       const pOut = side === 0 ? -wide : 1 + wide;
       const pIn = side === 0 ? STAIR_WALL + wide : 1 - STAIR_WALL - wide;
-      for (const [sa, sb, floor] of [[0, STAIR_POST.len, 0], [1 - STAIR_POST.len, 1, 1]] as const) {
+      for (const [sa, sb, floor] of [[-wide, STAIR_POST.len, 0], [1 - STAIR_POST.len, 1 + wide, 1]] as const) {
         const hTop = floor + STAIR_PARAPET + STAIR_POST.rise;
         const hBot = floor === 0 ? 0 : 0.5;
         const box = (ta: number, tb: number, s0: number, s1: number, shade: number): void => {

@@ -7,21 +7,27 @@ import { CAST_MAX_ALPHA } from './CastShadow3D';
 import type { World3DParams } from './World3D';
 
 export const defaultWorld3DParams = (): World3DParams => ({
-    // O enquadramento do jogo: a camera em (0, camHeight, camBack) olhando pro alvo. Estes dois
-    // numeros sao 72% do par original (8.4/7.6) — dois passos de slider: 80%, e depois 90% desse
-    // 80%. A camera desceu pela propria linha de visao, o tile ficou ~1.4x maior na tela e o
-    // enquadramento pegou menos mundo. Escolhidos a olho, com um slider temporario que existiu so
-    // pra isso e ja saiu do repo; achar o proximo valor e refaze-lo, e o que ele fazia esta dito
-    // na linha abaixo — multiplicar os DOIS por um fator so, e nada mais.
+    // O enquadramento do jogo: a camera em (0, camHeight, camBack) olhando pro alvo. O par ja foi
+    // 72% do original (8.4/7.6 → 6.048/5.472, dois passos de slider: 80%, e 90% desse 80%); depois
+    // o autor achou na regua de zoom que o padrao bom era o 90% dela (pedido de 2026-11-09), e os
+    // dois foram divididos por 0,9 — a camera subiu pela propria linha de visao e o quadro pegou
+    // um pouco mais de mundo. A regua (ZoomSlider) mede a partir DAQUI: 100% e este par. Achar o
+    // proximo valor e o mesmo gesto — multiplicar os DOIS por um fator so, e nada mais.
     //
     // ZOOM AQUI E DOLLY, NUNCA fov, e os dois numeros andam SEMPRE pelo mesmo fator: a RAZAO
     // camHeight/camBack (1.1053) e a direcao de visao, e meio jogo tem essa razao assada dentro
     // de si — e o DEPTH_UP com que a arte da flor da lua desenha os frames em pe
     // (spritefactory/sprites/moonflower.mjs). Mexer num dos dois sozinho gira a camera e faz esse
     // material mentir em silencio, sem erro nenhum: a flor fica plantada torta.
-    camHeight: 6.048,
-    camBack: 5.472,
-    fov: 38,
+    //
+    // A PERSPECTIVA MAIS CALMA (2026-11-10): o fov desceu de 38 para 30 e o par subiu pelo fator que mantém o tamanho
+    // do tile NA LINHA DO HERÓI (tan 19° / tan 15° = 1,285; 6,72/6,08 → 8,636/7,813). Um dolly zoom: o herói e o chão
+    // dele saem iguais, e o que está ao norte encolhe menos — com 38° perto, quem estava três tiles acima saía com o
+    // pixel 30% menor, e o quadro misturava tamanhos de pixel (o vizinho parecia de outra resolução que o herói). A
+    // razão (a direção de visão) não mudou. O fog e a largura mínima da tela em pé foram divididos pelo mesmo fator.
+    camHeight: 8.636,
+    camBack: 7.813,
+    fov: 30,
     // UM PARA TODOS. O celular desenhava na METADE (`isHandheld() ? 2 : 1`) para economizar
     // preenchimento — e essa metade se somava ao `devicePixelRatio` que a conta do buffer ignorava,
     // dando um quadro a 1/6 da tela: o serrilhado que o autor viu. O reescalonamento invisível foi
@@ -61,6 +67,9 @@ export const defaultWorld3DParams = (): World3DParams => ({
     lightCap: 1.55,
     seaFlow: 1,
     reflection: 0.62,
+    // A troca de paleta dos biomas e o contorno dos personagens (2026-11-10, ver biomeRamp.ts e spriteOutline.ts).
+    biomeRamp: 1,
+    outline: 0.62,
     // O jogo nasceu de noite, e todo número abaixo foi escolhido a olho contra o escuro: a noite
     // É o padrão, e o dia é o delta (render3d/skyPreset.ts). O valor real vem do ajuste do jogador
     // no construtor — este 0 é só o que o TypeScript precisa ver.
@@ -135,7 +144,8 @@ export const defaultWorld3DParams = (): World3DParams => ({
     // volta ao defeito da v1: uma elipse que passa do quadro não é vista, é `lift`.
     heroSightTiles: 2.6,
     heroSightLean: 0.9,
-    fogDensity: 0.02,
+    // 0,02 ÷ 1,285: a câmera recuou (ver camHeight), e o fog conta da câmera — sem isto o mundo todo enevoava mais.
+    fogDensity: 0.0156,
     // Raised with the ambient (see above) — a fuller moon for a brighter night.
     moon: 3.6,
     // Near-neutral (just a hint of cool) so tree-green etc. read as the art's own
@@ -156,9 +166,13 @@ export const defaultWorld3DParams = (): World3DParams => ({
     bloomThreshold: 0.85,
     focusY: 0.52,
     focusBand: 0.16,
-    dofBlur: 3.2,
-    dofNear: 0.55,
+    // O desfoque cedeu a vez à perspectiva atmosférica (2026-11-10): metade da força, e só no fundo distante — pixel
+    // art borrada lê como imagem estragada. O primeiro plano mal amacia.
+    dofBlur: 1.6,
+    dofNear: 0.3,
     vignette: 0.16, // eased with the brighter night — 0.24 re-darkened the corners
+    // A noite: o longe escurece e perde cor devagar (a cor do ar é quase preta). O dia leva o dobro (skyPreset).
+    haze: 0.45,
     lift: 1, // a noite é a rampa reta — ver o doc do campo
     grain: 0.02,
     // Occasional twinkles near lit fires + a faint low haze — tuned live to sit
@@ -170,7 +184,9 @@ export const defaultWorld3DParams = (): World3DParams => ({
     mist: 2.2,
     // Gentle split-tone: enough for the warm/cold HD-2D feel, but low so it doesn't
     // repaint the sprites' own colours. Saturation lifted slightly so the art reads vivid.
-    grade: 0.28,
-    saturation: 1.18,
+    // A noite com MENOS cor (era 1.18, 2026-11-10): de noite o olho perde a cor antes do valor, e um vale saturado no
+    // escuro lia como um dia apagado. O split-tone mais frio (GRADE_WOOD_SHADOW) faz o resto; o fogo continua quente.
+    grade: 0.34,
+    saturation: 1.02,
     contrast: 1.0,
   });

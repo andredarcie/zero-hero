@@ -4,7 +4,7 @@
 import { ASSET_KEYS, CHUNK_COLUMNS, CHUNK_ROWS } from '@/game/constants';
 import type { NpcKind, PickupKind } from '@/game/world/ScreenContent';
 import type { PropKind } from '@/game/world/worldSchema';
-import { biomeTintAt, decorFrameAt } from '@/game/world/biomes';
+import { biomeWashAt, decorFrameAt } from '@/game/world/biomes';
 import type { EditorDomUi } from './EditorDomUi';
 
 export const PANEL_WIDTH = 320;
@@ -74,7 +74,7 @@ export class EditorMinimap {
           ctx.drawImage(source, upperFrame.cutX, upperFrame.cutY, upperFrame.width, upperFrame.height, wx * scale, wy * scale, scale, scale);
         }
         // a cor do bioma por cima (multiplicar), como o tabuleiro e o jogo mostram (world/biomes.ts)
-        const [r, g, b] = biomeTintAt(wx, wy);
+        const [r, g, b] = biomeWashAt(wx, wy);
         const k = 255 / Math.max(r, g, b, 1);
         ctx.globalCompositeOperation = 'multiply';
         ctx.fillStyle = `rgb(${Math.round(r * k)}, ${Math.round(g * k)}, ${Math.round(b * k)})`;

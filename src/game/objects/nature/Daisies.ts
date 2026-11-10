@@ -2,7 +2,7 @@ import * as THREE from 'three';
 
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import { world3d } from '@/game/render3d/World3D';
-import { biomeTintAt } from '@/game/world/biomes';
+import { biomeWashAt } from '@/game/world/biomes';
 
 import { TILESET as P, hash, sprite, window01, type NatureFrame, type NatureSystem } from './kit';
 
@@ -103,7 +103,7 @@ export class Daisies implements NatureSystem {
             .setDisplaySize(5 / 16, 5 / 16)
             .setPosition(x + (hash(x, i, 83) - 0.5) * 0.7, y + (hash(i, y, 84) - 0.5) * 0.6);
           // O tom do chão do bioma, como as florzinhas do tileset (é a mesma família): sem ele, um branco solto.
-          const [r, g, b] = biomeTintAt(x, y);
+          const [r, g, b] = biomeWashAt(x, y);
           (bb.mesh.material as THREE.MeshLambertMaterial).color.setRGB(r * 0.8, g * 0.8, b * 0.8);
           clump.push({ bb, lag: hash(x + i, y, 85) * 0.25, sway: hash(i, x, 86) * 6 });
         }

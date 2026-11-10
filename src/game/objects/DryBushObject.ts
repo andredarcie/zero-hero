@@ -35,7 +35,7 @@ const STUMP_TINT = 0x2f2a25;
 const STUMP_SCALE_X = 0.62;
 const STUMP_SCALE_Y = 0.3;
 
-type BushState = 'intact' | 'burning' | 'ash';
+type BushState = 'intact' | 'burning' | 'ash' | 'cut';
 
 export class DryBushObject implements WorldProp {
   public readonly worldX: number;
@@ -60,9 +60,28 @@ export class DryBushObject implements WorldProp {
       .setDisplaySize(0.9, 0.9);
   }
 
-  /** The tile is impassable while the bush stands or burns; ash lets the hero walk through. */
+  /** The tile is impassable while the bush stands or burns; ash (or the axe's stump) lets the hero walk through. */
   public get blocking(): boolean {
-    return this.state !== 'ash';
+    return this.state === 'intact' || this.state === 'burning';
+  }
+
+  /**
+   * O MACHADO TAMBÉM ABRE (pedido do autor, 2026-11-09: "faça todo ser possível de cortar"): um golpe, e o arbusto
+   * tomba e fica o pé, rente ao chão, na cor dele — sem fogo e sem cinza. Devolve true se acabou de ser cortado.
+   */
+  public chop(): boolean {
+    if (this.state !== 'intact') return false;
+    this.state = 'cut';
+    this.scene.tweens.killTweensOf(this.sprite);
+    this.sprite.setAngle(0).setDepthLayer('ground');
+    this.scene.tweens.add({
+      targets: this.sprite,
+      scaleX: this.sprite.scaleX * STUMP_SCALE_X,
+      scaleY: this.sprite.scaleY * STUMP_SCALE_Y,
+      duration: 220,
+      ease: 'Back.easeIn',
+    });
+    return true;
   }
 
   public get isAsh(): boolean {

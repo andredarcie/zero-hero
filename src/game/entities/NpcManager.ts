@@ -109,7 +109,8 @@ class NpcEntity {
     this.size = size;
     this.breathPhase = ((worldX * 7 + worldY * 13) % 17) / 17 * Math.PI * 2;
     this.sprite = world3d()
-      .objects.addBillboard(visual.key, visual.frame ?? 0, { groundShadow: true, reflected: true })
+      // o contorno: o vizinho é o assunto do quadro, não o fundo (render3d/spriteOutline.ts)
+      .objects.addBillboard(visual.key, visual.frame ?? 0, { groundShadow: true, reflected: true, outline: true })
       .setPosition(worldX, worldY)
       .setDisplaySize(size, size);
     if (visual.tint !== undefined) this.sprite.setTint(visual.tint);
@@ -120,7 +121,7 @@ class NpcEntity {
       .setVisible(false);
   }
 
-  public render(tileSize: number, camera: WorldCamera, showExclaim: boolean, timeMs: number): void {
+  public render(tileSize: number, camera: WorldCamera, showExclaim: boolean, timeMs: number, uiTile = tileSize): void {
     // A RESPIRACAO: o corpo cresce um fio para cima e afina um fio, devagar — a mesma do heroi
     // parado. Pela base: o billboard pisa no chao e cresce para cima, entao os pes nao saem do lugar.
     const b = Math.sin(timeMs / 900 + this.breathPhase);
@@ -128,8 +129,9 @@ class NpcEntity {
     this.exclaim.setVisible(showExclaim);
     if (!showExclaim) return;
     const screen = camera.tileToScreen(this.worldX, this.worldY, tileSize);
-    // Chunky pixel scaling (integer multiple of the source texels) + a gentle bob.
-    const px = Math.max(1, Math.round(tileSize / 24));
+    // Chunky pixel scaling (integer multiple of the source texels) + a gentle bob. Interface: no tamanho do zoom
+    // de 100% (`uiTile`), qualquer que seja o zoom do jogador.
+    const px = Math.max(1, Math.round(uiTile / 24));
     const bob = Math.round(Math.sin(timeMs / 280) * px);
     const height = this.kind === 'death' ? 2 : 1;
     this.exclaim.setScale(px).setPosition(screen.x, screen.y - tileSize * height - px * 2 + bob);
@@ -291,7 +293,7 @@ export class NpcManager {
     return this.present().map((n) => ({ worldX: n.worldX, worldY: n.worldY, kind: n.kind }));
   }
 
-  public render(tileSize: number, camera: WorldCamera): void {
+  public render(tileSize: number, camera: WorldCamera, uiTile = tileSize): void {
     const now = this.scene.time.now;
     for (const npc of this.present()) {
       npc.render(
@@ -299,6 +301,7 @@ export class NpcManager {
         camera,
         !this.isTalkTarget(npc.worldX, npc.worldY) && this.hasNewDialog(npc.kind, npc.worldX, npc.worldY, npc.dialog),
         now,
+        uiTile,
       );
     }
   }

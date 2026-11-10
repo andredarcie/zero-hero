@@ -13,10 +13,13 @@ import { ITEM_VISUAL_2D } from './sceneDefs';
 
 /** O que ActionVerbs usa de GameScene. */
 export type ActionVerbsHost = Pick<GameScene,
-  'actions' | 'bumps' | 'camp' | 'garden' | 'hand' | 'heldItem' | 'itemManager' | 'machines'
+  'actions' | 'bumps' | 'camp' | 'garden' | 'hand' | 'heldItem' | 'inventory' | 'itemManager' | 'machines'
   | 'movementController' | 'npcManager' | 'playerWorld' | 'query' | 'questSetup' | 'arc' | 'swing'
   | 'swordPlanting' | 'torch' | 'valley'
 >;
+
+/** Os verbos que aceitam QUALQUER coisa (o altar vazio recebe o que vier): uma ferramenta guardada não os responde. */
+const ANY_ITEM_VERBS: ReadonlySet<string> = new Set(['put']);
 
 export class ActionVerbs {
   public actionPrompt?: ActionPrompt;
@@ -65,7 +68,8 @@ export class ActionVerbs {
     const hero = { x: this.host.playerWorld.worldX, y: this.host.playerWorld.worldY };
     if (at.x !== hero.x || at.y !== hero.y || this.host.bumps.heroThought?.visibleIcon) return null;
     if (!this.host.actions.canAct()) return null;
-    if (this.host.camp.rest.isResting) return { view: { rows: [{ label: t('actions.getUp'), key: 'hand' }] }, at: hero };
+    // Dormindo não há "Levantar": o sono acaba sozinho, de manhã (Resting.canGetUp).
+    if (this.host.camp.rest.isResting) return this.host.camp.rest.canGetUp ? { view: { rows: [{ label: t('actions.getUp'), key: 'hand' }] }, at: hero } : null;
     const front = this.facingTile();
     const reach = this.host.actions.reachesFront(front);
     const under = this.host.hand.handOfferUnderfoot();
@@ -73,27 +77,57 @@ export class ActionVerbs {
     let icons: Pick<ActionPromptView, 'ground' | 'held'> = {};
     const offerItem = (kind: HeldItemKind): void => {
       const held = this.host.heldItem;
-      const swaps = held !== 'none' && held !== kind;
+      // Só material sobre material troca: ferramenta vai para as guardadas (ver Inventory.fits).
+      const swaps = held !== 'none' && !this.host.inventory.fits(kind);
       rows.push({ label: t(swaps ? 'actions.swap' : 'actions.take'), key: 'hand' });
       icons = { ground: ITEM_VISUAL_2D[kind], held: swaps ? ITEM_VISUAL_2D[held] : undefined };
     };
     if (under) {
       offerItem(under);
     } else if (reach) {
-      const verb = this.handVerbAt(front.x, front.y);
+      const verb = this.handVerbAt(front.x, front.y) ?? this.toolFor(front.x, front.y, 'hand')?.verb ?? null;
       // "Colocar minério de ferro": no forno o verbo leva o nome do que entra (pedido do autor)
       if (verb === 'feed') rows.push({ label: `${t('actions.feed')} ${t(`items.name.${this.host.heldItem}`).toLowerCase()}`, key: 'hand' });
       else if (verb) rows.push({ label: t(`actions.${verb}`), key: 'hand' });
       else {
         const there = this.host.itemManager?.kindAt(front.x, front.y);
         const held = this.host.heldItem;
-        if (there && !isMushroomKind(there) && there !== held && !(held !== 'none' && isMushroomKind(held))) offerItem(there);
+        // O cogumelo colhido não sai das costas: só o que cabe sem largá-lo (uma ferramenta) se pega.
+        if (there && !isMushroomKind(there) && there !== held && !(isMushroomKind(held) && !this.host.inventory.fits(there))) offerItem(there);
       }
     }
-    const use = reach ? this.useVerbAt(front.x, front.y) : null;
+    const ahead = reach ? this.useVerbAt(front.x, front.y) ?? this.toolFor(front.x, front.y, 'use')?.verb ?? null : null;
+    // De pé numa cova rachada, o X cava ali mesmo quando a frente não pede nada (ItemUseGround.digUnderfoot).
+    const digHere = !ahead && this.canDigUnderfoot(hero);
+    const use = ahead ?? (digHere ? 'dig' : null);
     if (use) rows.push({ label: t(`actions.${use}`), key: 'use' });
     if (rows.length === 0) return null;
-    return { view: { rows, ...icons }, at: under || front.y > hero.y ? hero : front };
+    return { view: { rows, ...icons }, at: under || digHere || front.y > hero.y ? hero : front };
+  }
+
+  /** A pá cavaria debaixo dos pés dele? A cova rachada, e a pá nas costas ou guardada (e livre para vir). */
+  private canDigUnderfoot(hero: { x: number; y: number }): boolean {
+    if (!this.host.garden.canDigAt(hero.x, hero.y, true)) return false;
+    const held = this.host.heldItem;
+    return held === 'shovel' || (this.host.inventory.owns('shovel') && !this.host.torch.heldOnFire && !isMushroomKind(held));
+  }
+
+  /**
+   * A FERRAMENTA GUARDADA QUE ESTE TILE PEDE, e o verbo dela — quando o que está nas costas não faz nada ali. É a
+   * mesma pergunta do balão e do botão (`handVerbAt`/`useVerbAt`), feita como se cada guardada estivesse nas
+   * costas (Inventory.peek): o balão nunca promete o que a tecla recusaria. Duas costas ficam de fora: a TOCHA
+   * ACESA (trocar de item apaga o fogo, e quem carrega fogo está a caminho de outro lugar) e o COGUMELO COLHIDO
+   * (ele não sai das costas).
+   */
+  public toolFor(x: number, y: number, button: 'hand' | 'use'): { tool: HeldItemKind; verb: string } | null {
+    const verbAt = (): string | null => (button === 'hand' ? this.handVerbAt(x, y) : this.useVerbAt(x, y));
+    const held = this.host.heldItem;
+    if (this.host.torch.heldOnFire || isMushroomKind(held) || verbAt()) return null;
+    for (const tool of this.host.inventory.keptTools()) {
+      const verb = this.host.inventory.peek(tool, verbAt);
+      if (verb && !ANY_ITEM_VERBS.has(verb)) return { tool, verb };
+    }
+    return null;
   }
 
   /** O que o Z faz no tile da frente, na ordem de `pressAttack`. Pegar e trocar são à parte: levam desenhos. */
@@ -173,7 +207,8 @@ export class ActionVerbs {
       return held === 'wood' ? 'bridge' : null;
     }
     if (held === 'bucket' && this.host.query.isOpenWaterAt(x, y)) return 'fill';
-    if (this.host.query.getDryBushAt(x, y)?.blocking) return lit ? 'burn' : null;
+    const bush = this.host.query.getDryBushAt(x, y);
+    if (bush?.blocking) return lit ? 'burn' : this.host.swing.holdsAnAxe && !bush.isBurning ? 'chop' : null;
     if (this.host.query.getDryTreeAt(x, y)?.blocking || this.host.query.getDryShrubAt(x, y)?.blocking) return this.host.swing.holdsAnAxe ? 'chop' : null;
     if (this.host.query.getRockAt(x, y)?.blocking) return held === 'pickaxe' ? 'break' : null;
     if (spot?.blocking) return spot.isMound && held === 'bucketFull' ? 'water' : null;

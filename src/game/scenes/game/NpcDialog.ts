@@ -131,8 +131,8 @@ export class NpcDialog {
         if (npcWorld) this.host.npcManager?.hop(npcWorld.worldX, npcWorld.worldY);
         this.host.delivery.handGift(askId, gift, npcWorld);
       }
-      // A FACA VOLTA à mão vazia de quem foi falar com a Shui (ela a guardou no corte).
-      if (askId === FORAGER_DIALOG && !gift && this.host.heldItem === 'none' && this.host.forage.knifeWithShui()) {
+      // A FACA VOLTA a quem foi falar com a Shui sem ela: ferramenta não disputa as costas (vai às guardadas).
+      if (askId === FORAGER_DIALOG && !gift && this.host.forage.knifeWithShui()) {
         this.host.forage.returnKnife(npcWorld);
       }
       // O pedido fechou nesta conversa: um pulinho de alegria, coracoes, e o vale responde.

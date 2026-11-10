@@ -126,7 +126,7 @@ export const recordFixtures = (scene: Engine.Scene): FixtureSprite[] => {
   make('barril do gato', () => new CatBarrel());
   make('cachoeira', () => new Waterfall(scene));
   make('lago das carpas', () => new KoiPond(scene, far));
-  make('bosque', () => new BigTrees(scene, far));
+  make('bosque', () => new BigTrees(scene));
   make('cerca de madeira', () => new WoodFence());
   make('quintal do lenhador', () => new LumberYard());
   make('forja velha', () => new OldForge());

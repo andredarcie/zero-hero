@@ -5,16 +5,17 @@ import * as THREE from 'three';
 import { DUNGEON_TILES } from '@/game/constants';
 import { RELIEF_HEIGHT, reliefLevelAt } from '@/game/world/relief';
 import { isLifeHome } from '@/game/world/biomeLife';
-import { ANCIENT_GROVE, BIOME_DECOR, biomeTintAt, biomeTreeTintAt } from '@/game/world/biomes';
+import { ANCIENT_GROVE, BIOME_DECOR, biomeTreeTintAt } from '@/game/world/biomes';
 import { SolidCastField } from '../CastShadow3D';
 import { buildShadowBlobGeometry } from '../groundShadow';
 import { getBaseTexture3D } from '../textures3d';
-import { bucketKey, buildBankGeometry, buildFlatTileGeometry, buildLavaSurface, buildScorchGeometry, buildShoreGeometry, buildUprightTileGeometry, CLIFF_WALL_SET, DUNGEON_WALL_SET, LAVA_BANK_BANDS, LAVA_DEPTH_TILES, LAVA_RIM_TINT, tileKey, WIND_STIR_FRAMES } from '../terrainGeometry';
+import { bucketKey, buildBankGeometry, buildFlatTileGeometry, groundTintAt, buildLavaSurface, buildScorchGeometry, buildShoreGeometry, buildUprightTileGeometry, CLIFF_WALL_SET, DUNGEON_WALL_SET, LAVA_BANK_BANDS, LAVA_DEPTH_TILES, LAVA_RIM_TINT, tileKey, WIND_STIR_FRAMES } from '../terrainGeometry';
 import { buildMistCurtainGeometry, type MistUniforms } from '../glowMaterials';
 import type { TerrainMaterials } from '../terrainMaterials';
 import type { TerrainTile, TerrainSort } from './TerrainSorter';
 import type { World3D } from '../World3D';
 import { CAST_POOL_MAX } from './worldDefs';
+import { decorScatterAt, decorShown } from './decorScatter';
 
 // A altura da CORTINA de névoa. As árvores medem 1; 1.3 cobre a copa com folga, para nenhuma
 // ponta de pinheiro furar a névoa por cima.
@@ -69,7 +70,8 @@ export class TerrainFeatures {
       const lavaShore = buildShoreGeometry(
         lavaKeys, lavaBedTiles, (x, z) => groundFrame.get(tileKey(x, z)) ?? null, LAVA_DEPTH_TILES,
         {
-          min: 0.03, variance: 0.2, round: 0.1, corner: 0.34, wobble: 4.2, bands: LAVA_BANK_BANDS, mud: 0x2a1006,
+          // a beira ondula mais e as quinas arredondam mais (2026-11-10): o lago lia como um retângulo de tiles
+          min: 0.03, variance: 0.45, round: 0.22, corner: 0.8, wobble: 2.6, bands: LAVA_BANK_BANDS, mud: 0x2a1006,
           lipTint: LAVA_RIM_TINT,
         },
       );
@@ -99,15 +101,22 @@ export class TerrainFeatures {
   }
 
   public bakeDecor(t: TerrainSort, mats: TerrainMaterials): void {
-    const { decorTiles, solidSet } = t;
+    const { solidSet } = t;
+    // TOUCEIRA E CLAREIRA (ver decorScatter.ts): o enchimento rareia onde o ruído largo abre o chão. Só no desenho —
+    // o tile continua com a decoração no dado, e o que o jogo faz com ele não muda.
+    const decorTiles = t.decorTiles.filter((d) => decorShown(d.x, d.z, d.frame));
     // A decoracao do PLANALTO sobe com ele: a mesma malha (o indice dos quads e o do arbusto que
     // farfalha), so a altura de cada quad muda.
     this.host.tiles.decorGeo = buildFlatTileGeometry(
       decorTiles, (x, z) => 0.02 + reliefLevelAt(x, z) * RELIEF_HEIGHT, solidSet, undefined,
       (frame) => (WIND_STIR_FRAMES.has(frame) ? 1 : 0),
-      // a decoração leva METADE da cor do bioma: o chão carrega o lugar, e a flor mantém a cor dela
-      // (a margarida do prado continua branca, a campânula do planalto continua azul)
-      (x, z) => { const t = biomeTintAt(x, z); return [(1 + t[0]) / 2, (1 + t[1]) / 2, (1 + t[2]) / 2]; },
+      // a decoração leva a cor INTEIRA do bioma, a mesma do chão: a rampa (render3d/biomeRamp.ts) só a aplica na
+      // folha, então o tufo é do mesmo verde do chão em que nasce e a flor mantém a cor dela (a margarida continua
+      // branca, a campânula continua azul). Antes era metade da cor em tudo, e o tufo destoava do chão. A mesma mancha
+      // larga e a mesma sombra de copa do chão (groundTintAt), para o tufo não destoar da mancha em que nasce.
+      groundTintAt(solidSet),
+      // …e cada planta anda um pouco dentro do tile e varia um fio de tom (ver decorScatter.ts)
+      decorScatterAt,
     );
     this.host.terrain.addTerrainMesh(new THREE.Mesh(this.host.tiles.decorGeo, mats.decor));
     decorTiles.forEach((tile, i) => {

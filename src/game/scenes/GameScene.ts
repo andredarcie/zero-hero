@@ -95,9 +95,9 @@ export class GameScene extends Engine.Scene {
   public npcManager?: NpcManager;
   public itemManager?: ItemManager;
   /**
-   * A MÃO. O herói carrega UMA coisa de cada vez, nas costas (ver Inventory): a mochila acabou.
-   * Pegar outra coisa pede largar a que está na mão (`takeIntoHand`), e o Z é a mão — pega,
-   * troca e pousa no tile da frente (`handAt`).
+   * AS COSTAS. O herói carrega UMA coisa de cada vez nas costas, e guarda sem mostrar toda ferramenta que
+   * ganhou (ver Inventory). Pegar outro material pede largar o da mão (`takeIntoHand`), e o Z é a mão —
+   * pega, troca e pousa no tile da frente (`handAt`).
    *
    * `heldItem` continua querendo dizer o que sempre quis: o que está na mão AGORA. Toda fechadura
    * do mundo pergunta isso, e a resposta é uma só.
@@ -115,9 +115,9 @@ export class GameScene extends Engine.Scene {
    * mochila — que e exatamente o que uma assercao de "bare-handed" quer dizer.
    */
   private set heldItem(kind: 'none' | HeldItemKind) {
-    // A porta de AUTORIA (debug e playtest) troca o que está na mão sem pôr nada no mundo.
-    // `'sword'` vira mão vazia: a espada não é item.
-    this.inventory.clear();
+    // A porta de AUTORIA (debug e playtest) troca o que está nas costas sem pôr nada no mundo, e
+    // sem mexer nas ferramentas guardadas. `'sword'` vira mão vazia: a espada não é item.
+    this.inventory.takeAll();
     if (kind !== 'none' && kind !== 'sword') this.inventory.add(kind);
     this.carry.updateBackItem();
   }
@@ -131,6 +131,11 @@ export class GameScene extends Engine.Scene {
   public movementController?: PlayerMovementController;
   public playerWorld = { worldX: 0, worldY: 0 };
   public tileSize = MIN_BOARD_TILE_SIZE;
+  /**
+   * O tile no zoom de 100%: o tamanho que a INTERFACE presa ao mundo (o balão de ação, o pensamento, o "!" dos
+   * vizinhos) usa, para o zoom do jogador mexer só na câmera (pedido do autor). O lugar dela segue o `tileSize`.
+   */
+  public uiTileSize = MIN_BOARD_TILE_SIZE;
   // Dialog variants the player already heard this run (kind:base / kind:locked / wizard:beat).
   // An NPC whose *current* variant isn't here yet shows a "!" marker above its head.
   public readonly seenDialogKeys = new Set<string>();

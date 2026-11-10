@@ -25,8 +25,8 @@ const UNIQUE_TOOL_GIVERS: Partial<Record<HeldItemKind, NpcKind | null>> = {
 
 /** O que BodyBumps usa de GameScene. */
 export type BodyBumpsHost = Pick<GameScene,
-  'heldItem' | 'itemManager' | 'npcManager' | 'playerWorld' | 'query' | 'questSetup' | 'steps' | 'swing'
-  | 'torch'
+  'heldItem' | 'inventory' | 'itemManager' | 'npcManager' | 'playerWorld' | 'query' | 'questSetup' | 'steps'
+  | 'swing' | 'torch'
 >;
 
 export class BodyBumps {
@@ -115,10 +115,13 @@ export class BodyBumps {
       return need && held !== need ? need : null;
     }
     if (isMushroomKind(this.host.itemManager?.kindAt(wx, wy))) return held === 'knife' ? null : 'knife';
+    // A cova rachada da Sisi pede a pá (o chão em volta não pede nada: ali a pá não cava).
+    if (this.host.questSetup.painterQuest?.cracks.isCrack(wx, wy)) return held === 'shovel' ? null : 'shovel';
     if (this.host.query.getDryTreeAt(wx, wy)?.blocking || this.host.query.getDryShrubAt(wx, wy)?.blocking) return this.host.swing.holdsAnAxe ? null : 'axe';
     if (this.host.query.getRockAt(wx, wy)?.blocking) return held === 'pickaxe' ? null : 'pickaxe';
     if (this.host.query.getLockedDoorAt(wx, wy)?.blocking) return held === 'key' ? null : 'key';
-    if (this.host.query.getDryBushAt(wx, wy)?.blocking) return this.host.torch.heldOnFire ? null : 'torch';
+    // O arbusto seco abre com o fogo OU com o machado: com o machado (nas costas ou guardado) não falta nada.
+    if (this.host.query.getDryBushAt(wx, wy)?.blocking) return this.host.torch.heldOnFire || this.host.inventory.owns('axe') ? null : 'torch';
     const grass = this.host.query.getTallGrassAt(wx, wy);
     if (grass?.blocking && grass.isTall) return held === 'scythe' || this.host.torch.heldOnFire ? null : 'scythe';
     const spot = this.host.query.getPlantSpotAt(wx, wy);
@@ -137,10 +140,13 @@ export class BodyBumps {
     return null;
   }
 
-  /** O herói pensa no que falta, se faltar alguma coisa. */
+  /**
+   * O herói pensa no que falta, se faltar alguma coisa. Uma ferramenta que ele JÁ TEM, guardada, não falta: o balão
+   * de ação diz o verbo e o botão a traz às costas (ActionVerbs.toolFor).
+   */
   public thinkOfNeed(wx: number, wy: number, pressed: boolean): void {
     const need = this.neededAt(wx, wy, pressed);
-    if (!need) return;
+    if (!need || (need !== 'torch' && this.host.inventory.owns(need))) return;
     const kind = need === 'torch' ? 'wood' : need;
     const visual = ITEM_VISUAL_2D[kind];
     this.heroThought?.show(visual.texture, visual.frame, this.uniqueItemSource(kind));

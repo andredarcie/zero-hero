@@ -24,10 +24,9 @@ export const TEXT_RESOLUTION = 1;
 // enquadra herói e NPC no que sobra ACIMA dela) leem a mesma resposta. Duas contas diferentes e
 // a fala taparia quem está falando.
 //
-// A altura sai da TIPOGRAFIA, não de uma fração fixa: ela é a placa do nome mais as linhas de
-// texto que a fala mais longa do jogo (~180 caracteres) precisa NAQUELA largura — três num
-// monitor, quase cinco num telefone em pé, onde cabem 45 caracteres por linha. Uma altura
-// única serviria mal aos dois: sobra de barra vazia no monitor, texto cortado no telefone.
+// A altura sai da TIPOGRAFIA, não de uma fração fixa: ela é a placa do nome mais UMA ESTROFE — toda fala é
+// verso, e a caixa mostra a quadra inteira (quatro versos, um por linha, ver runtime/poemLayout), em qualquer
+// tela. Uma fração fixa serviria mal aos dois: sobra de barra vazia no monitor, verso cortado no telefone.
 // Piso e teto seguram os extremos (uma barra fina demais não é uma caixa de fala; metade da
 // tela num telefone deitado é a tela inteira).
 //
@@ -67,8 +66,9 @@ export const dialogBoxMetrics = (width: number, height: number): DialogBoxMetric
   // fonte escolhida só pela largura empurraria a caixa por metade da tela.
   const fontSize = Math.max(DIALOG_BOX_MIN_FONT, Math.min(DIALOG_BOX_MAX_FONT,
     Math.round(Math.min(width / 36, height / 18))));
-  // Os degraus batem com os do CSS (o retrato e o respiro encolhem em 560px).
-  const ems = width < 560 ? 9.4 : width < 900 ? 7.6 : 6.6;
+  // A placa do nome e os quatro versos da quadra (1,42 em cada) com o respiro da caixa. Os degraus batem com os do
+  // CSS (o retrato e o respiro encolhem em 560px).
+  const ems = width < 560 ? 9.4 : 9.1;
   const boxHeight = Math.round(Math.min(
     height * DIALOG_BOX_MAX_FRACTION,
     Math.max(fontSize * ems, height * DIALOG_BOX_MIN_FRACTION),
@@ -124,11 +124,13 @@ export const TIMINGS = {
    * same rate as a held key. It used to be the duration of a per-tile tween, and *which* number
    * you got depended on how you typed: 140ms for a fresh press, but 87ms (×0.62) while holding.
    *
-   * 150ms = 6.7 tiles/s: a walk. Holding a key used to cover ground at nearly 10 tiles/s, but it
-   * lurched and stalled the whole way, and once the walk ran smoothly that same pace simply read
-   * as a sprint. The shop's boots take it back up to ~9.5 (see applyUpgrade).
+   * 200ms = 5 tiles/s: um passeio. Eram 150ms (6,7 tiles/s), e o autor achou que o herói parecia
+   * correr, apressado demais para um jogo de calma (2026-11-09): 25% mais devagar tira a pressa sem
+   * deixar a travessia do vale entediante. (Antes disso, segurar a tecla chegava a ~10 tiles/s, aos
+   * trancos, e lido liso aquilo era um pique.) As pernas acompanham sozinhas: o ciclo é medido em
+   * distância, não em tempo (ver walkCycleTiles).
    */
-  moveDurationMs: 150,
+  moveDurationMs: 200,
   /**
    * Tiles covered by one full 4-frame stride — a property of the hero's legs, not of his speed.
    * The walk cycle is driven by distance rather than by a frame rate (see HeroView), so the feet

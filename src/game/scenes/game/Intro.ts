@@ -199,7 +199,7 @@ export class Intro {
     const endX = this.host.playerWorld.worldX + 1;
     const y = this.host.playerWorld.worldY;
     if (!w3) return Promise.resolve();
-    this.wizardStandIn = w3.objects.addBillboard(visual.key, visual.frame ?? 0, { groundShadow: true, reflected: true })
+    this.wizardStandIn = w3.objects.addBillboard(visual.key, visual.frame ?? 0, { groundShadow: true, reflected: true, outline: true })
       .setPosition(endX + WIZARD_WALK_TILES, y)
       .setDisplaySize(1, 1)
       .setFlipX(true);

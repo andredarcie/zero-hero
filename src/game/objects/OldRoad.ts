@@ -5,6 +5,7 @@ import { registerTexture3D } from '@/game/render3d/textures3d';
 import { world3d } from '@/game/render3d/World3D';
 import { getGardenGates, getPlayerStart } from '@/game/world/WorldData';
 import { createCanvas } from '@/game/platform/platform';
+import { ROAD_PX, roadBlotch as blotch, roadColor, roadNoise as noise } from './roadPaint';
 
 /**
  * A ESTRADA ANTIGA (pedido do autor): da espada fincada, reto para o norte, até a escada do jardim do fim. Ela diz,
@@ -18,7 +19,7 @@ import { createCanvas } from '@/game/platform/platform';
  */
 
 const TEXTURE = 'old-road';
-const PX = 16;
+const PX = ROAD_PX;
 /** Quantos tiles de mato entre a espada e o começo da estrada (o mesmo do script). */
 export const ROAD_GRASS_GAP = 3;
 /** Os passos que a abertura dá até fincar a espada (GameScene.INTRO_WALK_TILES). */
@@ -28,22 +29,6 @@ const WIDTH_TILES = 1.25;
 /** Um nada acima do chão e abaixo dos tufos (a decoração deita a 0,02). */
 const ROAD_Y = 0.012;
 
-const DIRT = ['#8f7a57', '#7c6849', '#6b593e', '#584930'] as const;
-const PEBBLE = ['#a89a7c', '#4c4231'] as const;
-
-const noise = (x: number, y: number, seed: number): number => {
-  const s = Math.sin(x * 127.1 + y * 311.7 + seed * 74.7) * 43758.5453;
-  return s - Math.floor(s);
-};
-const blotch = (x: number, y: number, seed: number, cell: number): number => {
-  const fx = x / cell; const fy = y / cell;
-  const ix = Math.floor(fx); const iy = Math.floor(fy);
-  const sx = (fx - ix) * (fx - ix) * (3 - 2 * (fx - ix));
-  const sy = (fy - iy) * (fy - iy) * (3 - 2 * (fy - iy));
-  const top = noise(ix, iy, seed) * (1 - sx) + noise(ix + 1, iy, seed) * sx;
-  const bottom = noise(ix, iy + 1, seed) * (1 - sx) + noise(ix + 1, iy + 1, seed) * sx;
-  return top * (1 - sy) + bottom * sy;
-};
 
 /**
  * A estrada pixel a pixel. `v` vai de 0 (a ponta da espada, ao sul) a 1 (o pé do portão). Em cada pixel: a que
@@ -73,10 +58,7 @@ const paintRoad = (w: number, h: number): HTMLCanvasElement => {
       // o capim atravessando: buracos que crescem onde a estrada é mais velha
       const gap = blotch(x, y, 5, 3) * 0.6 + noise(x, y, 9) * 0.4;
       if (cover <= 0 || gap > worn * cover + 0.08) continue;
-      const tone = blotch(x, y, 13, 6) + (noise(x, y, 17) - 0.5) * 0.3;
-      let color: string = DIRT[tone < 0.32 ? 0 : tone < 0.55 ? 1 : tone < 0.78 ? 2 : 3];
-      if (noise(x, y, 23) > 0.985) color = noise(x, y, 29) > 0.5 ? PEBBLE[0] : PEBBLE[1];
-      ctx.fillStyle = color;
+      ctx.fillStyle = roadColor(x, y);
       ctx.globalAlpha = 0.62;
       ctx.fillRect(x, y, 1, 1);
     }

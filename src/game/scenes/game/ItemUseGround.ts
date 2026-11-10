@@ -9,11 +9,25 @@ import type { GameScene } from '../GameScene';
 /** O que ItemUseGround usa de GameScene. */
 export type ItemUseGroundHost = Pick<GameScene,
   'camera' | 'carry' | 'debris' | 'fire' | 'garden' | 'gardenUnlock' | 'groundItems' | 'heldItem'
-  | 'playerWorld' | 'props' | 'query' | 'sparkle' | 'swing' | 'tileSize' | 'time' | 'torch' | 'water'
+  | 'playerWorld' | 'props' | 'query' | 'sparkle' | 'swing' | 'tileSize' | 'time' | 'torch' | 'verbs' | 'water'
 >;
 
 export class ItemUseGround {
   public constructor(private readonly host: ItemUseGroundHost) {}
+
+  /**
+   * A COVA DEBAIXO DOS PÉS (pedido do autor): de pé em cima da rachadura, a pá cava ali mesmo — não precisa sair dela
+   * e olhar para ela de fora. A pá guardada vem às costas. O arco do golpe vai para onde ele olha; quem morde é o tile
+   * dele. Só quando o tile da frente não tem nada a ver com o X (ver pressUse).
+   */
+  public digUnderfoot(): boolean {
+    const { worldX: x, worldY: y } = this.host.playerWorld;
+    if (!this.host.garden.canDigAt(x, y, true) || !this.host.swing.equip('shovel')) return false;
+    const front = this.host.verbs.facingTile();
+    this.host.swing.swingHeld(front.x, front.y);
+    this.host.time.delayedCall(150, () => this.host.garden.digPlantHole(x, y, true));
+    return true;
+  }
 
   /** A pedra (picareta), a flor da lua, o canteiro (regar) e o capim alto (foice, fogo). `undefined` = não é com este degrau (ver useItemAt). */
   public useOnStoneAndPlants(wx: number, wy: number): boolean | undefined {
@@ -149,10 +163,10 @@ export class ItemUseGround {
 
     // (Plantar é só a quest da Sisi: as quatro sementes de tinta nos quatro buracos. Ver PainterQuest.)
 
-    // A PÁ — a única ferramenta cuja fechadura é o CHÃO NU de terra (canDigAt): ela cava um
-    // canteiro (plantSpot). Por último de propósito, depois de todo prop e de toda marca:
-    // qualquer coisa EM CIMA da terra responde primeiro, e onde não há terra o `false` deixa
-    // o arco sair no vazio.
+    // A PÁ — a única ferramenta cuja fechadura é o CHÃO RACHADO (canDigAt: as covas da Sisi): ela
+    // cava um canteiro (plantSpot). Por último de propósito, depois de todo prop e de toda marca:
+    // qualquer coisa EM CIMA da terra responde primeiro, e fora das covas o `false` deixa o arco
+    // sair no vazio.
     if (this.host.heldItem === 'shovel' && this.host.garden.canDigAt(wx, wy)) {
       this.host.swing.swingHeld(wx, wy);
       this.host.time.delayedCall(150, () => this.host.garden.digPlantHole(wx, wy));

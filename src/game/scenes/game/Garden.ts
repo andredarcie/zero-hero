@@ -1,7 +1,7 @@
-// O CANTEIRO: a pá cava (só onde não prende ninguém), o balde rega, o capim brota, o buraco reabre quando o capim se
+// O CANTEIRO: a pá cava (só nas covas rachadas da Sisi, e onde não prende ninguém), o balde rega, o capim brota, o buraco reabre quando o capim se
 // vai, e os buracos cavados voltam do save.
 
-import { CHUNK_COLUMNS, CHUNK_ROWS, DIGGABLE_GROUND_FRAMES, SOLID_UPPER_FRAMES } from '@/game/constants';
+import { CHUNK_COLUMNS, CHUNK_ROWS, SOLID_UPPER_FRAMES } from '@/game/constants';
 import { TallGrassObject } from '@/game/objects/TallGrassObject';
 import { PlantSpotObject } from '@/game/objects/PlantSpotObject';
 import { canStep } from '@/game/world/relief';
@@ -81,19 +81,17 @@ export class Garden {
   }
 
   /**
-   * A PÁ pode cavar aqui? A fechadura dela é o CHÃO NU DE TERRA (DIGGABLE_GROUND_FRAMES — o
-   * pátio de pedra, a laje, a alvenaria de dungeon e o mar recusam a lâmina), e "nu" é a
-   * pergunta LARGA duas vezes: nada ocupando o tile (isTileOccupied: parede, bicho, item,
-   * coração, bomba, o próprio herói) e nenhum prop NEM NÃO-BLOQUEANTE em cima — um toco de
-   * mato, uma marca de bomba, um cabo, uma placa ou um canteiro já cavado são todos "este
-   * chão já tem dono". Congelado também recusa: gelo primeiro, terra depois.
+   * A PÁ pode cavar aqui? SÓ ONDE A TERRA JÁ ESTÁ RACHADA (pedido do autor, 2026-11-09: "não é mais livremente"): as
+   * quatro covas que a Sisi mostra (quests/PainterCracks). E a cova tem de estar NUA: nada ocupando o tile
+   * (isTileOccupied: parede, bicho, item, o próprio herói) e nenhum prop, nem não-bloqueante, em cima.
    */
-  public canDigAt(wx: number, wy: number): boolean {
+  public canDigAt(wx: number, wy: number, underfoot = false): boolean {
+    if (!this.host.questSetup.painterQuest?.cracks.isCrack(wx, wy)) return false;
     const chunkX = Math.floor(wx / CHUNK_COLUMNS);
     const chunkY = Math.floor(wy / CHUNK_ROWS);
     if (this.host.chunkManager?.hasChunkCoordinate(chunkX, chunkY) !== true) return false;
-    if (!DIGGABLE_GROUND_FRAMES.has(this.host.chunkManager.getTile(wx, wy).ground)) return false;
-    if (this.host.query.isTileOccupied(wx, wy)) return false;
+    // De pé em cima da cova (`underfoot`), o herói não conta como ocupante: ele cava ali mesmo (pedido do autor).
+    if (underfoot ? this.host.query.isTileTaken(wx, wy) : this.host.query.isTileOccupied(wx, wy)) return false;
     for (const entry of this.host.props.propRegistry) {
       if (this.host.query.propAt(entry.list, wx, wy)) return false;
     }
@@ -138,8 +136,8 @@ export class Garden {
    * place de propósito (o propRegistry referencia este array; ver o comentário dele). Na
    * aventura de overworld o buraco é ESTRUTURA do jogador e entra no save como diff — dungeon não tem terra, e level/explorador zeram por desenho.
    */
-  public digPlantHole(wx: number, wy: number): void {
-    if (!this.canDigAt(wx, wy)) return; // o mundo teve 150ms para mudar — reconfere no impacto
+  public digPlantHole(wx: number, wy: number, underfoot = false): void {
+    if (!this.canDigAt(wx, wy, underfoot)) return; // o mundo teve 150ms para mudar — reconfere no impacto
     getSoundManager().work.playGrassCut(); // terra revirada — o mesmo farfalhar seco do plantio
     // SÓ O BURACO FICA NO TILE: cavar revolve a superfície inteira. A grama baixa assada no
     // terreno (decor da camada upper — não-sólido por construção: um frame sólido teria barrado
@@ -157,6 +155,7 @@ export class Garden {
     }
     const spot = new PlantSpotObject(this.host, wx, wy, { dug: true });
     this.host.props.plantSpots.push(spot);
+    this.host.questSetup.painterQuest?.cracks.dug(wx, wy);
     // A CAVADA AOS POUCOS: o canteiro aprofunda em quatro tempos (os frames do sheet — ver
     // PlantSpotObject.animateDigIn), e cada tempo tem o seu peso aqui fora. A poeira seca sobe
     // no impacto; os torrões voam em três levas que MINGUAM (a primeira pazada tira o grosso);

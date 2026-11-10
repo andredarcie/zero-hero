@@ -1,10 +1,12 @@
 // O BALANÇO DA FERRAMENTA: o arco do item na mão (o mesmo da espada), o machado que morde a árvore e derruba o
-// graveto, a picareta, e qual ferramenta o tile à frente pede.
+// graveto, a picareta, e a ferramenta guardada que vem às costas quando o tile à frente a pede.
 
 import { ASSET_KEYS } from '@/game/constants';
 import type { HeldItemKind } from '@/game/entities/ItemPickup';
-import { AXE_STUCK_MS, CHOP_DRIVE_AT_MS, CHOP_IMPACT_MS, CHOP_TOTAL_MS } from '@/game/runtime/SwordOrbit';
 import { isMushroomKind } from '@/game/fungi/fungi';
+import { AXE_STUCK_MS, CHOP_DRIVE_AT_MS, CHOP_IMPACT_MS, CHOP_TOTAL_MS } from '@/game/runtime/SwordOrbit';
+import { isToolKind } from '@/game/runtime/Inventory';
+import { materialOf } from '@/game/audio/materials';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import type { GameScene } from '../GameScene';
 import { SwordSlash } from '@/game/runtime/SwordOrbit';
@@ -19,8 +21,8 @@ const SWING_BACK_TURNED_NEAR = 0.3;
 
 /** O que ToolSwing usa de GameScene. */
 export type ToolSwingHost = Pick<GameScene,
-  'actions' | 'camera' | 'carry' | 'debris' | 'groundItems' | 'hand' | 'heldItem' | 'hero' | 'inventory'
-  | 'itemManager' | 'movementController' | 'playerWorld' | 'query' | 'tileSize' | 'time' | 'torch' | 'tweens'
+  'actions' | 'camera' | 'carry' | 'debris' | 'groundItems' | 'heldItem' | 'hero' | 'inventory'
+  | 'movementController' | 'playerWorld' | 'query' | 'save' | 'tileSize' | 'time' | 'torch' | 'tweens' | 'verbs'
   | 'world3d'
 >;
 
@@ -35,46 +37,35 @@ export class ToolSwing {
   }
 
   /**
-   * A FERRAMENTA QUE ESTE TILE PEDE — e que o herói já tem na mochila. `null` quando o tile não
-   * tem uma resposta única (a esmagadora maioria) ou quando a ferramenta dele não foi encontrada
-   * ainda: aí o X segue com o que estiver selecionado, e a recusa física de sempre acontece.
-   *
-   * A lista é curta de propósito e só entra aqui o que tem UMA resposta possível: madeira morta
-   * pede machado, pedra pede picareta. Balde, chave, semente e tocha
-   * ficam de fora porque os alvos deles aceitam mais de uma coisa (a fogueira acesa reabastece a
-   * tocha E apaga com o balde), e adivinhar ali seria escolher pelo jogador em vez de poupá-lo.
+   * A FERRAMENTA GUARDADA VEM ÀS COSTAS quando é ela que o tile à frente pede (ActionVerbs.toolFor: a mesma
+   * pergunta do balão). A que estava nas costas, se for ferramenta, vai para as guardadas; se for MATERIAL, desce
+   * aos pés do herói — só uma coisa vai nas costas, e quem guarda as ferramentas não guarda pedra. O Z a pega de
+   * volta. A tocha acesa e o cogumelo colhido nunca saem assim (ver toolFor).
    */
-  private toolWantedAt(wx: number, wy: number): HeldItemKind | null {
-    // MADEIRA MORTA pede o machado. A árvore VERDE não pede nada: nada no jogo a derruba.
-    if ((this.host.query.getDryTreeAt(wx, wy)?.blocking ?? false)
-      || (this.host.query.getDryShrubAt(wx, wy)?.blocking ?? false)) {
-      return this.firstOwned(['axe']);
-    }
-    // PEDRA e VEIO são a mesma rocha, e a picareta é a resposta dos dois.
-    if (this.host.query.getRockAt(wx, wy)?.blocking ?? false) return this.firstOwned(['pickaxe']);
-    // O COGUMELO NASCENDO pede a faca.
-    if (isMushroomKind(this.host.itemManager?.kindAt(wx, wy))) return this.firstOwned(['knife']);
-    return null;
-  }
-
-  /** O primeiro destes que está na mochila, na ordem em que foram pedidos. */
-  private firstOwned(kinds: readonly HeldItemKind[]): HeldItemKind | null {
-    return kinds.find((kind) => this.host.inventory.count(kind) > 0) ?? null;
+  public equipToolFor(wx: number, wy: number, button: 'hand' | 'use'): void {
+    const found = this.host.verbs.toolFor(wx, wy, button);
+    if (found) this.equip(found.tool);
   }
 
   /**
-   * Saca a ferramenta que o tile à frente pede, se o herói a tiver e ainda não estiver com ela.
-   *
-   * A TOCHA ACESA é intocável, e é a única exceção: o fogo mora no graveto que está na mão, e
-   * trocar de item o apaga (ver selectItem). Perder a chama por passar na frente de uma árvore
-   * seria o gesto automático cobrando a coisa mais cara do jogo — e quem carrega fogo está
-   * sempre a caminho de outro lugar.
+   * Traz uma ferramenta que ele TEM às costas (a cova debaixo dos pés pede a pá sem olhar para o tile da frente).
+   * Devolve se ela está nas costas agora. A tocha acesa e o cogumelo colhido não saem das costas.
    */
-  public equipToolFor(wx: number, wy: number): void {
-    if (this.host.torch.heldOnFire) return;
-    const wanted = this.toolWantedAt(wx, wy);
-    if (!wanted || wanted === this.host.heldItem) return;
-    this.host.hand.selectItem(wanted);
+  public equip(tool: HeldItemKind): boolean {
+    const held = this.host.heldItem;
+    if (held === tool) return true;
+    if (!this.host.inventory.owns(tool) || this.host.torch.heldOnFire || isMushroomKind(held)) return false;
+    if (!isToolKind(held)) {
+      const out = this.host.inventory.takeAll();
+      this.host.torch.heldOnFire = false;
+      this.host.torch.torchFuelMs = 0;
+      if (out) this.host.groundItems.dropNear(out.kind, out.count, this.host.playerWorld.worldX, this.host.playerWorld.worldY);
+    }
+    if (!this.host.inventory.equip(tool)) return false;
+    this.host.carry.updateBackItem();
+    getSoundManager().ui.playPick(materialOf(tool), 0);
+    this.host.save.persistAdventure();
+    return true;
   }
 
   /**
@@ -99,6 +90,8 @@ export class ToolSwing {
       texture: visual.texture, // wood uses its single-stick icon (the "graveto")
       frame: visual.frame,
       onFire: this.host.heldItem === 'wood' && this.host.torch.heldOnFire,
+      // A pá é desenhada com o cabo em cima: de ponta-cabeça, quem morde a terra é o metal (pedido do autor).
+      flipY: this.host.heldItem === 'shovel',
     });
   }
 
@@ -161,7 +154,8 @@ export class ToolSwing {
     if (!this.swordSlash || !this.host.camera) return;
     const dx = Math.sign(wx - this.host.playerWorld.worldX);
     const dy = Math.sign(wy - this.host.playerWorld.worldY);
-    const hit = Boolean(this.host.query.getDryTreeAt(wx, wy)?.blocking || this.host.query.getDryShrubAt(wx, wy)?.blocking);
+    const hit = Boolean(this.host.query.getDryTreeAt(wx, wy)?.blocking || this.host.query.getDryShrubAt(wx, wy)?.blocking
+      || this.host.query.getDryBushAt(wx, wy)?.blocking);
     const sound = getSoundManager();
     this.host.time.delayedCall(CHOP_DRIVE_AT_MS, () => sound.work.playAxeWhoosh());
     this.host.carry.hideBackItemDuringSwing(CHOP_TOTAL_MS + AXE_STUCK_MS);

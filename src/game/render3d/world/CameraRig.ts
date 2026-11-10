@@ -1,6 +1,7 @@
 // A CÂMERA DO MUNDO 3D: seguir o alvo, o balanço de mão, o tremor, e o encaixe no pixel (a câmera de pixel suave).
 
 import { isReducedMotion } from '@/game/runtime/accessibility';
+import { getCameraZoom } from '@/game/runtime/graphicsSettings';
 import * as THREE from 'three';
 import { platform } from '@/game/platform/platform';
 import type { World3D } from '../World3D';
@@ -37,6 +38,9 @@ export class CameraRig {
   /** A escala da grade da câmera de pixel suave, medida em repouso (ver snapGridScale). */
   private readonly snapScale = { key: '', ppx: 0, ppz: 0, ppy: 0 };
   private readonly snapCamera = new THREE.PerspectiveCamera();
+  /** O zoom em uso, e o relógio da última leitura: ele persegue o do jogador para deslizar (ver easeZoom). */
+  private zoom = getCameraZoom();
+  private zoomAt = 0;
 
   // Impact kick on the camera (see shake()): amplitude in tiles, decaying to zero.
   public shakeMs = 0;
@@ -79,14 +83,39 @@ export class CameraRig {
     const lean = aimed ? SHAKE_LEAN : 0;
     const ox = swayX + (k > 0 ? k * (dirX * lean + (Math.random() * 2 - 1) * rattle) : 0);
     const oy = swayY + (k > 0 ? k * (dirY * lean + (Math.random() * 2 - 1) * rattle) : 0);
+    const dist = 1 / this.easeZoom();
     this.host.camera.position.set(
       this.host.camTarget.x + ox,
-      this.host.camTarget.y + this.host.params.camHeight + oy,
-      this.host.camTarget.z + this.host.params.camBack,
+      this.host.camTarget.y + this.host.params.camHeight * dist + oy,
+      this.host.camTarget.z + this.host.params.camBack * dist,
     );
     this.host.camera.lookAt(this.host.camTarget.x + ox, this.host.camTarget.y + 0.4 + oy, this.host.camTarget.z);
     this.host.camera.updateMatrixWorld();
     this.snapCameraToPixel();
+  }
+
+  /**
+   * O ZOOM DO JOGADOR (graphicsSettings, a régua da HUD): um fator sobre a distância, nos DOIS eixos — o ângulo
+   * da câmera não muda (ver worldParams). Ele se soma ao dolly das cenas, que mexe em `camHeight`/`camBack`.
+   * A câmera desliza até o valor pedido em ~0,3 s; com "reduzir movimento", ela pula.
+   */
+  /** O zoom em uso agora (o que desliza até o pedido): a interface o desconta para não mudar de tamanho. */
+  public get zoomFactor(): number {
+    return this.zoom;
+  }
+
+  /** Pula direto para o zoom pedido: o ajuste com o jogo parado redesenha sem o relógio andar (ver ZoomSetup). */
+  public snapZoom(): void {
+    this.zoom = getCameraZoom();
+  }
+
+  private easeZoom(): number {
+    const wanted = getCameraZoom();
+    const dt = Math.max(0, this.host.elapsed - this.zoomAt);
+    this.zoomAt = this.host.elapsed;
+    if (isReducedMotion() || Math.abs(wanted - this.zoom) < 1e-4) this.zoom = wanted;
+    else this.zoom += (wanted - this.zoom) * (1 - Math.exp(-dt * 12));
+    return this.zoom;
   }
 
   /**
@@ -150,11 +179,14 @@ export class CameraRig {
     const s = this.snapScratch;
     const size = this.host.renderer.getSize(s.size);
     const p = this.host.params;
-    const key = `${p.camHeight}|${p.camBack}|${this.host.camera.fov}|${size.x}x${size.y}`;
+    // A câmera em repouso inclui o zoom do jogador: é a mesma distância que o quadro usa (ver easeZoom).
+    const height = p.camHeight / this.zoom;
+    const back = p.camBack / this.zoom;
+    const key = `${height}|${back}|${this.host.camera.fov}|${size.x}x${size.y}`;
     if (key !== this.snapScale.key) {
       const cam = this.snapCamera;
       cam.copy(this.host.camera);
-      cam.position.set(0, p.camHeight, p.camBack);
+      cam.position.set(0, height, back);
       cam.lookAt(0, 0.4, 0);
       cam.updateMatrixWorld();
       const toBuffer = (v: THREE.Vector3): THREE.Vector3 => {

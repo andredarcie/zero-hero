@@ -58,7 +58,7 @@ export class PainterTalk {
       case 'water': {
         const left = this.host.save.plots.filter((plot) => !plot.watered).length;
         say(remaining('water', left), () => {
-          if (this.host.host.held() !== 'bucket' && this.host.host.held() !== 'bucketFull' && !this.host.host.onGround('bucket') && !this.host.host.onGround('bucketFull')) this.host.give('bucket', 1, at);
+          if (!this.host.host.owns('bucket') && !this.host.host.owns('bucketFull') && !this.host.host.onGround('bucket') && !this.host.host.onGround('bucketFull')) this.host.give('bucket', 1, at);
         });
         return true;
       }
@@ -82,11 +82,11 @@ export class PainterTalk {
     }
   }
 
-  /** A pá volta e fica ao lado dela, para quem quiser pegar de novo. */
+  /** A pá volta (das costas ou das guardadas) e fica ao lado dela, para quem quiser pegar de novo. */
   private returnShovel(at: { worldX: number; worldY: number }): void {
     const tile = this.host.shovelTile ?? { x: at.worldX, y: at.worldY + 1 };
     const hero = this.host.host.hero();
-    const inHand = this.host.host.held() === 'shovel';
+    const inHand = this.host.host.owns('shovel');
     if (inHand) this.host.host.removeFromHand('shovel', 1);
     else if (!this.host.host.takeFromGround('shovel')) return;
     if (inHand) this.host.host.fling('shovel', hero.x, hero.y, tile.x, tile.y);
@@ -95,10 +95,10 @@ export class PainterTalk {
     this.host.host.persist();
   }
 
-  /** A última conversa: ela pega o pincel de volta, e a quest fecha. */
+  /** A última conversa: ela pega o pincel de volta (das costas ou das guardadas), e a quest fecha. */
   private finish(at: { worldX: number; worldY: number }): void {
     const hero = this.host.host.hero();
-    if (this.host.host.held() === 'brush') {
+    if (this.host.host.owns('brush')) {
       this.host.host.removeFromHand('brush', 1);
       this.host.host.fling('brush', hero.x, hero.y, at.worldX, at.worldY);
     } else {

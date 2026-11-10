@@ -6,6 +6,7 @@ import { isNightTime } from '@/game/runtime/timeOfDay';
 import { materialOf } from '@/game/audio/materials';
 import type { CollectedItem } from '@/game/entities/ItemManager';
 import { isBagItem, isDecorKind, type HeldItemKind } from '@/game/entities/ItemPickup';
+import { isToolKind } from '@/game/runtime/Inventory';
 import { t } from '@/game/i18n/i18n';
 import { KNIFE_TEXTURE_KEY, isMushroomKind } from '@/game/fungi/fungi';
 import { BUTTERFLY_TEXTURE } from '@/game/render3d/cozyTextures';
@@ -75,25 +76,28 @@ export class HandItems {
   /**
    * O Z PODE PEGAR O QUE ESTÁ DEBAIXO DO HERÓI? A mesma pergunta decide o balão e o botão, para o balão
    * nunca prometer o que a tecla recusaria. Cogumelo é da faca, e o que enfeita é sólido. Duas coisas
-   * iguais não têm o que trocar, a não ser o PACOTE, que soma. Com um NPC na frente o Z é a conversa.
+   * iguais não têm o que trocar, a não ser o PACOTE, que soma; uma ferramenta que ele já tem, também não.
+   * Com o cogumelo colhido nas costas só se pega o que cabe sem largá-lo (uma ferramenta). Com um NPC na
+   * frente o Z é a conversa.
    */
   public handOfferUnderfoot(): HeldItemKind | null {
     const { worldX, worldY } = this.host.playerWorld;
     const kind = this.host.itemManager?.kindAt(worldX, worldY);
     if (!kind || isMushroomKind(kind) || isDecorKind(kind)) return null;
     const held = this.host.heldItem;
-    if (held !== 'none' && isMushroomKind(held)) return null;
+    if (held !== 'none' && isMushroomKind(held) && !this.host.inventory.fits(kind)) return null;
     if (held === kind && !UNIT_PACK_KINDS.has(kind)) return null;
+    if (isToolKind(kind) && this.host.inventory.owns(kind)) return null;
     const front = this.host.verbs.facingTile();
     if (this.host.actions.reachesFront(front) && this.host.npcManager?.hasNpcAt(front.x, front.y)) return null;
     return kind;
   }
 
-  /** Mão vazia ou o mesmo pacote: pega. Mão cheia: troca, e o que estava nela fica no lugar. */
+  /** Cabe sem largar nada (costas vazias, o mesmo pacote, uma ferramenta): pega. Senão troca, e o que estava fica no lugar. */
   public takeUnderfoot(): void {
     const { worldX, worldY } = this.host.playerWorld;
     const kindHere = this.host.itemManager?.kindAt(worldX, worldY);
-    if (this.host.heldItem === 'none' || this.host.heldItem === kindHere) this.collectUnderfoot(worldX, worldY);
+    if (kindHere && this.host.inventory.fits(kindHere)) this.collectUnderfoot(worldX, worldY);
     else this.handAt(worldX, worldY);
   }
 
@@ -106,9 +110,10 @@ export class HandItems {
   private collectUnderfoot(wx: number, wy: number): void {
     const taken = this.host.itemManager?.takeAt(wx, wy);
     if (!taken) return;
-    const handWasEmpty = this.host.heldItem === 'none';
+    const before = this.host.heldItem;
     this.host.inventory.add(taken.kind, taken.units ?? 1);
-    if (handWasEmpty) {
+    // O fogo só muda quando a coisa apanhada foi PARA AS COSTAS (uma ferramenta guardada não mexe na tocha).
+    if (this.host.heldItem === taken.kind && before !== taken.kind) {
       this.host.torch.heldOnFire = taken.kind === 'wood' && taken.fire !== undefined;
       this.host.torch.torchFuelMs = taken.fire?.fuelMs ?? 0;
     }
@@ -149,12 +154,12 @@ export class HandItems {
   }
 
   /**
-   * O Z É A MÃO, e com uma mão só ela tem três gestos contra o tile da frente:
-   *   • coisa no chão e mão vazia → PEGA;
-   *   • coisa no chão e mão cheia → TROCA (a da mão pousa onde a outra estava);
-   *   • chão livre e mão cheia    → POUSA.
-   * O cogumelo colhido não sai das costas: no chão ele voltaria a ser um cogumelo nascendo, que só
-   * a faca solta (ver `harvestMushroomAt`). Ele vai até a Shui ou até a fogueira do fim.
+   * O Z É A MÃO, e ela tem dois gestos contra o tile da frente:
+   *   • coisa no chão que cabe sem largar nada (costas vazias, uma ferramenta) → PEGA;
+   *   • material no chão e material nas costas → TROCA (o das costas pousa onde o outro estava).
+   * POUSAR NO CHÃO LIVRE SAIU (pedido do autor, 2026-11-09: "não tem utilidade nenhuma"). Só o ENFEITE
+   * (banquinho, lanterna, vaso) ainda se pousa: ele não serve para outra coisa. O cogumelo colhido não
+   * sai das costas: no chão ele voltaria a ser um cogumelo nascendo, que só a faca solta.
    */
   public handAt(wx: number, wy: number): boolean {
     if (!this.host.itemManager) return false;
@@ -163,6 +168,12 @@ export class HandItems {
     if (isMushroomKind(there)) return false; // nascendo: é da faca
     const stuck = held !== 'none' && isMushroomKind(held);
     if (there) {
+      if (this.host.inventory.fits(there)) {
+        if (isToolKind(there) && this.host.inventory.owns(there)) return false; // a mesma ferramenta: ele já tem
+        const taken = this.host.itemManager.takeAt(wx, wy);
+        if (taken) this.onCollectItem({ kind: taken.kind, worldX: wx, worldY: wy, fire: taken.fire, units: taken.units });
+        return true;
+      }
       if (stuck) { this.host.forage.refuseMushroomDrop(); return true; }
       const fire = this.host.torch.isTorchLit ? { fuelMs: this.host.torch.torchFuelMs } : undefined;
       const out = this.host.inventory.takeAll();
@@ -180,17 +191,18 @@ export class HandItems {
       }
       return true;
     }
-    if (held === 'none') return false;
-    if (stuck) { this.host.forage.refuseMushroomDrop(); return true; }
+    if (held === 'none' || !isDecorKind(held)) return false;
     return this.placeItemAt(wx, wy);
   }
 
   /**
-   * PÔR NA MÃO o que chega de fora (presente, devolução): o que estava nela pousa perto do herói
-   * antes. É a lei de uma coisa só, num lugar só.
+   * PÔR NA MÃO o que chega de fora (presente, devolução). Ferramenta não disputa lugar (ver Inventory.fits): a
+   * que chega vai às costas e a de antes para as guardadas, ou, com material nas costas, ela vai direto para as
+   * guardadas. Material sobre material: o que estava nas costas pousa perto do herói antes — a lei de uma coisa
+   * só, num lugar só.
    */
   public takeIntoHand(kind: HeldItemKind, units = 1): void {
-    if (this.host.heldItem !== 'none' && this.host.heldItem !== kind) {
+    if (!this.host.inventory.fits(kind)) {
       const out = this.host.inventory.takeAll();
       if (this.host.torch.heldOnFire) this.host.torch.extinguishTorch();
       this.host.torch.heldOnFire = false;
@@ -234,19 +246,18 @@ export class HandItems {
   public onCollectItem(item: CollectedItem): void {
     // O pacote entra inteiro (as sementes valem SEEDS_PER_PACK recém-colhidas; um punhado
     // pousado volta com a contagem que tinha). A bolsa e a subtela já mostram o número.
+    const before = this.host.heldItem;
     this.host.inventory.add(item.kind, item.units ?? 1);
     this.host.delivery.questEvent({ type: 'gather', item: item.kind, units: item.units ?? 1 });
     // Um graveto ACESO apanhado do chao sobe aceso, com o combustivel que lhe resta — o par
     // do deposito no braco. O item LARGADO na troca ainda pousa apagado (a queda apaga);
-    // fogo so desce ao chao pela entrega deliberada a uma maquina.
-    if (item.kind === 'wood' && item.fire) {
-      this.host.torch.heldOnFire = true;
-      this.host.torch.torchFuelMs = item.fire.fuelMs;
-    } else {
-      this.host.torch.heldOnFire = false;
-      this.host.torch.torchFuelMs = 0;
+    // fogo so desce ao chao pela entrega deliberada a uma maquina. Uma ferramenta que foi
+    // para as guardadas não mexe no fogo das costas.
+    if (this.host.heldItem === item.kind && before !== item.kind) {
+      this.host.torch.heldOnFire = item.kind === 'wood' && item.fire !== undefined;
+      this.host.torch.torchFuelMs = item.fire?.fuelMs ?? 0;
+      this.host.swing.swordSlash?.setOnFire(false);
     }
-    this.host.swing.swordSlash?.setOnFire(false);
     this.host.carry.updateBackItem(); // the held item shows on the hero's back — the game's only inventory
 
     if (this.host.seenItems.has(item.kind)) {
@@ -270,12 +281,6 @@ export class HandItems {
     this.host.torch.heldOnFire = false;
     this.host.torch.torchFuelMs = 0;
     this.host.carry.updateBackItem();
-  }
-
-  /** Escolher o item do B (a subtela, e o playtest). Recusa o que nao esta na mochila. */
-  public selectItem(kind: HeldItemKind | 'none'): boolean {
-    // Com uma mão só não há o que escolher: "selecionar" só confirma o que já está nela.
-    return kind === this.host.heldItem;
   }
 
   // Zelda-style "item get" beat: freeze the game, spotlight the hero, raise the item.

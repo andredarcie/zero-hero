@@ -94,13 +94,17 @@ export class ActionPrompt {
     return this.bubble.visible ? this.shownRows : [];
   }
 
-  /** `view` nulo esconde. `anchor` é onde o balão aponta, em tiles. */
+  /**
+   * `view` nulo esconde. `anchor` é onde o balão aponta, em tiles. `uiTile` é o tile no zoom de 100%: o balão é
+   * interface, e afastar a câmera não pode deixar "Conversar" ilegível (pedido do autor) — só o lugar segue o mundo.
+   */
   public render(
     view: ActionPromptView | null,
     tileSize: number,
     camera: WorldCamera,
     timeMs: number,
     anchor: { readonly x: number; readonly y: number },
+    uiTile = tileSize,
   ): void {
     if (!view) {
       this.shown = null;
@@ -108,7 +112,7 @@ export class ActionPrompt {
       this.bubble.setVisible(false);
       return;
     }
-    const px = Math.max(1, Math.round((tileSize / 32) * getTextScale()));
+    const px = Math.max(1, Math.round((uiTile / 32) * getTextScale()));
     const sign = `${JSON.stringify(view)}|${this.letterOf('hand')}|${this.letterOf('use')}`;
     const changed = sign !== this.shown;
     if (changed || px !== this.laidOutPx) this.layout(view, px);

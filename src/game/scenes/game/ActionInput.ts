@@ -21,7 +21,7 @@ export type ActionInputHost = Pick<GameScene,
   'arc' | 'bumps' | 'camp' | 'craft' | 'cutsceneActive' | 'dialog' | 'dialogCam' | 'forage' | 'forge' | 'hand'
   | 'heldItem' | 'input' | 'intro' | 'machines' | 'movementController' | 'orders' | 'pause' | 'playerWorld'
   | 'questSetup' | 'roastEnding' | 'sparkle' | 'steps' | 'swing' | 'swordPlanting' | 'textures' | 'use'
-  | 'verbs'
+  | 'useGround' | 'verbs'
 >;
 
 export class ActionInput {
@@ -151,7 +151,8 @@ export class ActionInput {
     // Uma tecla SEGURADA repete o `keydown` no navegador; o sinal certo pra ignorar a repeticao e
     // o `repeat` do proprio evento, nunca um booleano nosso que um `keyup` perdido deixaria preso.
     if (event?.repeat) return;
-    if (this.host.camp.rest.isResting) { this.host.camp.rest.standUp(); return; }
+    // Descansando, o Z só levanta — e dormindo, nem isso: quem acorda o herói é a manhã (ver Resting.canGetUp).
+    if (this.host.camp.rest.isResting) { this.host.camp.rest.getUp(); return; }
     if (!this.canAct()) return;
     const front = this.host.verbs.facingTile();
     // O balão promete o Z para o que está debaixo do herói: conversar é a única coisa que passa na frente.
@@ -159,6 +160,8 @@ export class ActionInput {
     // A BEIRA DA SERRA: entre o planalto e o chao de baixo nao ha mao que alcance (ver relief).
     if (!this.reachesFront(front)) { this.host.camp.catCare.pet(); return; }
     if (this.host.dialog.talkToNpcAt(front.x, front.y)) return;
+    // A ferramenta guardada que este tile pede vem às costas (a faca diante do cogumelo, o pincel diante do quadro).
+    this.host.swing.equipToolFor(front.x, front.y, 'hand');
     if (this.host.questSetup.painterQuest?.neededAt(front.x, front.y) || this.host.questSetup.lumberQuest?.neededAt(front.x, front.y) || this.host.questSetup.astronomerQuest?.neededAt(front.x, front.y)) this.host.bumps.thinkOfNeed(front.x, front.y, true);
     if (this.host.questSetup.painterQuest?.interactAt(front.x, front.y)) return;
     if (this.host.questSetup.lumberQuest?.interactAt(front.x, front.y)) return;
@@ -200,7 +203,7 @@ export class ActionInput {
     // Segurar o X um instante a mais para equipar fazia o primeiro keydown CONFIRMAR o item e a
     // repetição seguinte, já com a bolsa fechada, USÁ-LO. Quem quer usar duas vezes aperta duas.
     if (event?.repeat) return;
-    if (this.host.camp.rest.isResting) { this.host.camp.rest.standUp(); return; }
+    if (this.host.camp.rest.isResting) { this.host.camp.rest.getUp(); return; }
     // A BOLSA ABERTA SEQUESTRA O X — e este é o único lugar do código onde isso pode ser decidido.
     if (!this.canAct()) return;
     // A cadencia adia, nao descarta (ver ACTION_BUFFER_MS).
@@ -217,10 +220,9 @@ export class ActionInput {
       if (this.host.heldItem !== 'none') this.host.swing.swingHeld(x, y);
       return;
     }
-    // 0. A FERRAMENTA CERTA SE APRESENTA SOZINHA: diante de um tronco só existe uma resposta, e
-    //    fazer o jogador dizê-la em voz alta é cobrar burocracia por uma escolha que não existe.
-    //    Ver `toolWantedAt`.
-    this.host.swing.equipToolFor(x, y);
+    // 0. A FERRAMENTA CERTA SE APRESENTA SOZINHA: o que está nas costas age primeiro; se não age e uma ferramenta
+    //    guardada agiria, ela vem às costas. Ver ActionVerbs.toolFor.
+    this.host.swing.equipToolFor(x, y, 'use');
     this.host.bumps.thinkOfNeed(x, y, true);
     if (this.host.questSetup.lumberQuest?.interactAt(x, y)) return;
     if (this.host.questSetup.astronomerQuest?.interactAt(x, y)) return;
@@ -231,6 +233,8 @@ export class ActionInput {
     if (this.host.forge.workAltarAt(x, y)) return;
     // 3. RECOLHER a máquina que o JOGADOR construiu.
     if (this.host.machines.pickUpMachineAt(x, y)) return;
+    // 3½. A COVA DEBAIXO DOS PÉS: de pé em cima da rachadura, a pá cava ali mesmo (ver digUnderfoot).
+    if (this.host.useGround.digUnderfoot()) return;
     // 4. O gesto sai NO VAZIO: um botão que só se mexe quando acerta esconde do jogador o que ele
     //    está segurando. Sem nada selecionado não há braço a balançar.
     if (this.host.heldItem !== 'none') this.host.swing.swingHeld(x, y);

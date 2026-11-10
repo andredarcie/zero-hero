@@ -36,7 +36,7 @@ export class FireVisitor {
   ) {
     const visual = NPC_VISUALS[kind];
     this.body = world3d()
-      .objects.addBillboard(visual.key, visual.frame ?? 0, { groundShadow: true, reflected: true })
+      .objects.addBillboard(visual.key, visual.frame ?? 0, { groundShadow: true, reflected: true, outline: true })
       .setDisplaySize(1, 1);
     if (visual.tint !== undefined) this.body.setTint(visual.tint);
     this.place();

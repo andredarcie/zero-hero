@@ -8,6 +8,8 @@ import { shroudDayUniform } from '../ChunkShroud3D';
 import { getPixelScale } from '@/game/runtime/graphicsSettings';
 import { flowTimeUniform, lightCapUniform, lightResUniform, lightStepsUniform, lightWobbleUniform, reflectionStrengthUniform, seaFlowUniform, texelAaUniform, waterGlintUniform, windUniform } from '../pixelArtLight';
 import { platform } from '@/game/platform/platform';
+import { biomeRampUniform } from '../biomeRamp';
+import { outlineUniforms } from '../spriteOutline';
 import { fireGlowResUniform, fireRampCoreUniform, fireRampMidUniform, fireRampRimUniform, type MistUniforms, setFireGlow } from '../glowMaterials';
 import type { FireEntry } from './TerrainData';
 import type { World3D } from '../World3D';
@@ -53,6 +55,8 @@ export class FrameRenderer {
     lightCapUniform.value = this.host.params.lightCap;
     seaFlowUniform.value = Math.max(0, this.host.params.seaFlow);
     reflectionStrengthUniform.value = Math.min(1, Math.max(0, this.host.params.reflection));
+    biomeRampUniform.value = Math.min(1, Math.max(0, this.host.params.biomeRamp));
+    outlineUniforms.uOutline.value = Math.min(1, Math.max(0, this.host.params.outline));
     // These five are CSS STRINGS, live-tunable through window.hd3d — and Color.set(string) parses
     // the CSS every time it is called. Re-reading them each frame meant five regex parses a frame
     // to arrive back at the colour that was already there. Only re-parse when the knob moves.
@@ -84,6 +88,8 @@ export class FrameRenderer {
       this.host.look.applyColor('fog', this.host.scene.fog.color, this.host.params.skyColor);
       this.host.scene.fog.density = this.host.params.fogDensity;
     }
+    // A cor do AR da perspectiva atmosférica é a do fog (duas horas do dia: ela já mora no skyPreset).
+    this.host.look.applyColor('haze', this.host.screen.finishPass.uniforms.uHazeColor.value as THREE.Color, this.host.params.skyColor);
     const fov = this.host.screen.effectiveFov(this.host.camera.aspect);
     if (fov !== this.host.appliedFov) {
       this.host.camera.fov = fov;

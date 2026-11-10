@@ -6,11 +6,12 @@ import { getKeyLetter, setKeyCapture, setKeyCode, type BoundAction } from '@/gam
 import type { PauseMenu } from './PauseMenu';
 
 const SLIDER_STEPS = 10;
-/** Uma escolha entre valores com nome, ou um nível de 0 a 1. É tudo o que uma opção pode ser. */
+/** Uma escolha entre valores com nome, um nível de 0 a 1, uma tecla, ou uma tela própria que a linha abre (o zoom). */
 export type OptionDef =
   | { kind: 'choice'; label: string; values: { text: () => string; apply: () => void; active: () => boolean }[] }
   | { kind: 'level'; label: string; read: () => number; write: (v: number) => void; release?: () => void }
-  | { kind: 'key'; label: string; action: BoundAction };
+  | { kind: 'key'; label: string; action: BoundAction }
+  | { kind: 'open'; label: string; value: () => string; open: () => void };
 /** Uma linha viva da lista de opções: quem a move (teclado, mouse ou dedo) chama a mesma coisa. */
 export type OptionRow = {
   el: HTMLElement;
@@ -131,6 +132,23 @@ export class PauseRows {
         };
       },
       refresh: () => { value.textContent = getKeyLetter(def.action); },
+    };
+    el.addEventListener('click', () => row.activate());
+    el.style.cursor = 'pointer';
+    return row;
+  }
+
+  /** A linha que ABRE uma tela (o zoom): mostra o valor de agora e, no Enter ou no clique, abre. */
+  public openRow(def: Extract<OptionDef, { kind: 'open' }>): OptionRow {
+    const el = this.rowEl(def.label);
+    const value = document.createElement('b');
+    value.className = 'zh-pause-value';
+    el.appendChild(value);
+    const row: OptionRow = {
+      el,
+      step: () => { /* abrir não tem anterior nem próximo */ },
+      activate: () => def.open(),
+      refresh: () => { value.textContent = def.value(); },
     };
     el.addEventListener('click', () => row.activate());
     el.style.cursor = 'pointer';

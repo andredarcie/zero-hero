@@ -1,5 +1,8 @@
 {
-  "_leia": "ALL CHARACTER LINES, in English. Edit here: the game reads this file (src/game/i18n/i18n.ts merges it into locales/en.json). Each character has a 'filosofia' (reference only: the game does not read it) and the 'falas', keyed by the path the code asks for (e.g. 'wizard.intro'). Each line is one string; a leading '[narrator] ' makes it narration. {n} is replaced by a number. The Portuguese file (pt-br.json) must have the same paths and the same number of lines in each speech.",
+  "_leia": "ALL CHARACTER LINES, in English. Edit here: the game reads this file (src/game/i18n/i18n.ts merges it into locales/en.json). Each character has a 'filosofia' (reference only: the game does not read it) and the 'falas', keyed by the path the code asks for (e.g. 'wizard.intro'). Each line is one string; a leading '[narrator] ' makes it narration. {n} is replaced by a number. A backslash-n (\\n) inside a line breaks the verse; a section with 'verso' is a poem, and src/game/i18n/versos.test.ts checks it against the Portuguese. The Portuguese file (pt-br.json) must have the same paths and the same number of lines in each speech.",
+  "_verso": {
+    "nota": "EVERY LINE IS VERSE: common meter (8·6·8·6 syllables, the ballad and hymn stanza), lines 2 and 4 rhyming, ONE STANZA PER BOX like the Portuguese (the whole quatrain together, so the rhyme is seen); a short line, or one the code slots into another, is a rhyming couplet (8·8). A poem of its own, not a translation: rhyme does not translate. The tests check that the boxes match the Portuguese; the meter is checked by ear."
+  },
   "heroi": {
     "nome": "Zero",
     "filosofia": {
@@ -24,43 +27,37 @@
     "falas": {
       "wizard": {
         "intro": [
-          "[narrator] The war is over.",
-          "The sword was your raft. You have crossed. No need to carry it on your back.",
-          "Now find what comes after.",
-          "Care for the people here. Then the garden opens.",
-          "You haven't truly slept since the war began.",
-          "Your camp is still there, east of the lake. Go and rest.",
-          "[narrator] Z talk & take · X use"
+          "[narrator] The war is over. What remains\nis road, and quiet air.",
+          "Your sword was just the raft you crossed;\ndon't haul it everywhere.",
+          "Now go and find what follows on:\nthe crossing's not the end.\nLook after those who live here; then\nthe garden opens, friend.",
+          "You haven't truly slept, not once,\nsince all the war began.\nYour camp is east, beyond the lake:\ngo rest there, if you can.",
+          "So go. Your sword can stay behind;\nit's planted in the ground.",
+          "[narrator] Z talks and picks things up; and X\nuses what you have found."
         ],
         "guide": [
-          "There is nothing left to fight.",
-          "The warrior was not you. It was only what you did.",
-          "I only point the way. The meaning, you make by walking."
+          "There's nothing left to fight. The war\nhas ceased; it isn't anymore.",
+          "The warrior was never you,\njust what you used to do.\nI only point the way. Meaning\nis made by walking through."
         ],
         "again": [
-          "She comes back. Sleep again.",
-          "I only point the way. The meaning, you make by walking."
+          "She comes again. Go back to sleep,\nand sleep until the day.\nI only point the road. Meaning:\nyou make it, come what may."
         ],
         "gate": [
-          "The garden is open.",
-          "Go to the fire in the middle."
+          "The garden's open. Have no dread:\nits central fire lies ahead."
         ],
         "after": [
-          "You found it. A place to sit.",
-          "Suffering comes from wanting what doesn't stay. Here, just breathe."
+          "You found it: just a place to sit,\nwith nothing else to do.\nTo suffer is to want what goes.\nBreathe. Here the road is through."
         ],
         "tent": [
-          "There is nothing left to fight.",
-          "The warrior was not you. It was only what you did.",
-          "Rest at your camp, east of the lake. I only point the way; the meaning, you make by walking."
+          "There's nothing left to fight. The war\nhas ceased; it isn't anymore.",
+          "The warrior was never you,\njust what you used to do.\nI only point the way. Meaning\nis made by walking through.",
+          "Rest at your camp, east of the lake;\ngo on now, find your bed.\nThe night is yours at last; your sleep\nis waiting there ahead."
         ]
       },
       "npc.wizard": {
         "name": "Sati",
         "lines": [
-          "There is nothing left to fight.",
-          "The warrior was not you. It was only what you did.",
-          "I only point the way. The meaning, you make by walking."
+          "There's nothing left to fight. The war\nhas ceased; it isn't anymore.",
+          "The warrior was never you,\njust what you used to do.\nI only point the way. Meaning\nis made by walking through."
         ]
       }
     }
@@ -78,47 +75,43 @@
       "npc.radiationSuit": {
         "name": "Shui",
         "lines": [
-          "I watch the fungi of this valley. They are never in a hurry.",
-          "What you see is only the fruit. The fungus lives hidden, as threads, underground.",
-          "Six kinds grow here. I need four, the rest only if you like. Take my knife and my basket.",
-          "Don't force it: cut where it already opens, and the knife never dulls. Brush, don't wash."
+          "I watch the fungi of this vale:\nthey're slow, and they are right.\nWhat shows is only fruit; the rest\nis thread, and out of sight.",
+          "Six kinds grow here; I need just four,\nthe others, if you please.\nSo take my knife and basket too,\nand go among the trees.",
+          "Don't force it: cut where it gives way;\nthe knife won't ever dull.\nBrush off the earth, and never wash;\ndon't tug, and never pull."
         ]
       },
       "npc.radiationSuitDone": {
         "name": "Shui",
         "lines": [
-          "Four is enough. Whoever knows what is enough has everything.",
-          "Be like water: soft, and still it wears down stone.",
-          "The others only if you like. Just never eat the red one."
+          "Four is enough. Who knows enough\nhas everything they need.\nBe water: soft, and yet the stone\ngives way; the soft succeed.",
+          "The others, if you like, complete;\nthe red one you must never eat."
         ]
       },
       "npc.radiationSuitAll": [
-        "All six! You walked with the valley, not against it.",
-        "The red one is good for nothing. That is why it lives so long. Never eat it."
+        "All six! You moved the way the vale\nmoves, never against it.\nThe red one's useless; so it lives\nso long. Don't eat a bit."
       ],
       "npc.radiationSuitHint": {
         "porcini": [
-          "Right here on my left, this mushroom: cut it to learn how it’s done."
+          "Right here, upon my left: cut this,\nand learn how it is done.\nCut low, right at the ground, and slow:\nthe hurry? There is none."
         ],
         "morel": [
-          "North, on an island: a cap like a honeycomb. Two sticks make a bridge; Marco has the axe."
+          "Up north, an island holds a cap\nof honeycomb, alone.\nTwo sticks will make a bridge to it;\nthe axe is Marco's own."
         ],
         "puffball": [
-          "North-east, in the tall grass: a white ball with no cap. Tall grass falls to a scythe or fire."
+          "Northeast, in the tall grass: a ball,\nall white, without a cap.\nTall grass will fall to scythe or fire,\nthat opens up a gap."
         ],
         "inkCap": [
-          "Far north, behind dry bushes: tall and white, shaggy. Dry bushes burn."
+          "Far north, behind the bushes, dry:\nwhite, tall, and wild of hair.\nA dry bush, set on fire, will burn\nand clear a pathway there."
         ],
         "chanterelle": [
-          "North, ringed by lava: a golden funnel. A stone sinks and becomes floor. Lava lights a stick."
+          "Up north, in lava's ring: a gold\nand funnel-shaped one, low.\nA stone sinks down and turns to ground;\na stick held there will glow."
         ],
         "flyAgaric": [
-          "The north-west corner, behind dead scrub: red, with white spots. Bring an axe. Don't eat."
+          "Northwest, past withered grass: a red\nwith spots of white on top.\nBring an axe. And never eat it:\nit's poison, every drop."
         ]
       },
       "finds.door.radiationSuit": [
-        "Better stay out. There is fungus on everything.",
-        "The porch is yours. I'll bring tea."
+        "Best not come in: there's fungus all\nover, even the chair.\nThe porch is yours. Sit down, and I'll\nbring tea for you out there."
       ]
     }
   },
@@ -135,100 +128,90 @@
       "npc.painter": {
         "name": "Sisi",
         "lines": [
-          "Everything I paint comes out grey. Colour doesn't come ready-made: we draw it from the ground.",
-          "Take the shovel: dig four holes, close by."
+          "Whatever I paint comes out grey;\ncolour comes from the ground.\nTake this shovel; dig the four cracks\nright by me, in the ground."
         ]
       },
       "npc.painterDone": {
         "name": "Sisi",
         "lines": [
-          "Your painting stays here.",
-          "The world is still grey. Colour is my revolt.",
-          "To create is to live twice.",
-          "In the midst of winter, I found within me an invincible summer."
+          "Your painting stays here, by my side,\nwhere all its colours wake.\nIn winter's midst, I found in me\na summer none could break.",
+          "The grey comes back? Then let it come.\nI paint, and pay the price.\nColour is my revolt, and so:\ncreating's living twice."
         ]
       },
       "npc.painterStep": {
         "dig": [
-          "{n} to go. Shovel in the dirt."
+          "Still {n} to dig, and only where\nthe ground is cracked: just dig them there."
         ],
         "seeds": [
-          "Four holes! The shovel stays here beside me.",
-          "Mixed seeds: one in each hole."
+          "Four holes! The shovel stays right here,\nbeside me, leaning there.\nMixed seeds: put one in every hole,\nand plant each one with care."
         ],
         "sow": [
-          "{n} to go. One seed in each hole."
+          "One seed in every hole, and then:\n{n} more, and colour starts again."
         ],
         "bucket": [
-          "Planted! Take the bucket.",
-          "Fetch water from the pond, to the west, and water all four.",
-          "Back and forth, back and forth. One can be happy like that."
+          "Planted! The bucket's yours to take:\nthe pond lies to the west;\ngo water all four, one by one;\nthe ground will do the rest.",
+          "Back, forth, and back, and never through:\nyou can imagine happy, too."
         ],
         "water": [
-          "{n} to go. Fill the bucket at the pond and water them."
+          "Still {n} to water. Fill it up\nand pour it slowly, cup by cup."
         ],
         "wait": [
-          "Now we wait.",
-          "Or sleep one night: they'll be ready by morning."
+          "Now all there is to do is wait,\nor sleep a night away:\nby morning they'll be ready, all,\nfor you to pick, by day."
         ],
         "harvest": [
-          "They bloomed!",
-          "Pick them by hand, all four. Then to the table."
+          "They bloomed! Now pick all four by hand,\nno tools: just hands, and care.\nThen bring them to the table, all:\nthe paint is made right there."
         ],
         "bring": [
-          "The flowers go on the table."
+          "Take flowers to the table: there\nthey turn to paint, and something rare."
         ],
         "easel": [
-          "Brush in hand. Paint the world you want."
+          "Brush in your hand: now paint the world\nyou'd want, with every colour swirled."
         ]
       },
       "npc.painterMake": {
         "intro": [
-          "What flowers! Watch how it's done."
+          "What flowers! Watch how this is done,\nand slowly, step by step, each one."
         ],
         "urucum": [
-          "Annatto: I rub the seeds in water and the red powder comes off."
+          "Annatto: rubbed in water, seed\nlets go its warm red powder, freed."
         ],
         "anil": [
-          "Indigo: the leaves ferment in water. I beat it, and the blue is born in the air."
+          "Indigo: leaves ferment; I beat,\nand in the air the blue's complete."
         ],
         "curcuma": [
-          "Turmeric: the root, dried and ground, becomes yellow powder."
+          "Turmeric: the root, dried, milled fine,\nbecomes a yellow, like sunshine."
         ],
         "garanca": [
-          "Madder: the ground root, in warm water. Boiled, the red turns dull."
+          "Madder: ground root; and boiling, too,\nturns all its red a darker hue."
         ],
         "binder": [
-          "Alum fixes the colour. Gum arabic makes it paint."
+          "Alum fixes the colour; and\ngum makes it paint, for any hand."
         ],
         "brush": [
-          "Thank you for the paints! I'll set up the canvas.",
-          "Take the brush: now you're the one who creates.",
-          "Paint without hoping for anything. That is what makes you free."
+          "Thank you for all the paints! I'll set\nthe canvas up; and so,\nhere, take the brush: the one who makes\nis you now. Off you go.",
+          "Paint without hoping, and you'll stand\nfree, with an open, unarmed hand."
         ]
       },
       "npc.painterReview": {
         "form": {
-          "sparse": "A few strokes, and it says everything.",
-          "middle": "Look what you did on this canvas!",
-          "full": "Not one blank corner left!"
+          "sparse": "A few strokes, and it says it all;\nthe white around is quiet, small.",
+          "middle": "Look what you did! This canvas shows\nit all at once, the way it flows.",
+          "full": "Not one blank corner left in sight!\nThe canvas runs, a river, bright."
         },
         "color": {
-          "all": "All four colours together. Even I would not dare.",
-          "urucum": "That orange looks like late afternoon.",
-          "anil": "That blue looks like deep water.",
-          "curcuma": "That yellow warms the whole canvas.",
-          "garanca": "That red has a heart."
+          "all": "All four colours: a courage I\ndid not have, painting earth and sky.",
+          "urucum": "That orange is late afternoon:\nthe low sun, burning, setting soon.",
+          "anil": "That blue is water, deep and wide:\nlook in, and you will sink inside.",
+          "curcuma": "That yellow's warmth is in the air:\nit warms the canvas everywhere.",
+          "garanca": "That red has got a heart, and so\nit beats upon the canvas, slow."
         },
         "thanks": [
-          "You have a painter's hand.",
-          "I only saw grey. We invented colour.",
-          "I will keep the brush. The painting stays here."
+          "You have a painter's hand. I saw\njust grey; but colour's new:\nwe made it up, the two of us;\nit's better done by two.",
+          "The painting stays here, where it's at;\nthe brush I keep, and that is that."
         ]
       },
       "finds.door.painter": [
-        "Everything in here is wet with paint.",
-        "Sit on the porch. I'll bring tea."
+        "In here, it's all wet paint, still fresh,\nstill dripping on the floor.\nSit on the porch: I'll bring the tea;\nthe view's worth waiting for."
       ]
     }
   },
@@ -245,59 +228,51 @@
       "npc.businessMan": {
         "name": "Marco",
         "lines": [
-          "I lost the business, the firewood, everything. My hands are shaking.",
-          "The rest isn't up to me. A fire is. Over there, on that dirt. Take the axe.",
-          "Cut a dead branch and bring it to the block. Stand it up and split it. Both halves go on the dirt. Four times.",
-          "Dead trees are rare around here. Walk and look."
+          "I lost my business, firewood, all;\nmy hands won't stop their shake.\nThe rest is not mine. But a fire:\nthat one is mine to make.",
+          "There, on that ground. Here is the axe:\ncut a dead branch, and bring\nit to the stump; stand it up straight,\nand split it with a swing.",
+          "The halves go to the ground; four times.\nBut look around with care:\ndead trees are rare round here; so walk,\nand search, and don't despair."
         ]
       },
       "npc.businessManDone": {
         "name": "Marco",
         "lines": [
-          "I can still smell the smoke.",
-          "It isn't what happens that weighs on us. It's what we think of it.",
-          "Thea watches the sky; I, the fire. It is all the same nature.",
-          "Thank you, friend. The axe is yours."
+          "I smell the smoke still. What weighs down\nis not the things we meet:\nit's what we think of them. My hands\nare warm now, in the heat.",
+          "Thea, the sky; and I, the fire:\nit's all one nature, true.\nThank you, my friend. The axe is yours;\nI'm giving it to you."
         ]
       },
       "npc.businessManStep": {
         "gather": [
-          "{n} to go. Dead branch, block, dirt. Dead trees are rare: search."
+          "Still {n} to go: dead branch, then stump,\nthen ground; and that's the way.\nDead trees are rare: so look around,\nand search, and you won't stray."
         ],
         "ready": [
-          "Four. That's a fire already, it only lacks the flame.",
-          "Go and light it."
+          "Four. That's a fire already; all\nit needs is just a spark.\nGo on and light it: all the wood\nis split. Go light the dark."
         ],
         "light": [
-          "Go and light it."
+          "Go on, and light the fire there:\nthe wood is waiting, split with care."
         ]
       },
       "npc.businessManNight": {
         "split": {
-          "clean": "Split clean. Good hands.",
-          "rough": "Split crooked, but split. You learn an axe by swinging it."
+          "clean": "Split clean. You've got a steady hand;\neven the wood would understand.",
+          "rough": "Split crooked, but it split, and so:\nyou learn by striking. Now you know."
         },
         "fire": {
-          "first": "And it lit first try.",
-          "worked": "That fire took work. Every fire does."
+          "first": "And it lit on the first strike, too:\na steady spark, and aimed and true.",
+          "worked": "The fire was work; I know, I know:\nall fires are; that's the way they go."
         },
         "story": [
-          "Sit. Watch the fire with me.",
-          "Fire is not a thing. It is a thing happening.",
-          "Heat makes the branch give off gas. The gas burns, not the wood.",
-          "The gas meets the air, and that burning gives off more heat. Which gives off more gas. That is why it keeps itself going.",
-          "And this light? Soot. Tiny grains, so hot they glow.",
-          "The tree spent its whole life storing sun. The fire only gives it back.",
-          "A strong fire turns whatever falls on it into more flame. What gets in the way becomes firewood."
+          "Sit. Watch the fire with me, the way\nyou'd watch a friend at end of day.",
+          "A fire's not a thing: it's something\nthat happens, in plain sight.\nThe heat draws gas out of the branch:\nthe gas, not wood, alight.",
+          "The gas meets air, and burning gives\nmore heat, which frees more gas:\nthat's why it doesn't stop; alone,\nit burns on, as hours pass.",
+          "And all that light? It's soot, it's grains\nso hot, they start to glow.\nA tree stores sun its whole life long;\nthe fire lets it go.",
+          "A strong fire turns what falls in it\nto flame, all that it meets.\nAnd life's the same: what blocks your way\nis fuel the fire eats."
         ],
         "farewell": [
-          "Never say 'I lost it'. Say 'I gave it back'. Look: my hands stopped shaking.",
-          "No one can take this night from me."
+          "Don't ever say 'I lost it.' Say\n'I gave it back.' And so,\nmy hands don't shake. This night, at least,\nis mine; I won't let go."
         ]
       },
       "finds.door.businessMan": [
-        "The door sticks. The porch does not.",
-        "Sit. I'll bring tea."
+        "The door is stuck; the porch is not:\nit's yours to take, for free.\nSit down; I'll bring a cup of tea,\nand some good company."
       ]
     }
   },
@@ -314,84 +289,69 @@
       "npc.astronaut": {
         "name": "Thea",
         "lines": [
-          "Hello. My ship crashed and broke.",
-          "I have to go back home. I need your help.",
-          "With the telescope fixed, I can find where the stars are and know exactly where to send a signal.",
-          "Then my friends will come for me.",
-          "But the telescope broke in the fall too. Only the tube is left.",
-          "No tripod, no lens, no sky. And everyone is born wanting to know.",
-          "Take this pickaxe. Bring me an iron bar."
+          "Hello. My ship came down and broke;\nI have to get back home.\nWill you help me? Alone, I can't:\nthe sky's too wide to roam.",
+          "With the telescope whole, I'd know\nwhere every star is set,\nand where to send my signal; then\nmy friends would find me yet.",
+          "But in the fall, the telescope\nbroke too; just the tube stayed.\nNo tripod and no lens: the sky\nhas gone, the way things fade.",
+          "And all of us are born like this:\nwanting to know. And so,\nhere, take this pickaxe; bring to me\nan iron bar. Now go."
         ]
       },
       "npc.astronautDone": {
         "name": "Thea",
         "lines": [
-          "The sky is still up there. Looking at it is the best of life. Come back at night.",
-          "I built a cairn here: a place to come back to.",
-          "Marco lives by making; I, by looking. Both of us seek to live well.",
-          "One swallow doesn't make a summer: happiness is a whole life, not a day."
+          "The sky's still there: to look at it\nis life's best part, by far.\nCome back at night: a cairn of stones,\nto show you where you are.",
+          "Marco lives making; I, by looking;\nboth seek to live life well.\nEach has a way of reaching it,\nand each one does it well.",
+          "One swallow doesn't make a summer,\nand joy is not a day;\nit is a whole life, all of it,\nnot half of it, halfway."
         ]
       },
       "npc.astronautHint": {
         "ore": [
-          "Head west, to the lava lake. The black-veined rock gives charcoal, the red-veined one, ore. The furnace here asks for one at a time."
+          "Go west, as far as lava goes:\nblack veins will give you coal;\nred veins give ore. They're stones: just break\nthem open: that's the goal.",
+          "The furnace here will only take\none thing at a time: no mistake."
         ],
         "bloom": [
-          "Take the charcoal and the ore to the furnace, right here. It asks for what it needs, one thing at a time."
+          "Coal and ore go to the furnace\nright here; it tells you which\nis missing; and you bring it: one\nby one, without a hitch."
         ],
         "iron": [
-          "Put the hot lump on the anvil, right here, and hammer it."
+          "The anvil, here beside the flame:\nthe hot lump, hammered, takes its frame."
         ]
       },
       "npc.astronautStep": {
         "tripod": [
-          "Iron! This becomes the tripod.",
-          "The lens is missing, and a lens is glass.",
-          "Glass is born from sand and ash: the ash helps the sand melt.",
-          "The ash is by the fire. Sand only by the big lake, down south. Both into the furnace."
+          "Iron! This becomes the tripod.\nThe lens is missing: glass,\nand glass is made of sand and ash:\nthe ash helps melt the mass.",
+          "The ash lies by the fire; the sand,\nbeside the big lake, south.\nBoth of them go into the furnace,\none open, waiting mouth."
         ],
         "wait": [
-          "Sand from the big lake, down south. Ash from the fire. Both into the furnace."
+          "Sand from the big lake to the south;\nthe ash from the fire, near;\nand both together, in the furnace,\nand glass will soon appear."
         ],
         "polish": [
-          "Good glass. Now it becomes a lens.",
-          "First the rough stone, for the curve. Then the fine one, to clear the haze.",
-          "Rub in circles."
+          "Good glass! Now it becomes a lens:\nthe rough stone gives the curve;\nthe fine one clears the haze away,\nand leaves it clear to serve.",
+          "Rub it in circles, round and round,\nuntil the lens is clear and sound."
         ],
         "carry": [
-          "It came out sharp!",
-          "Sand is the matter. The lens, the form. You, the one who made it. And seeing, the end.",
-          "Take the telescope to the plateau, to the south-west. Climb the stairs and look for the cairn. The sky is cleaner up there."
+          "It's sharp! The matter is the sand,\nthe form, the lens; and you,\nthe maker; seeing is the end.\nNow carry it on through",
+          "to the plateau, southwest: climb up\nthe stairs, to find the mark.\nUp there, the sky is clean and whole:\na dome, clear in the dark."
         ],
         "night": [
-          "You can't see anything by day.",
-          "Sit beside it and wait for the night."
+          "By day, you can't see anything.\nSit by it, through the gray,\nfor night to come, without a rush:\nthe sky loves those who stay."
         ],
         "reunion": [
-          "I saw the fire from up there. Any marshmallows left?"
+          "I saw the fire from way up high.\nAny marshmallows left? Oh my!"
         ],
         "goodbye": [
-          "With the sky back, my ship found me.",
-          "Thank you for everything.",
-          "A friend is another self.",
-          "But I have to go back to my home planet. Home is up there.",
-          "When you look at the sky, wave."
+          "With the sky back, my ship found me.\nThank you for everything:\na friend is another self; I'll take\nyou with me, wandering.",
+          "But I must go back to my planet:\nmy home is up on high.\nWhen you look up at night, just wave:\nit brings us close, the sky."
         ],
         "farewell": [
-          "You found all four.",
-          "It was wonder at the moon and the stars that made us start to think.",
-          "The light you saw was on its way long before you were born.",
-          "It only needed someone to look.",
-          "The stars before dawn are different ones. Sleep, and wake for them."
+          "You found all four! The wonder at\nthe moon and stars, I'd say,\nfirst made us think: philosophy\nwas born from it that way.",
+          "The light you saw was on its way\nlong, long before your birth;\nit only needed someone's eyes\nto look at it from earth.",
+          "The stars before the dawn are new:\nso sleep, and then arise,\nand wake up early for them: there,\nthe season turns the skies."
         ],
         "anvil": [
-          "The bar! No one is born a smith: you become one by hammering.",
-          "I'll build the tripod."
+          "The bar! Nobody's born a smith:\nyou make one, hammering.\nAnd now I'll build the tripod: so\nstay, watch me do the thing."
         ]
       },
       "finds.door.astronaut": [
-        "The porch has the best view after the ship. Sit there.",
-        "I'll bring tea."
+        "The porch has the best view there is,\nafter my ship, I'd say.\nSit there: I'll bring the tea, and let\nthe hours drift away."
       ]
     }
   },
@@ -407,33 +367,22 @@
       "death": {
         "name": "Death",
         "visit": [
-          "Don't get up. I didn't come for you.",
-          "I know you. I walked behind you the whole war.",
-          "You were a warrior. Wherever you went, I had work.",
-          "Now you sleep under the stars, and your sword stayed on the road.",
-          "Glory, honour, victory: they were your gods. And they are dead.",
-          "Now nothing is worth anything. And no one will come to tell you what is.",
-          "Sleep. I know how to wait."
+          "Don't rise. I didn't come for you.\nI know you, from the start:\nI walked behind you through the war;\nI never stood apart.",
+          "Wherever you went, I was there,\nwith all my work to do.\nTonight you sleep beneath the stars;\nyour sword sleeps in the dew.",
+          "Glory and honour, victory:\nthese were your gods. They're dead.\nSo nothing's worth a thing at all,\nand no new gods instead.",
+          "No one will tell you what has worth;\nthe emptiness is yours.\nNow sleep. There is no need to rush:\nI've waited out your wars."
         ],
         "visit2": [
-          "Here again. I said I knew how to wait.",
-          "You carried orders all your life, the way a camel carries weight.",
-          "In the desert, the camel becomes a lion. And the lion says: no.",
-          "No to the old gods. But the lion still creates nothing.",
-          "Now a question. Don't lie to me.",
-          "What if this life, exactly as it is, came back without end? Every pain, every night, this talk.",
-          "Would you curse me? Or would you say: I never heard anything more divine?",
-          "Sleep on that."
+          "Here once again. I said I'd wait.\nYou only did as told:\nyou carried orders on your back,\na camel, bought and sold.",
+          "Out in the desert, camels turn\nto lions, roaring: no.\nThey tell the old gods no. But claws\naren't hands; they cannot sow.",
+          "And now, a question. Do not lie\nto me. Do not pretend.\nWhat if this life came back, the same,\neach pain, each night, no end?",
+          "Would you curse me, the one who spoke,\nor say: yes, all once more?\nDon't answer now. Sleep on it, sleep.\nI'm patient, as before."
         ],
         "visit3": [
-          "Last night. After this one, I won't come again.",
-          "The lion becomes a child. The child plays, forgets and begins again.",
-          "It says yes. It creates its own values, playing.",
-          "No one gave you a meaning. You are making one, with your hands.",
-          "Want nothing different. Not backward, not forward. Love what is.",
-          "Become who you are.",
-          "One must have chaos within to give birth to a dancing star.",
-          "Goodbye, child."
+          "The final night. When it is done,\nI won't come back to you.\nThe lion turns into a child,\nforgets, and starts anew.",
+          "It says yes, and in play it makes\nits values, asking none.\nNo one has given you a meaning:\nyour hands are making one.",
+          "Want nothing other, not ahead,\nnor back, nor what could be.\nLove all of it, the way it is,\nfor all eternity.",
+          "One must have chaos still within\nto birth a dancing star.\nSleep well, child. This is my goodbye:\nbecome the one you are."
         ]
       }
     }
@@ -442,9 +391,7 @@
     "nota": "Whoever closes the last request says this at the end of their own speech, and hands over the High Garden key.",
     "falas": {
       "garden.key": [
-        "You have shown yourself a true friend to everyone: the village and nature alike.",
-        "Now you may walk freely through the High Garden, with respect for nature.",
-        "Take the key."
+        "You were a friend to everyone:\nthe village, and the wild.\nTake the key: the High Garden is\nyours. Walk there, soft and mild."
       ]
     }
   },
@@ -457,12 +404,9 @@
     },
     "falas": {
       "ending.lines": [
-        "[narrator] The marshmallow turns golden.",
-        "[narrator] The sword stays in the road.",
-        "[narrator] No one chose for him.",
-        "[narrator] No hunger, no cold, among friends. Not even a god has more.",
-        "[narrator] Death is nothing to us: when it is, we are not.",
-        "[narrator] Nowhere to be. At last."
+        "[narrator] The marshmallow goes gold; the sword\nstays out there on the road.\nNo one has chosen for him; he\nwas made from what he sowed.",
+        "[narrator] No hunger, cold, and friends close by:\nno god has more than this.\nDeath's nothing: when it comes, we're gone;\nit's never ours to miss.",
+        "[narrator] No place to go, no need, no list:\nat last, it's good just to exist."
       ]
     }
   },
@@ -470,57 +414,46 @@
     "nota": "Not an NPC: things in the valley read with Z (finds, the camp).",
     "falas": {
       "finds.helmet": [
-        "[narrator] A rusted helmet.",
-        "[narrator] A flower grew inside."
+        "[narrator] A helmet, rusted through. Inside,\na flower took its root,\nwithout a by-your-leave, right where\nthe war had stamped its boot."
       ],
       "finds.bottle": [
-        "[narrator] A bottle with a note.",
-        "[narrator] “I made it. It's good here. Come.”",
-        "[narrator] No name."
+        "[narrator] A bottle, and a note inside:\n“I made it. It's good here.”\n“Come.” And no name. Whoever wrote\nit left nothing else to hear."
       ],
       "finds.sword": [
-        "[narrator] This blade felled the darkness.",
-        "[narrator] And gave the world back its light.",
-        "[narrator] He is no longer this. He is what he does now."
+        "[narrator] This blade once overcame the dark;\nit gave the world its light.\nHe is no longer this: he's what\nhe chooses now, outright."
       ],
       "finds.smithy": [
-        "[narrator] The old forge.",
-        "[narrator] The smith left long ago.",
-        "[narrator] The furnace still draws well."
+        "[narrator] The old forge. Long ago, the smith\nwent off and never came.\nThe furnace still draws well today,\nand waits for a new flame."
       ],
       "finds.sign": [
-        "[narrator] High Garden.",
-        "[narrator] Closed for environmental preservation."
+        "[narrator] The High Garden: closed, to protect\nthe wild it holds within.\nNo one goes in, unless they've been\nallowed to enter in."
       ],
       "finds.signOpen": [
-        "[narrator] High Garden.",
-        "[narrator] Closed for environmental preservation.",
-        "[narrator] Someone has scratched out \"closed\"."
+        "[narrator] The High Garden: closed, to protect\nthe wild it holds within.\nNo one goes in, unless they've been\nallowed to enter in.",
+        "[narrator] Someone crossed out the “closed”: and so,\nthe path is open; in you go."
       ],
       "finds.door.empty": [
-        "[narrator] Nobody home.",
-        "[narrator] The porch is still here."
+        "[narrator] No one at home. The porch, though, stays,\nfor anyone who's tired,\nwho comes and sits a while, and asks\nfor nothing; none required."
       ],
       "camp": {
         "ring": [
-          "[narrator] Fire stones. Cold."
+          "[narrator] A ring of fire-stones, cold and grey,\nthat wait now for another day."
         ],
         "rack": [
-          "[narrator] Mushrooms drying. A keepsake from Shui."
+          "[narrator] Mushrooms are drying on the rack:\na gift from Shui, to bring her back."
         ],
         "easel": [
-          "[narrator] Sisi's painting."
+          "[narrator] The painting Sisi made: the grey,\nand then the colour, here to stay."
         ],
         "woodpile": [
-          "[narrator] Marco's dry firewood."
+          "[narrator] Dry wood that Marco gave to you:\nthe fire is yours now, through and through."
         ],
         "chart": [
-          "[narrator] Thea's star chart."
+          "[narrator] The map of stars that Thea drew,\nher way, the way she always knew."
         ]
       },
       "cat.barrel": [
-        "[narrator] A barrel on its side, with straw inside.",
-        "[narrator] Whoever lives here needs nothing more."
+        "[narrator] A barrel lying down, with straw\ninside. The one who stays\nneeds nothing more than what he has:\nthe sun, and his own days."
       ]
     }
   },
@@ -537,56 +470,45 @@
       "npc.blackCat": {
         "name": "Sinope",
         "lines": [
-          "A hero. How new.",
-          "Want to give me something? Then stand out of my sun."
+          "A hero. How new. So you'd like\nto give me something? Fine:\nthen step out of my sun. That's all\nI want; the sun is mine."
         ]
       },
       "cat.talk": {
         "1": [
-          "A hero. How new.",
-          "Want to give me something? Then stand out of my sun."
+          "A hero. How new. So you'd like\nto give me something? Fine:\nthen step out of my sun. That's all\nI want; the sun is mine."
         ],
         "2": [
-          "I learned how to live by watching a mouse.",
-          "It seeks no bed, fears no dark, wants no feast."
+          "I learned to live by watching mice:\nno bed is what they seek,\nno fear of dark, no feast, no fame;\nthey eat, and sleep, and squeak."
         ],
         "3": [
-          "I saw a child drink water from its hands.",
-          "I threw my bowl away. It beat me at simplicity."
+          "I saw a child drink from its hands;\nI threw my bowl away:\nthat child had beaten me at being\nmore simple, plain as day."
         ],
         "4": [
-          "The gods need nothing. Whoever needs little is almost a god.",
-          "How much are you carrying, hero?"
+          "The gods need nothing; who needs little\nis nearly one, I'd say.\nAnd you, hero, tell me: how much\ndo you carry, each day?"
         ],
         "5": [
-          "Where am I from? The world."
+          "Where am I from? The world, all through:\na citizen of it; and you?"
         ],
         "6": [
-          "They call me a dog. I'm a cat. The name doesn't matter.",
-          "I purr at those who give, hiss at those who don't, and scratch the wicked."
+          "They call me dog. I'm cat. A name\nis nothing; never mind.\nI purr for givers, hiss at those\nwho won't; claw the unkind."
         ],
         "7": [
-          "I walked in daylight with a lantern, looking for a man.",
-          "I found many heroes. A man, none."
+          "I walked by day, lamp in my hand,\nto find a man. I came\non heroes, plenty; but a man?\nNot one. And none to name."
         ],
         "8": [
-          "Some advice: deface the currency.",
-          "Glory, honour, custom: scratch it all out and see what is left."
+          "My advice: go deface the coin:\nhonour, glory, the norm;\ncross it all out, and what is left\nis you, without the form."
         ],
         "9": [
-          "I beg the statues for food.",
-          "I am practising not getting any."
+          "I beg for food from statues: so\nI train to get no meal.\nWho hopes for nothing doesn't hurt:\nthe stone has taught me steel."
         ],
         "10": [
-          "Plato said man is a featherless biped.",
-          "I plucked a chicken and brought it to him: here is Plato's man."
+          "Plato said man's a biped, one\nwithout a feather, plain.\nI plucked a chicken, brought it in:\n“There's Plato's man!” Explain."
         ],
         "11": [
-          "What did philosophy give me? To be ready for any fortune."
+          "What did philosophy give me?\nTo be ready for what may be."
         ],
         "12": [
-          "The woodcutter lost everything and learned to need little.",
-          "A student of my student taught that to a lot of people."
+          "The woodsman lost it all, and learned\nthat little is enough.\nA pupil of my pupil taught\nmany that very stuff."
         ]
       }
     }

@@ -99,7 +99,7 @@ export const referenceProbe = (s: GameScene) => {
       }
       const v = s.valley;
       const heroAt = () => ({ x: s.playerWorld.worldX, y: s.playerWorld.worldY });
-      if (v.bigTrees) { v.bigTrees.destroy(); reseed(); v.bigTrees = new BigTrees(s, v.bigTrees['heroAt']); }
+      if (v.bigTrees) { v.bigTrees.destroy(); reseed(); v.bigTrees = new BigTrees(s); }
       if (v.koiPond) { v.koiPond.destroy(); reseed(); v.koiPond = new KoiPond(s, heroAt); }
       if (v.waterfall) { v.waterfall.destroy(); reseed(); v.waterfall = new Waterfall(s); }
       if (v.crashSite) { v.crashSite.destroy(); reseed(); v.crashSite = new CrashSite(s); }

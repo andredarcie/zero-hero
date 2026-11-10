@@ -5,8 +5,9 @@ import { getSoundManager } from '@/game/audio/SoundManager';
 import { getLang, setLang, t, type Lang } from '@/game/i18n/i18n';
 import { getTextScale, isBindableKey, isCalmGames, isInstantText, isReducedMotion, setCalmGames, setInstantText, setKeyCapture, setReducedMotion, setTextScale, TEXT_SCALES } from '@/game/runtime/accessibility';
 import {
-  getDaylight, getDofIntensity, isThriftyPixels, setDaylight, setDofIntensity, setThriftyPixels,
+  getCameraZoom, getDaylight, getDofIntensity, isThriftyPixels, setDaylight, setDofIntensity, setThriftyPixels,
 } from '@/game/runtime/graphicsSettings';
+import { zoomLabel } from '@/game/runtime/ZoomSlider';
 import {
   KEY_BG, KEY_BORDER, KEY_GLYPH, PIXEL_FONT, pixelFrame,
 } from '@/game/runtime/uiStyle';
@@ -182,6 +183,8 @@ export interface PauseMenuCallbacks {
   onResume: () => void;
   /** Absent (editor playtest — the title scene isn't registered) hides the quit entry. */
   onQuit?: () => void;
+  /** Abre o ajuste do zoom por cima do jogo parado (ver ZoomSetup); sem ele, a linha do zoom não aparece. */
+  onZoom?: () => void;
 }
 
 type OptionSection = { title: string; options: OptionDef[] };
@@ -206,7 +209,7 @@ const LANGUAGES: { lang: Lang; name: string }[] = [
 ];
 
 /** TODAS as opções do jogo. Só aparece o que este aparelho pode mudar. */
-const optionSections = (): OptionSection[] => {
+const optionSections = (cb: PauseMenuCallbacks): OptionSection[] => {
   const sound = getSoundManager();
   const image: OptionDef[] = [];
   // A tela cheia é da página, não do motor: o canvas já ocupa a janela. O iPhone não deixa.
@@ -234,6 +237,8 @@ const optionSections = (): OptionSection[] => {
     // O desfoque das bordas é a assinatura do visual, mas cansa a vista de alguns: zero o desliga.
     { kind: 'level', label: 'pause.blur', read: getDofIntensity, write: setDofIntensity },
   );
+  // O ZOOM não cabe numa linha: ele se julga olhando o mundo. A linha abre a régua por cima do jogo parado.
+  if (cb.onZoom) image.push({ kind: 'open', label: 'pause.zoom', value: () => zoomLabel(getCameraZoom()), open: cb.onZoom });
 
   const sections: OptionSection[] = [
     {
@@ -336,6 +341,8 @@ export class PauseMenu {
   /** A linha acesa da página atual. Nas opções, a última posição é o Voltar. */
   private selected = 0;
   private destroyed = false;
+  /** Outra tela do menu está por cima (ver suspend). */
+  private suspended = false;
 
   public constructor(scene: Engine.Scene, private readonly cb: PauseMenuCallbacks) {
     void scene; // the menu is scene-agnostic DOM; kept in the signature for overlay parity
@@ -365,13 +372,16 @@ export class PauseMenu {
     this.list = document.createElement('div');
     this.list.className = 'zh-pause-list';
     this.optionsPage.appendChild(this.list);
-    for (const section of optionSections()) {
+    for (const section of optionSections(this.cb)) {
       const box = document.createElement('section');
       const title = document.createElement('h2');
       title.textContent = t(section.title);
       box.appendChild(title);
       for (const def of section.options) {
-        const row = def.kind === 'choice' ? this.rowKit.choiceRow(def) : def.kind === 'level' ? this.rowKit.levelRow(def) : this.rowKit.keyRow(def);
+        const row = def.kind === 'choice' ? this.rowKit.choiceRow(def)
+          : def.kind === 'level' ? this.rowKit.levelRow(def)
+            : def.kind === 'open' ? this.rowKit.openRow(def)
+              : this.rowKit.keyRow(def);
         const index = this.rows.length;
         this.rows.push(row);
         row.el.addEventListener('pointerenter', (event) => { if (event.pointerType === 'mouse') this.select(index); });
@@ -398,6 +408,18 @@ export class PauseMenu {
     document.addEventListener('fullscreenchange', this.handleFullscreenChange);
     this.showPage('main');
     requestAnimationFrame(() => { if (!this.destroyed) this.root.classList.add('zh-in'); });
+  }
+
+  /** Some e deixa as teclas para a tela que abriu por cima (o zoom); `wake` volta às opções, com os valores novos. */
+  public suspend(): void {
+    this.suspended = true;
+    this.root.style.display = 'none';
+  }
+
+  public wake(): void {
+    this.suspended = false;
+    this.root.style.display = '';
+    this.rows.forEach((row) => row.refresh());
   }
 
   public destroy(): void {
@@ -491,7 +513,7 @@ export class PauseMenu {
   };
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
-    if (this.destroyed) return;
+    if (this.destroyed || this.suspended) return;
     const code = event.code;
     // Esperando a tecla nova, só ela conta: Esc desiste, e o que não pode ser escolhido é ignorado.
     if (this.waitingKey) {

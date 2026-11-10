@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import { registerTexture3D } from '@/game/render3d/textures3d';
 import { world3d } from '@/game/render3d/World3D';
-import { biomeTreeTintAt } from '@/game/world/biomes';
+import { biomeTreeWashAt } from '@/game/world/biomes';
 import { getBosqueTrees } from '@/game/world/WorldData';
 import { createCanvas } from '@/game/platform/platform';
 
@@ -25,8 +25,8 @@ import { createCanvas } from '@/game/platform/platform';
  *   · A COR DO BIOMA no material (`biomeTreeTintAt`), igual às árvores do mapa — e não o tom das peças de cenário.
  * A densidade é a mesma (16 px por tile): uma árvore grande é uma árvore do tileset com MAIS pixels, não pixels maiores.
  *
- * As copas balançam com o vento (2 quadros, cada árvore no seu tempo) e ficam translúcidas quando o herói passa por
- * trás delas.
+ * As copas balançam com o vento (2 quadros, cada árvore no seu tempo). Quando o herói passa por trás delas, a árvore
+ * fica inteira e ele aparece de contorno claro, como atrás da serra (pedido do autor; ver TREE_RENDER_ORDER).
  *
  * ONDE ficam é o MAPA que diz: são props do world.json (`oakTree`, `birchTree`, `youngOak`, `fallenLog`), que o editor
  * põe, move e apaga. O pé de cada uma bloqueia pelo próprio prop (`at`), sem colisão pintada — apagou a árvore, o
@@ -271,27 +271,36 @@ const register = (): void => {
   registered = true;
 };
 
-interface Tree { kind: TreeKind; x: number; y: number; bb: Billboard3D; variant: number; phase: number; alpha: number }
+interface Tree { kind: TreeKind; x: number; y: number; bb: Billboard3D; variant: number; phase: number }
+
+/**
+ * Antes da silhueta do herói (OccludedSilhouette, -1) e de todo sprite: a árvore escreve a profundidade primeiro, e a
+ * silhueta acha o herói escondido atrás dela como acha atrás da serra.
+ */
+const TREE_RENDER_ORDER = -2;
 
 export class BigTrees {
   private readonly trees: Tree[] = [];
   private clock = 0;
 
-  public constructor(private readonly scene: Engine.Scene, private readonly heroAt: () => { x: number; y: number }) {
+  public constructor(private readonly scene: Engine.Scene) {
     register();
     const w3 = world3d();
     bosqueTrees().forEach((t) => {
       const { w, h } = SIZE[t.kind];
       // A variante sai do lugar (e não da ordem no mapa): apagar uma árvore não troca a cara das outras.
       const variant = Math.floor(hash(t.x, t.y, 5) * VARIANTS);
-      const bb = w3.objects.addBillboard(key(t.kind, variant, 0), 0, {})
+      // DESENHADA ANTES DA SILHUETA DO HERÓI, como a serra (ver OccludedSilhouette): a árvore não some quando ele
+      // passa atrás dela; ele é que aparece por trás, de contorno claro (pedido do autor).
+      const bb = w3.objects.addBillboard(key(t.kind, variant, 0), 0, { renderOrder: TREE_RENDER_ORDER })
         .setDisplaySize(w / 16, h / 16)
         // O tronco caído deita em dois tiles: o meio dele fica entre x e x+1.
         .setPosition(t.kind === 'log' ? t.x + 0.5 : t.x, t.y);
-      // A cor do bioma, como nas árvores do mapa (World3D a põe no vértice; aqui vai no material, que aceita > 1).
-      const [r, g, b] = biomeTreeTintAt(t.x, t.y);
+      // A cor do bioma, como nas árvores do mapa — no tom LAVADO: o pinheiro do mapa troca só a rampa da copa (render3d/
+      // biomeRamp.ts), e este sprite inteiro (tronco, barba-de-velho) leva o material todo, que aceita > 1.
+      const [r, g, b] = biomeTreeWashAt(t.x, t.y);
       (bb.mesh.material as THREE.MeshLambertMaterial).color.setRGB(r, g, b);
-      this.trees.push({ ...t, bb, variant, phase: hash(t.x, t.y, 2) * 4000, alpha: 1 });
+      this.trees.push({ ...t, bb, variant, phase: hash(t.x, t.y, 2) * 4000 });
     });
     scene.events.on(Engine.Scenes.Events.POST_UPDATE, this.onFrame, this);
   }
@@ -302,8 +311,8 @@ export class BigTrees {
   }
 
   /** As árvores (a janela do playtest). */
-  public get list(): ReadonlyArray<{ kind: TreeKind; x: number; y: number; alpha: number }> {
-    return this.trees.map((t) => ({ kind: t.kind, x: t.x, y: t.y, alpha: t.alpha }));
+  public get list(): ReadonlyArray<{ kind: TreeKind; x: number; y: number; renderOrder: number }> {
+    return this.trees.map((t) => ({ kind: t.kind, x: t.x, y: t.y, renderOrder: t.bb.mesh.renderOrder }));
   }
 
   /** O quadro, medido (debug/Profiler: seção `life.trees`; desligado, não custa nada). */
@@ -314,21 +323,12 @@ export class BigTrees {
   }
 
   private frameTick(): void {
-    const delta = this.scene.game.loop.delta;
-    this.clock += delta;
-    const hero = this.heroAt();
+    this.clock += this.scene.game.loop.delta;
     for (const t of this.trees) {
       if (t.kind === 'log') continue;
       // O vento: cada árvore no seu tempo, a copa indo e voltando devagar.
       const f = Math.floor((this.clock + t.phase) / 1300) % 2;
       t.bb.setTexture(key(t.kind, t.variant, f));
-      // O herói atrás da copa (ao norte do pé, debaixo dela na tela): a copa fica translúcida para não escondê-lo.
-      const half = t.kind === 'oak' ? 1.4 : 0.6;
-      const tall = t.kind === 'oak' ? 2.4 : 1.4;
-      const behind = hero.y < t.y && hero.y >= t.y - tall && Math.abs(hero.x - t.x) <= half;
-      const want = behind ? 0.42 : 1;
-      t.alpha += (want - t.alpha) * Math.min(1, delta / 160);
-      t.bb.setAlpha(t.alpha);
     }
   }
 

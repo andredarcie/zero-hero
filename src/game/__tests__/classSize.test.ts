@@ -61,5 +61,7 @@ describe('o tamanho das classes', () => {
     expect(sizes.size).toBeGreaterThan(100); // a varredura achou o repo (um caminho errado daria zero e passaria)
     const over = [...sizes].filter(([, n]) => n > LIMIT).map(([key, n]) => `${key}: ${n}`);
     expect(over).toEqual([]);
-  });
+    // A varredura lê o código inteiro (~400 arquivos): sozinha leva ~2 s, mas com a bateria toda rodando em paralelo
+    // numa máquina ocupada passou dos 5 s do padrão e caiu por tempo, não por classe grande.
+  }, 30_000);
 });
