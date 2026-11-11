@@ -24,6 +24,8 @@ export interface TerrainMaterials {
   pitFloor: THREE.MeshBasicMaterial;
   /** A DECORAÇÃO EM PÉ (standingDecor.ts): toda a decoração do mapa, de pé, com a luz de coisa em pé e a planta curvando. */
   standing: THREE.MeshLambertMaterial;
+  /** A mesma decoração na PASSADA DA FRENTE (decorSway.ts): só os fios à frente dos pés do herói, depois dele. */
+  standingFront: THREE.MeshLambertMaterial;
   solid: THREE.MeshLambertMaterial;
   /** A MONTANHA em cubo: o mesmo atlas, com o volume nas cores de vértice (ROCK_CUBE_SHADE). */
   rock: THREE.MeshLambertMaterial;
@@ -83,6 +85,13 @@ export const makeTerrainMaterials = (tileset: THREE.Texture): TerrainMaterials =
   });
   patchPixelMaterial(standing, { quantize: true, texelAa: tileAa, biome: 'decor', standing: true });
   standing.name = 'terrain-decor';
+  // A PASSADA DA FRENTE: o mesmo material, com um uniform ligado. A chave do programa é a mesma (o código é o mesmo),
+  // então as duas passadas usam UM programa e nada compila a mais.
+  const standingFront = new THREE.MeshLambertMaterial({
+    map: tileset, transparent: true, alphaTest: 0.35, depthWrite: false, vertexColors: true,
+  });
+  patchPixelMaterial(standingFront, { quantize: true, texelAa: tileAa, biome: 'decor', standing: true, standFront: { value: 1 } });
+  standingFront.name = 'terrain-decor-front';
   const solid = new THREE.MeshLambertMaterial({ map: tileset, alphaTest: 0.5 });
   patchPixelMaterial(solid, { quantize: true, normalUp: true, texelAa: tileAa, wind: 'lean' });
   // AS ÁRVORES EM PÉ: o `solid` com a cor do bioma no vértice (world/biomes, `treeTint`). Material
@@ -122,7 +131,7 @@ export const makeTerrainMaterials = (tileset: THREE.Texture): TerrainMaterials =
   patchPixelMaterial(vines, { quantize: true, normalUp: true });
   vines.name = 'terrain-vines';
   return {
-    ground, sea, bank, lavaBank, lava, pit, pitFloor, standing, solid, trees, rock, stair, wallTop, vines,
+    ground, sea, bank, lavaBank, lava, pit, pitFloor, standing, standingFront, solid, trees, rock, stair, wallTop, vines,
     voidMist: makeVoidMistMaterial(),
     blob: makeShadowBlobMaterial(0.34),
   };

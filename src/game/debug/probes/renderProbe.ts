@@ -46,6 +46,8 @@ export const renderProbe = (s: GameScene) => {
       const rows = Math.round(1 / (1 - tilesetFrameUv(0).v0));
       const out: Record<'upright' | 'decor', Record<string, { on: number; off: number }>> = { upright: {}, decor: {} };
       for (const mesh of world.tiles.terrainMeshes) {
+        // A passada da frente da decoração é a MESMA geometria desenhada de novo: contá-la seria contar cada fio duas vezes.
+        if (mesh.name === 'terrain-decor-front') continue;
         const flex = mesh.geometry.getAttribute('aFlex');
         const stand = mesh.geometry.getAttribute('aStand');
         const wind = mesh.geometry.getAttribute('aWind');

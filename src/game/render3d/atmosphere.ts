@@ -12,8 +12,17 @@ import * as THREE from 'three';
 const NOISE_SIZE = 128;
 /** Quantos tiles do mundo uma volta da textura cobre: a mancha de nuvem mais larga tem ~um quarto disso. */
 export const CLOUD_SPAN_TILES = 24;
-/** A altura do teto de nuvens, em tiles: é ela que dá a paralaxe do reflexo no lago quando a câmera anda. */
-export const CLOUD_HEIGHT_TILES = 26;
+/**
+ * O CÉU NA ÁGUA É UMA CAMADA RASA (pixelArtLight.WATER_SKY_GLSL conta por quê). O ponto do campo de nuvens que um pixel
+ * de água devolve é `pixel × SKY_MIRROR_SCALE + raio refletido × SKY_MIRROR_DEPTH`:
+ *   · a ESCALA diz de que tamanho a nuvem sai na água: 2 = metade do tamanho da sombra dela no chão;
+ *   · a PROFUNDIDADE diz quanto o reflexo escorrega quando a câmera anda. Com a câmera a ~9 tiles da água, ele desliza
+ *     a DEPTH/9 ÷ (SCALE + DEPTH/9) da velocidade dela: um quinto. Subir este número é voltar a ver o céu correr.
+ */
+export const SKY_MIRROR_SCALE = 2;
+export const SKY_MIRROR_DEPTH = 4.5;
+/** As estrelas moram na mesma camada: quantas células da grade delas cabem numa unidade dela (uma ≈ ¼ de tile de água). */
+export const SKY_MIRROR_STARS = 1.55;
 
 /** Um inteiro embaralhado em [0, 1): o mesmo número para a mesma célula, sem `Math.random` (o mundo é determinístico). */
 const hash = (x: number, y: number, seed: number): number => {

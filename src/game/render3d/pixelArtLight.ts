@@ -1,9 +1,12 @@
 import * as THREE from 'three';
-import { CLOUD_FIELD_GLSL, CLOUD_HEIGHT_TILES, skyUniforms } from './atmosphere';
+import { CLOUD_FIELD_GLSL, SKY_MIRROR_DEPTH, SKY_MIRROR_SCALE, SKY_MIRROR_STARS, skyUniforms } from './atmosphere';
 import { biomeRampColorGlsl, biomeRampUniform, type BiomeRampKind } from './biomeRamp';
 import { shadowTint } from './CastShadow3D';
 import { OUTLINE_FRAGMENT_GLSL, OUTLINE_VERTEX_GLSL, RIM_FRAGMENT_GLSL, outlineUniforms } from './spriteOutline';
-import { STAND_ACTOR_SLOTS, STAND_FRAGMENT_PARS_GLSL, STAND_FRAGMENT_SHADE_GLSL, STAND_VERTEX_GLSL, standActorsUniform, standUniform } from './decorSway';
+import {
+  STAND_ACTOR_SLOTS, STAND_FRAGMENT_PARS_GLSL, STAND_FRAGMENT_SHADE_GLSL, STAND_RUSTLE_SLOTS, STAND_VERTEX_GLSL, STAND_WAKE_SLOTS,
+  standActorsUniform, standFrontOffUniform, standRustleUniform, standUniform, standWakeUniform,
+} from './decorSway';
 
 // ── The world's light treatment ───────────────────────────────────────────────
 //
@@ -188,10 +191,19 @@ const WATER_REFLECT_GLSL = /* glsl */ `
  * céu. Então cada texel de ARTE da superfície (16 por tile, na grade do mundo — o reflexo sai em pixel de arte, nunca
  * em degradê liso) lança o raio do olho refletido para cima e pergunta o que há lá:
  *
- *   · as NUVENS, do mesmo campo que faz sombra no chão (atmosphere.ts), num teto a CLOUD_HEIGHT_TILES de altura — é a
- *     altura que dá a paralaxe: andar pela margem faz o céu deslizar dentro do lago, mais depressa que o chão;
- *   · as ESTRELAS e a LUA, de noite — no infinito, então elas acompanham quem anda, como reflexo de verdade;
+ *   · as NUVENS, do mesmo campo que faz sombra no chão (atmosphere.ts), e as ESTRELAS, numa camada RASA (SKY_MIRROR_*):
+ *     andar faz o céu deslizar devagar dentro do lago, a um quinto da velocidade da câmera;
+ *   · a LUA, no infinito: um disco só, que acompanha quem anda, como reflexo de verdade;
  *   · a cor do céu da hora (azul, fogo no entardecer, anil de noite), que vem do skyPreset.
+ *
+ * O TETO ERA ALTO DEMAIS (relato do autor, 2026-11-10: "quando eu ando o reflexo dela muda o brilho branco de forma tão
+ * rápida que fica não natural"). As nuvens refletidas moravam num teto a 26 tiles e as estrelas no infinito, com a
+ * câmera a 9 tiles da água: cada tile andado levava o reflexo 2,9 tiles dentro do campo de nuvens. As manchas brancas
+ * atravessavam o lago a 74% da velocidade do herói, quatro vezes menores que a sombra delas no chão, e cada pixel de
+ * água trocava de tom várias vezes por segundo. Medido no lago ao meio-dia com SÓ a câmera andando (o relógio da água,
+ * o vento e a hora parados): 10% da água mudava 24 de brilho ou mais a cada 1/16 de tile; sem o céu, 13. É a física de
+ * um drone sobre um lago de verdade, e num diorama lê como a água piscando. A camada rasa ainda escorrega (é isso que
+ * diz "reflexo", e não "pintura na água"), mas devagar, e a nuvem sai do tamanho de uma mancha, não de um respingo.
  *
  * O espelho treme por linha com a mesma marola que quebra o reflexo dos corpos, e reflete menos na beira rasa (onde
  * se vê o fundo) e perto da câmera (olhar mais a pique: menos Fresnel). Entra ANTES do reflexo dos personagens e das
@@ -208,7 +220,10 @@ const WATER_SKY_GLSL = /* glsl */ `
     vec3 zhRay = reflect(zhEye, normalize(vec3(zhTilt * 0.03, 1.0, 0.0)));
     zhRay.y = max(zhRay.y, 0.2);
     vec2 zhDome = zhRay.xz / zhRay.y;
-    float zhCl = zhCloud(zhWt + zhDome * ${CLOUD_HEIGHT_TILES.toFixed(1)});
+    // O ponto do céu raso que este pixel devolve (ver SKY_MIRROR_* em atmosphere.ts). O deslocamento fixo tira o
+    // reflexo de cima da sombra da mesma nuvem: sem ele, um lago à sombra devolveria justo a nuvem que o escurece.
+    vec2 zhSkyP = zhWt * ${SKY_MIRROR_SCALE.toFixed(2)} + zhDome * ${SKY_MIRROR_DEPTH.toFixed(2)} + vec2(9.7, 5.3);
+    float zhCl = zhCloud(zhSkyP);
     // A NUVEM REFLETIDA É PINTADA, NÃO ESFUMADA: o campo de nuvens é macio (ele também faz a sombra larga no chão), e
     // devolvido direto na água saía uma mancha cinza em degradê, o único borrão do quadro. Aqui ela cai em quatro
     // tons chapados, com a beira serrilhada por texel como a da espuma: nuvem de pixel art.
@@ -216,9 +231,9 @@ const WATER_SKY_GLSL = /* glsl */ `
     zhCl = floor(clamp(zhCl + (zhClRag - 0.5) * 0.14, 0.0, 1.0) * 3.0 + 0.5) / 3.0;
     vec3 zhSkyCol = mix(uSkyColor, uCloudColor, zhCl);
     if (uStars > 0.0) {
-      // As estrelas moram numa grade do céu; só ~6% das células têm uma, e ela ocupa o miolo da célula (um ou dois
-      // texels de água). Cada uma pisca no seu ritmo.
-      vec2 zhSg = zhDome * 34.0;
+      // As estrelas moram numa grade do céu raso; só ~6% das células têm uma, e ela ocupa o miolo da célula (um ou dois
+      // texels de água). Cada uma pisca no seu ritmo. (No infinito, elas corriam pela água na velocidade do herói.)
+      vec2 zhSg = zhSkyP * ${SKY_MIRROR_STARS.toFixed(2)};
       vec2 zhSc = floor(zhSg);
       float zhSr = fract(sin(dot(zhSc, vec2(127.1, 311.7))) * 43758.5453);
       vec2 zhSi = abs(fract(zhSg) - 0.5);
@@ -764,6 +779,12 @@ type PatchOpts = {
    * leitura da arte).
    */
   standing?: boolean;
+  /**
+   * A PASSADA DA FRENTE da decoração em pé (decorSway.ts): 1 = esta malha só desenha os fios logo à frente de quem
+   * está no foco. É um uniform, não um pedaço de código: as duas passadas compartilham o mesmo programa (a chave do
+   * cache não muda), e nenhuma compila nada a mais.
+   */
+  standFront?: THREE.IUniform<number>;
 };
 
 /**
@@ -816,17 +837,22 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
     if (opts.standing) {
       // A DECORAÇÃO EM PÉ (standingDecor.ts / decorSway.ts): fica em pé, e a planta se curva e abre em volta de quem passa.
       shader.uniforms.uStandActors = standActorsUniform;
+      shader.uniforms.uStandRustle = standRustleUniform;
+      shader.uniforms.uStandWake = standWakeUniform;
+      shader.uniforms.uStandFront = opts.standFront ?? standFrontOffUniform;
       shader.uniforms.uStand = standUniform;
       shader.vertexShader = shader.vertexShader
         .replace(
           'void main() {',
-          `attribute vec4 aStand;\nattribute float aFlex;\nuniform vec4 uStandActors[${STAND_ACTOR_SLOTS}];\nuniform float uStand;\nvarying float vZhBend;\nvoid main() {`,
+          `attribute vec4 aStand;\nattribute float aFlex;\nattribute vec4 aBlade;\nuniform vec4 uStandActors[${STAND_ACTOR_SLOTS}];\n`
+            + `uniform vec4 uStandRustle[${STAND_RUSTLE_SLOTS}];\nuniform vec4 uStandWake[${STAND_WAKE_SLOTS}];\nuniform float uStandFront;\n`
+            + 'uniform float uStand;\nvarying float vZhBend;\nvarying vec4 vZhBlade;\nvarying vec2 vZhBladeG;\nvoid main() {',
         )
         .replace('#include <begin_vertex>', `#include <begin_vertex>\n${STAND_VERTEX_GLSL}`);
       // A curva mora no AA de texel (o `zhStandBend` abaixo); aqui, o que a curva tirou do quadro e a luz de coisa
       // em pé, depois da arte e da rampa do bioma e antes do corte de alfa.
       shader.fragmentShader = shader.fragmentShader
-        .replace('void main() {', 'uniform float uStand;\nvarying float vZhBend;\nvoid main() {')
+        .replace('void main() {', 'uniform float uStand;\nvarying float vZhBend;\nvarying vec4 vZhBlade;\nvarying vec2 vZhBladeG;\nvoid main() {')
         .replace('#include <alphamap_fragment>', `${STAND_FRAGMENT_SHADE_GLSL}\n#include <alphamap_fragment>`);
     }
     if (opts.wind === 'lean') {

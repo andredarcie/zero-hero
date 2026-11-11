@@ -16,7 +16,8 @@ import { MIN_CAST_LEN } from './worldDefs';
 
 /** O que TerrainBaker usa de World3D. */
 export type TerrainBakerHost = Pick<World3D,
-  'appliedMoonShadow' | 'camTarget' | 'emit' | 'features' | 'ground' | 'mirror' | 'moonCastRotY' | 'moonDimmed' | 'params' | 'probe' | 'scene' | 'shadows' | 'sorter' | 'tiles'
+  'appliedMoonShadow' | 'camTarget' | 'elapsed' | 'emit' | 'features' | 'ground' | 'mirror' | 'moonCastRotY' | 'moonDimmed' | 'params' | 'probe'
+  | 'scene' | 'shadows' | 'sorter' | 'tiles'
 >;
 
 export class TerrainBaker {
@@ -82,8 +83,9 @@ export class TerrainBaker {
       actors: () => this.host.mirror?.actorBodies ?? [],
       focus: () => this.host.camTarget,
       stand: () => this.host.params.stand,
+      now: () => this.host.elapsed,
     });
-    this.host.tiles.standing.bake(decor, t.solidSet, mats.standing);
+    this.host.tiles.standing.bake(decor, t.solidSet, mats.standing, mats.standingFront);
     this.host.features.bakeSolids(t, mats);
     this.host.features.bakeMistAndShadows(t, mats, wetTiles);
     this.fillMoonCastField();

@@ -266,6 +266,27 @@ const sheetPixels = (key: string): ImageData | null => {
 };
 
 /**
+ * Os pixels de um quadro de uma folha, (x, y) com y = 0 no topo do quadro, em RGBA de 0 a 255 — ou null quando a
+ * imagem não é legível (textura feita em runtime, ou o ambiente de teste sem canvas). É como os fios da grama
+ * (grassBlades.ts) leem o desenho que vão pôr de pé.
+ */
+export const framePixelReader = (key: string, frame: number): ((x: number, y: number) => readonly [number, number, number, number]) | null => {
+  const def = DEFS[key];
+  const img = sheetPixels(key);
+  if (!def || !img) return null;
+  const fw = def.frameW ?? img.width;
+  const fh = def.frameH ?? img.height;
+  const cols = Math.max(1, Math.floor(img.width / fw));
+  const x0 = (frame % cols) * fw;
+  const y0 = Math.floor(frame / cols) * fh;
+  if (y0 + fh > img.height) return null;
+  return (x, y) => {
+    const i = ((y0 + y) * img.width + (x0 + x)) * 4;
+    return [img.data[i], img.data[i + 1], img.data[i + 2], img.data[i + 3]];
+  };
+};
+
+/**
  * How much of a frame is EMPTY below its art, as a fraction of the frame's height.
  *
  * A frame is a box; the drawing inside it need not fill it. Almost all of this game's art is
