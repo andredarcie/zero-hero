@@ -18,6 +18,8 @@ import type { EditorDomUi } from './EditorDomUi';
 export type CollisionPaintMode = 'keep' | 'set' | 'clear';
 // O que a ferramenta Serra pinta: o planalto, ou a escada (que aponta sozinha para o planalto).
 export type ReliefPaintMode = 'high' | 'peak' | 'stair';
+// O que a ferramenta Solo pinta no chão (constants.setSoilSource); o botão direito volta ao automático.
+export type SoilPaintMode = 'grass' | 'earth';
 export type ViewMode = 'world' | 'chunk';
 // A ESPADA NAO ESTA AQUI, e a ausencia e a regra: ela deixou de ser item (o heroi nasce com a
 // dele — ver GameScene.swordEquipped) e nao nasce mais no chao nem se apanha. Oferece-la na
@@ -109,7 +111,7 @@ const TILE_GROUPS: ReadonlyArray<{
   {
     title: 'Chao',
     tiles: [
-      { frame: 5, label: 'Terra', layer: 'ground' },
+      { frame: 5, label: 'Terra (grama e terra pelo bioma; a ferramenta Solo troca tile a tile)', layer: 'ground' },
       { frame: 6, label: 'Terra 2', layer: 'ground' },
       // O mar bloqueia por si so (SOLID_GROUND_FRAMES), sem colisao pintada — e a fronteira
       // do mundo, e nenhum item do jogo abre agua. Fica no chao porque E chao, nao um prop.
@@ -328,34 +330,28 @@ export class EditorPanels {
     }
 
     if (this.host.state.tool === 'relief') {
-      const reliefSeg = document.createElement('div');
-      reliefSeg.className = 'zh-seg';
-      const modes: Array<{ id: ReliefPaintMode; label: string; hint: string }> = [
+      const mode = this.host.state.reliefMode;
+      this.modeSeg<ReliefPaintMode>([
         { id: 'high', label: 'Planalto', hint: 'Bloco um nivel acima do chao' },
         { id: 'peak', label: 'Cume', hint: 'O segundo andar: dois niveis acima do chao, em cima do planalto' },
         { id: 'stair', label: 'Escada', hint: 'Encosta num planalto (ou num cume); clicar de novo gira' },
-      ];
-      modes.forEach((mode) => {
-        const btn = this.host.button(mode.label, mode.hint, () => {
-          this.host.state.reliefMode = mode.id;
-          this.host.changed();
-        });
-        btn.classList.toggle('active', this.host.state.reliefMode === mode.id);
-        reliefSeg.appendChild(btn);
-      });
-      this.host.optionsEl.appendChild(reliefSeg);
-      const hint = document.createElement('div');
-      hint.style.cssText = 'font-size:10px;color:#d9a55a;margin:4px 0 6px;line-height:1.55;';
-      hint.textContent = this.host.state.reliefMode === 'high'
+      ], mode, (id) => { this.host.state.reliefMode = id; }, '#d9a55a', mode === 'high'
         ? 'Pinte o planalto; a borda escura e o paredao. So se sobe por escada. Botao direito volta ao chao.'
-        : this.host.state.reliefMode === 'peak'
+        : mode === 'peak'
           ? 'Pinte o cume, o segundo andar, cercado de planalto. Do planalto ao cume, so por escada. Botao direito volta ao chao.'
-          : 'Clique num tile de chao encostado no planalto (ou de planalto encostado no cume): a seta aponta para onde a escada sobe. Clique de novo para girar.';
-      this.host.optionsEl.appendChild(hint);
+          : 'Clique num tile de chao encostado no planalto (ou de planalto encostado no cume): a seta aponta para onde a escada sobe. Clique de novo para girar.');
+    }
+
+    if (this.host.state.tool === 'soil') {
+      this.modeSeg<SoilPaintMode>([
+        { id: 'grass', label: 'Grama', hint: 'O tile fica de grama, mesmo onde a terra abriria' },
+        { id: 'earth', label: 'Terra', hint: 'O tile fica de terra batida' },
+      ], this.host.state.soilMode, (id) => { this.host.state.soilMode = id; }, '#7fd36b',
+      'A terra do chao nasce sozinha pelo bioma; aqui ela se troca tile a tile (so no chao de grama e terra). Contorno verde: grama fixa; ocre: terra fixa. Botao direito volta ao automatico.');
     }
 
     if (this.host.state.tool === 'brush' || this.host.state.tool === 'eraser' || this.host.state.tool === 'collision'
-      || (this.host.state.tool === 'relief' && this.host.state.reliefMode !== 'stair')) {
+      || this.host.state.tool === 'soil' || (this.host.state.tool === 'relief' && this.host.state.reliefMode !== 'stair')) {
       const brushSeg = document.createElement('div');
       brushSeg.className = 'zh-seg';
       brushSeg.style.marginTop = '4px';
@@ -394,6 +390,26 @@ export class EditorPanels {
       checks.appendChild(label);
     });
     this.host.optionsEl.appendChild(checks);
+  }
+
+  /** Uma fileira de modos de uma ferramenta (a Serra, o Solo): o ativo aceso, e a explicação embaixo. */
+  private modeSeg<T extends string>(
+    modes: ReadonlyArray<{ id: T; label: string; hint: string }>, current: T, pick: (id: T) => void, color: string, note: string,
+  ): void {
+    const seg = document.createElement('div');
+    seg.className = 'zh-seg';
+    modes.forEach((mode) => {
+      const btn = this.host.button(mode.label, mode.hint, () => {
+        pick(mode.id);
+        this.host.changed();
+      });
+      btn.classList.toggle('active', current === mode.id);
+      seg.appendChild(btn);
+    });
+    const hint = document.createElement('div');
+    hint.style.cssText = `font-size:10px;color:${color};margin:4px 0 6px;line-height:1.55;`;
+    hint.textContent = note;
+    this.host.optionsEl.append(seg, hint);
   }
 
   public renderPalette(): void {

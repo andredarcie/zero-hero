@@ -4,10 +4,10 @@
 import type { TileLayerId } from '@/game/editor/EditorStore';
 import type { PropDir, PropKind } from '@/game/world/worldSchema';
 import type { EntitySelection } from './EditorMinimap';
-import type { CollisionPaintMode, ReliefPaintMode, ViewMode } from './EditorPanels';
+import type { CollisionPaintMode, ReliefPaintMode, SoilPaintMode, ViewMode } from './EditorPanels';
 import type { EditorDomUi } from './EditorDomUi';
 
-export type ToolId = 'brush' | 'eraser' | 'rect' | 'fill' | 'picker' | 'collision' | 'relief' | 'entity' | 'spawn';
+export type ToolId = 'brush' | 'eraser' | 'rect' | 'fill' | 'picker' | 'collision' | 'relief' | 'soil' | 'entity' | 'spawn';
 export type PaletteTab = 'tiles' | 'npcs' | 'pickups' | 'props';
 export type UiState = {
   tool: ToolId;
@@ -16,6 +16,7 @@ export type UiState = {
   brushSize: 1 | 2 | 3;
   collisionMode: CollisionPaintMode;
   reliefMode: ReliefPaintMode;
+  soilMode: SoilPaintMode;
   tab: PaletteTab;
   entity: EntitySelection;
   showGrid: boolean;
@@ -88,7 +89,7 @@ export class EditorKeys {
     }
 
     const key = event.key.toLowerCase();
-    const toolByKey: Record<string, ToolId> = { b: 'brush', e: 'eraser', r: 'rect', f: 'fill', i: 'picker', c: 'collision', a: 'relief', s: 'spawn' };
+    const toolByKey: Record<string, ToolId> = { b: 'brush', e: 'eraser', r: 'rect', f: 'fill', i: 'picker', c: 'collision', a: 'relief', h: 'soil', s: 'spawn' };
     if (toolByKey[key]) {
       this.host.state.tool = toolByKey[key];
       this.host.changed();

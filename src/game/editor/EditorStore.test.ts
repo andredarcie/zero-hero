@@ -61,6 +61,22 @@ describe('células', () => {
     expect(Boolean(chunk.relief)).toBe(hadRelief);
   });
 
+  it('o solo pintado nasce na primeira escrita, avisa que é solo, desfaz e some quando volta ao automático', () => {
+    const { x, y } = emptyTile(store);
+    const chunk = store.world.chunks.find((c) => c.cx === Math.floor(x / 12) && c.cy === Math.floor(y / 12))!;
+    const hadSoil = Boolean(chunk.soil);
+    const onChange = vi.fn();
+    store.listen(onChange);
+    expect(store.setCell('soil', x, y, 1)).toBe(true);
+    expect(store.readCell('soil', x, y)).toBe(1);
+    expect(onChange).toHaveBeenCalledWith({ cells: [{ wx: x, wy: y }], soil: true });
+    store.history.undo();
+    expect(store.readCell('soil', x, y)).toBe(0);
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ soil: true }));
+    expect(Boolean(chunk.soil)).toBe(hadSoil);
+    expect(store.readCell('soil', 9999, 9999)).toBe(0);
+  });
+
   it('o balde pinta a região ligada e para nas bordas pedidas', () => {
     const { x, y } = emptyTile(store);
     const target = store.readCell('ground', x, y);

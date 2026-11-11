@@ -1,4 +1,4 @@
-import { CHUNK_COLUMNS, CHUNK_ROWS } from '@/game/constants';
+import { CHUNK_COLUMNS, CHUNK_ROWS, setSoilSource, SOIL_AUTO } from '@/game/constants';
 import type { DialogScript, DialogVoice } from '@/game/dialogs/NpcDialogs';
 import { localizedNpc } from '@/game/i18n/i18n';
 import type { ChunkData } from './Chunk';
@@ -69,6 +69,8 @@ let bounds: WorldBounds | null = null;
 let reliefGrid: Uint8Array | null = null;
 let reliefWidth = 0;
 let reliefHeight = 0;
+/** O SOLO PINTADO no editor (grama ou terra forçada; ver constants.setSoilSource), na mesma grade plana da serra. */
+let soilGrid: Uint8Array | null = null;
 
 const EMPTY_CONTENT: ScreenContent = { pickups: [], npcs: [] };
 
@@ -114,16 +116,23 @@ export const setWorldData = (raw: unknown): void => {
   reliefWidth = data.meta.worldChunksX * CHUNK_COLUMNS;
   reliefHeight = data.meta.worldChunksY * CHUNK_ROWS;
   reliefGrid = null;
+  soilGrid = null;
   for (const chunk of data.chunks) {
-    if (!chunk.relief) continue;
-    reliefGrid ??= new Uint8Array(reliefWidth * reliefHeight);
-    for (let r = 0; r < CHUNK_ROWS; r += 1) {
-      for (let c = 0; c < CHUNK_COLUMNS; c += 1) {
-        const v = chunk.relief[r]?.[c] ?? 0;
-        if (v) reliefGrid[(chunk.cy * CHUNK_ROWS + r) * reliefWidth + chunk.cx * CHUNK_COLUMNS + c] = v;
+    for (const [layer, read] of [['relief', chunk.relief], ['soil', chunk.soil]] as const) {
+      if (!read) continue;
+      const grid = layer === 'relief'
+        ? (reliefGrid ??= new Uint8Array(reliefWidth * reliefHeight))
+        : (soilGrid ??= new Uint8Array(reliefWidth * reliefHeight));
+      for (let r = 0; r < CHUNK_ROWS; r += 1) {
+        for (let c = 0; c < CHUNK_COLUMNS; c += 1) {
+          const v = read[r]?.[c] ?? 0;
+          if (v) grid[(chunk.cy * CHUNK_ROWS + r) * reliefWidth + chunk.cx * CHUNK_COLUMNS + c] = v;
+        }
       }
     }
   }
+  // A terra do chão (constants.groundFrameAt) passa a ler o solo deste mundo, e esquece o que tinha calculado.
+  setSoilSource(getTileSoil);
   bounds = {
     minCx: 0,
     maxCx: data.meta.worldChunksX - 1,
@@ -143,6 +152,13 @@ export const getTileRelief = (wx: number, wy: number): number => {
   if (!reliefGrid) return 0;
   if (wx < 0 || wy < 0 || wx >= reliefWidth || wy >= reliefHeight) return 0;
   return reliefGrid[wy * reliefWidth + wx];
+};
+
+/** O solo pintado de um tile (SOIL_AUTO fora do mundo e onde ninguém pintou). */
+export const getTileSoil = (wx: number, wy: number): number => {
+  if (!soilGrid) return SOIL_AUTO;
+  if (wx < 0 || wy < 0 || wx >= reliefWidth || wy >= reliefHeight) return SOIL_AUTO;
+  return soilGrid[wy * reliefWidth + wx];
 };
 
 /** O mundo tem alguma serra? (o caminho rápido de quem pergunta altura a cada quadro) */

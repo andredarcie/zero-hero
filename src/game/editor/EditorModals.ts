@@ -263,7 +263,7 @@ export class EditorModals {
       ['Botao direito', 'Apaga (entidades, tile superior e colisao; na ferramenta Colisao, so colisao)'],
       ['Botao do meio / Espaco + arrastar', 'Move a camera'],
       ['Roda do mouse', 'Zoom no cursor'],
-      ['B / E / R / F / I / C / S', 'Pincel, Borracha, Retangulo, Balde, Conta-gotas, Colisao, Ponto Inicial'],
+      ['B / E / R / F / I / C / A / H / S', 'Pincel, Borracha, Retangulo, Balde, Conta-gotas, Colisao, Serra, Solo, Ponto Inicial'],
       ['1..4', 'Abas: Tiles, NPCs, Itens, Props'],
       ['Tab', 'Alterna camada chao/superior'],
       ['[ e ]', 'Tamanho do pincel'],

@@ -7,7 +7,8 @@ import type { EditorStore } from './EditorStore';
 
 const UNDO_LIMIT = 200;
 // `relief` é a SERRA (ver world/relief.ts): 0 chão, 1 planalto, 2..5 escada subindo N/L/S/O.
-export type CellLayerId = 'ground' | 'upper' | 'collision' | 'relief';
+// `soil` é o SOLO PINTADO (ver constants.setSoilSource): 0 automático, 1 grama, 2 terra.
+export type CellLayerId = 'ground' | 'upper' | 'collision' | 'relief' | 'soil';
 export type CellValue = number | boolean | null;
 export type CellChange = { wx: number; wy: number; layer: CellLayerId; prev: CellValue; next: CellValue };
 export type PlacedEntity =
@@ -24,6 +25,8 @@ type Op =
 // undo/redo without duplicating value bookkeeping).
 export type StoreChange = {
   cells?: Array<{ wx: number; wy: number }>;
+  /** Alguma dessas células mudou de SOLO: a terra dos vizinhos se reajusta, então o tabuleiro refaz a volta delas. */
+  soil?: boolean;
   entities?: boolean;
   spawn?: boolean;
   dialogs?: boolean;
@@ -117,6 +120,7 @@ export class EditorHistory {
     ops.forEach((op) => {
       if (op.kind === 'cells') {
         change.cells = (change.cells ?? []).concat(op.changes.map((c) => ({ wx: c.wx, wy: c.wy })));
+        if (op.changes.some((c) => c.layer === 'soil')) change.soil = true;
       } else if (op.kind === 'entities') change.entities = true;
       else if (op.kind === 'spawn') change.spawn = true;
       else change.dialogs = true;

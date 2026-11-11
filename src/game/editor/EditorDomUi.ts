@@ -38,6 +38,8 @@ export type StatusInfo = {
   upper: number | null;
   collision: boolean;
   relief: number;
+  /** O solo pintado (0 automático, 1 grama, 2 terra; ver EditorSoil). */
+  soil: number;
   entities: string[];
   zoom: number;
 };
@@ -403,6 +405,8 @@ export class EditorDomUi {
       ? `${this.state.entity.list}:${this.state.entity.type}`
       : this.state.tool === 'relief'
         ? ({ high: 'planalto', peak: 'cume', stair: 'escada' } as const)[this.state.reliefMode]
+      : this.state.tool === 'soil'
+        ? ({ grass: 'grama', earth: 'terra' } as const)[this.state.soilMode]
       : this.state.tool === 'spawn'
         ? `(${this.store.spawn.worldX}, ${this.store.spawn.worldY})`
       : this.state.tile === null ? 'limpar' : `tile ${this.state.tile}`;
@@ -414,7 +418,7 @@ export class EditorDomUi {
       const cy = Math.floor(info.tileY / CHUNK_ROWS);
       lines.push(`Tile (${info.tileX}, ${info.tileY}) — chunk (${cx}, ${cy}) — zoom ${Math.round(info.zoom * 100)}%`);
       const upper = info.upper === null ? '-' : String(info.upper);
-      lines.push(`chao ${info.ground} | sup ${upper} | colisao ${info.collision ? 'sim' : 'nao'}${info.relief ? ` | serra ${RELIEF_LABEL[info.relief] ?? info.relief}` : ''}${info.entities.length ? ` | ${info.entities.join(', ')}` : ''}`);
+      lines.push(`chao ${info.ground} | sup ${upper} | colisao ${info.collision ? 'sim' : 'nao'}${info.relief ? ` | serra ${RELIEF_LABEL[info.relief] ?? info.relief}` : ''}${info.soil ? ` | solo ${info.soil === 2 ? 'terra' : 'grama'}` : ''}${info.entities.length ? ` | ${info.entities.join(', ')}` : ''}`);
     } else {
       lines.push(info ? `Fora do mundo — zoom ${Math.round(info.zoom * 100)}%` : 'Cursor fora do mapa');
       lines.push('Direito apaga, roda = zoom, meio/espaco = mover');

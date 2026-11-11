@@ -30,7 +30,7 @@ describe('world.json', () => {
     expect(cells.size).toBe(worldChunksX * worldChunksY);
     for (const c of world.chunks) {
       const id = `chunk ${c.cx},${c.cy}`;
-      for (const layer of [c.ground, c.upper, c.collisions, ...(c.relief ? [c.relief] : [])]) {
+      for (const layer of [c.ground, c.upper, c.collisions, ...(c.relief ? [c.relief] : []), ...(c.soil ? [c.soil] : [])]) {
         expect(layer, id).toHaveLength(chunkRows);
         for (const row of layer) expect(row, id).toHaveLength(chunkColumns);
       }

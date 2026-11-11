@@ -528,13 +528,45 @@ export const groundFrameAt = (frame: number, x: number, y: number): number => {
 };
 
 /**
+ * O SOLO PINTADO (pedido do autor, 2026-11-11: "a terra eu não consigo tirar pelo editor, queria trocar algumas terras
+ * por grama"). A terra nasce da conta de baixo (ruído × bioma), então ela não era dado de ninguém e o editor não
+ * tinha como mexer nela. Agora o chunk pode guardar, por tile, o que o autor pintou com a ferramenta Solo do editor
+ * (`WorldChunk.soil`): GRAMA (nunca vira terra), TERRA (sempre terra) ou AUTOMÁTICO (a conta decide, como sempre foi).
+ * O pintado manda no próprio tile; em volta, o automático continua se ajeitando a ele (a regra do tile ilhado lê os
+ * vizinhos já com o que foi pintado).
+ */
+export const SOIL_AUTO = 0;
+export const SOIL_GRASS = 1;
+export const SOIL_EARTH = 2;
+let soilAt: (x: number, y: number) => number = () => SOIL_AUTO;
+/** Os caches da terra (ver `remember`): a conta só muda quando o solo pintado muda, e aí eles esvaziam juntos. */
+const earthMemos: Array<Map<number, boolean>> = [];
+/**
+ * Quem diz o solo pintado de cada tile: o mundo carregado (WorldData) no jogo, o armazém no editor. Trocar a fonte
+ * (ou avisar que ela mudou) esvazia os caches.
+ */
+export const setSoilSource = (read: (x: number, y: number) => number): void => {
+  soilAt = read;
+  for (const memo of earthMemos) memo.clear();
+};
+/** O que o solo pintado força neste tile (`null` = automático). */
+const forcedEarth = (x: number, y: number): boolean | null => {
+  const soil = soilAt(x, y);
+  return soil === SOIL_GRASS ? false : soil === SOIL_EARTH ? true : null;
+};
+
+/**
  * O corte é do BIOMA (world/biomes.ts): a terra vulcânica abre em chão nu quase todo, o prado quase não
  * abre. GROUND_DETAIL_CUT continua sendo a referência do vale de antes.
  */
-const rawEarthAt = (x: number, y: number): boolean => groundEarthiness(x, y) >= biomeEarthCutAt(x, y);
-/** Tudo aqui é função só da coordenada (o mundo, o bioma, o ruído): o que já se calculou não muda nunca. */
+const rawEarthAt = (x: number, y: number): boolean => forcedEarth(x, y) ?? groundEarthiness(x, y) >= biomeEarthCutAt(x, y);
+/**
+ * Tudo aqui é função da coordenada (o mundo, o bioma, o ruído) e do solo pintado: o que já se calculou só muda quando
+ * a fonte do solo muda (`setSoilSource` esvazia os caches).
+ */
 const remember = (fn: (x: number, y: number) => boolean) => {
   const memo = new Map<number, boolean>();
+  earthMemos.push(memo);
   return (x: number, y: number): boolean => {
     const k = (x + 4096) * 8192 + (y + 4096);
     let v = memo.get(k);
@@ -550,6 +582,9 @@ const remember = (fn: (x: number, y: number) => boolean) => {
  */
 const NEIGHBORS = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const;
 const settle = (read: (x: number, y: number) => boolean) => remember((x: number, y: number): boolean => {
+  // o tile que o autor pintou não se mexe: só o automático se ajeita
+  const forced = forcedEarth(x, y);
+  if (forced !== null) return forced;
   const around = NEIGHBORS.filter(([dx, dy]) => read(x + dx, y + dy)).length;
   // Com dois iguais em volta ele fica; com três do outro tipo ele vira.
   return read(x, y) ? around >= 2 : around >= 3;
@@ -558,6 +593,8 @@ const settle = (read: (x: number, y: number) => boolean) => remember((x: number,
 const settled = settle(settle(remember(rawEarthAt)));
 /** E o que AINDA ficou sem nenhum vizinho igual vira o tipo de todos em volta (isso não ilha ninguém). */
 const isEarthAt = remember((x: number, y: number): boolean => {
+  const forced = forcedEarth(x, y);
+  if (forced !== null) return forced;
   const me = settled(x, y);
   return NEIGHBORS.some(([dx, dy]) => settled(x + dx, y + dy) === me) ? me : !me;
 });

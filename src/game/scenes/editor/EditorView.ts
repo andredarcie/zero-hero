@@ -10,7 +10,7 @@ import { CAMERA_PAD, MAX_ZOOM, MIN_ZOOM, WORLD_TILE } from './editorDefs';
 /** O que EditorView usa de EditorScene. */
 export type EditorViewHost = Pick<EditorScene,
   'appliedView' | 'cameras' | 'chunkMaskGfx' | 'collisionLayer' | 'entityContainer' | 'fixtureContainer'
-  | 'gridGfx' | 'reliefGfx' | 'session' | 'store' | 'ui' | 'uiState'
+  | 'gridGfx' | 'reliefGfx' | 'session' | 'soil' | 'store' | 'ui' | 'uiState'
 >;
 
 export class EditorView {
@@ -22,6 +22,7 @@ export class EditorView {
     this.host.reliefGfx?.setVisible(this.host.uiState.showRelief);
     this.host.entityContainer?.setVisible(this.host.uiState.showEntities);
     this.host.fixtureContainer?.setVisible(this.host.uiState.showFixtures);
+    this.host.soil.syncMarks();
   }
 
   private chunkRect(): { x: number; y: number; w: number; h: number } {

@@ -14,6 +14,7 @@ export const TOOL_DEFS: ReadonlyArray<{ id: ToolId; label: string; kbd: string; 
   { id: 'picker', label: 'Conta-gotas', kbd: 'I', hint: 'Copia o tile sob o cursor' },
   { id: 'collision', label: 'Colisao', kbd: 'C', hint: 'Pinta colisao (botao direito limpa)' },
   { id: 'relief', label: 'Serra', kbd: 'A', hint: 'Planalto um nivel acima, ou escada para subir (botao direito volta ao chao)' },
+  { id: 'soil', label: 'Solo', kbd: 'H', hint: 'Grama ou terra no chao, tile a tile (botao direito volta ao automatico)' },
   { id: 'entity', label: 'Entidade', kbd: '2-5', hint: 'Coloca a entidade escolhida na paleta' },
   { id: 'spawn', label: 'Ponto Inicial', kbd: 'S', hint: 'Obrigatorio: clique onde o jogador deve comecar' },
 ];

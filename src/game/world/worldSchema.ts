@@ -45,6 +45,11 @@ export type WorldChunk = {
    * o norte, leste, sul ou oeste; 6..7 a mata fechada, um ou dois níveis acima. Opcional — um chunk sem serra não carrega a grade.
    */
   relief?: number[][];
+  /**
+   * O SOLO PINTADO (ver constants.setSoilSource): 0 automático (a terra sai da conta de ruído e bioma), 1 grama
+   * (nunca terra), 2 terra (sempre). Pintado com a ferramenta Solo do editor. Opcional, como a serra.
+   */
+  soil?: number[][];
   pickups: WorldPickupSpawn[];
   npcs: WorldNpcSpawn[];
 };

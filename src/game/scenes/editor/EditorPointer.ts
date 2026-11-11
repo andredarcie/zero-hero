@@ -11,7 +11,7 @@ import { MAX_ZOOM, MIN_ZOOM, WORLD_TILE } from './editorDefs';
 /** O que EditorPointer usa de EditorScene. */
 export type EditorPointerHost = Pick<EditorScene,
   'activeStroke' | 'cameras' | 'hoverGfx' | 'input' | 'panning' | 'rectDrag' | 'rectGfx' | 'relief' | 'session'
-  | 'store' | 'tools' | 'ui' | 'uiState' | 'view'
+  | 'soil' | 'store' | 'tools' | 'ui' | 'uiState' | 'view'
 >;
 
 export class EditorPointer {
@@ -163,7 +163,7 @@ export class EditorPointer {
     if (!this.host.view.isEditable(cell.x, cell.y) && this.host.uiState.tool !== 'picker') return;
 
     const size = (this.host.uiState.tool === 'brush' || this.host.uiState.tool === 'eraser' || this.host.uiState.tool === 'collision'
-      || (this.host.uiState.tool === 'relief' && this.host.uiState.reliefMode === 'high'))
+      || this.host.uiState.tool === 'soil' || (this.host.uiState.tool === 'relief' && this.host.uiState.reliefMode !== 'stair'))
       ? this.host.uiState.brushSize
       : 1;
     const from = size === 3 ? -1 : 0;
@@ -203,6 +203,7 @@ export class EditorPointer {
       upper: inside ? (store.readCell('upper', cell.x, cell.y) as number | null) : null,
       collision: inside ? (store.readCell('collision', cell.x, cell.y) as boolean) : false,
       relief: inside ? this.host.relief.reliefAt(cell.x, cell.y) : RELIEF_GROUND,
+      soil: inside ? this.host.soil.soilAt(cell.x, cell.y) : 0,
       entities: inside ? store.entities.entitiesAt(cell.x, cell.y).map((e) => e.type) : [],
       zoom: this.host.cameras.main.zoom,
     });

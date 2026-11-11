@@ -103,14 +103,14 @@ export class EditorStore {
   public readCell(layer: CellLayerId, wx: number, wy: number): CellValue {
     const chunk = this.chunkAt(wx, wy);
     if (!chunk) {
-      if (layer === 'relief') return 0;
+      if (layer === 'relief' || layer === 'soil') return 0;
       return layer === 'collision' ? false : layer === 'upper' ? null : DEFAULT_GROUND_TILE;
     }
     const lx = wx - chunk.cx * CHUNK_COLUMNS;
     const ly = wy - chunk.cy * CHUNK_ROWS;
     if (layer === 'ground') return chunk.ground[ly][lx];
     if (layer === 'upper') return chunk.upper[ly][lx];
-    if (layer === 'relief') return chunk.relief?.[ly]?.[lx] ?? 0;
+    if (layer === 'relief' || layer === 'soil') return chunk[layer]?.[ly]?.[lx] ?? 0;
     return chunk.collisions[ly][lx];
   }
 
@@ -121,20 +121,21 @@ export class EditorStore {
     const ly = wy - chunk.cy * CHUNK_ROWS;
     if (layer === 'ground') chunk.ground[ly][lx] = value as number;
     else if (layer === 'upper') chunk.upper[ly][lx] = value as number | null;
-    else if (layer === 'relief') this.writeRelief(chunk, lx, ly, value as number);
+    else if (layer === 'relief' || layer === 'soil') this.writeOptionalGrid(chunk, layer, lx, ly, value as number);
     else chunk.collisions[ly][lx] = value as boolean;
   }
 
-  // A grade de serra é OPCIONAL no chunk (o schema diz: chunk sem serra não carrega a grade). Ela
-  // nasce na primeira escrita e some quando o último tile volta ao chão, então o world.json de um
-  // chunk plano continua sem o campo.
-  private writeRelief(chunk: WorldChunk, lx: number, ly: number, value: number): void {
-    if (!chunk.relief) {
+  // As grades da serra e do solo são OPCIONAIS no chunk (o schema diz: chunk sem serra não carrega a
+  // grade). Elas nascem na primeira escrita e somem quando o último tile volta a zero, então o
+  // world.json de um chunk plano e sem solo pintado continua sem os campos.
+  private writeOptionalGrid(chunk: WorldChunk, layer: 'relief' | 'soil', lx: number, ly: number, value: number): void {
+    let grid = chunk[layer];
+    if (!grid) {
       if (value === 0) return;
-      chunk.relief = Array.from({ length: CHUNK_ROWS }, () => Array.from({ length: CHUNK_COLUMNS }, () => 0));
+      grid = chunk[layer] = Array.from({ length: CHUNK_ROWS }, () => Array.from({ length: CHUNK_COLUMNS }, () => 0));
     }
-    chunk.relief[ly][lx] = value;
-    if (value === 0 && chunk.relief.every((row) => row.every((v) => v === 0))) delete chunk.relief;
+    grid[ly][lx] = value;
+    if (value === 0 && grid.every((row) => row.every((v) => v === 0))) delete chunk[layer];
   }
 
   /**
@@ -166,7 +167,7 @@ export class EditorStore {
     }
 
     this.markDirty();
-    this.emit({ cells: [{ wx, wy }] });
+    this.emit(layer === 'soil' ? { cells: [{ wx, wy }], soil: true } : { cells: [{ wx, wy }] });
     return true;
   }
 

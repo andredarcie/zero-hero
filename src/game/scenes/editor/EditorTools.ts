@@ -9,7 +9,7 @@ export type CellCoord = { x: number; y: number };
 
 /** O que EditorTools usa de EditorScene. */
 export type EditorToolsHost = Pick<EditorScene,
-  'relief' | 'session' | 'store' | 'ui' | 'uiState' | 'view'
+  'relief' | 'session' | 'soil' | 'store' | 'ui' | 'uiState' | 'view'
 >;
 
 export class EditorTools {
@@ -40,7 +40,8 @@ export class EditorTools {
           if (this.host.view.isEditable(cx, cy)) this.host.store?.setCell('relief', cx, cy, code);
         });
       }
-    } else if (tool === 'entity') this.placeSelectedEntity(x, y);
+    } else if (tool === 'soil') this.forEachBrushCell(x, y, (cx, cy) => this.host.soil.paint(cx, cy));
+    else if (tool === 'entity') this.placeSelectedEntity(x, y);
     else if (tool === 'spawn' && this.host.view.isEditable(x, y)) this.host.store?.meta.setSpawn(x, y);
   }
 
@@ -53,6 +54,10 @@ export class EditorTools {
     }
     if (this.host.uiState.tool === 'relief') {
       this.forEachBrushCell(x, y, (cx, cy) => this.host.relief.clearRelief(cx, cy));
+      return;
+    }
+    if (this.host.uiState.tool === 'soil') {
+      this.forEachBrushCell(x, y, (cx, cy) => this.host.soil.clear(cx, cy));
       return;
     }
     this.forEachBrushCell(x, y, (cx, cy) => this.eraseCell(cx, cy));

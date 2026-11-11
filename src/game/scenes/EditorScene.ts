@@ -19,6 +19,7 @@ import { EditorBoard } from './editor/EditorBoard';
 import { EditorPieces } from './editor/EditorPieces';
 import { EditorView } from './editor/EditorView';
 import { EditorRelief } from './editor/EditorRelief';
+import { EditorSoil } from './editor/EditorSoil';
 import { EditorTools, type CellCoord } from './editor/EditorTools';
 import { EditorPointer } from './editor/EditorPointer';
 import { EditorCameraRig } from './editor/EditorCameraRig';
@@ -45,6 +46,7 @@ export class EditorScene extends Engine.Scene {
     brushSize: 1,
     collisionMode: 'keep',
     reliefMode: 'high',
+    soilMode: 'grass',
     tab: 'tiles',
     entity: { list: 'npcs', type: 'blackCat' },
     showGrid: true,
@@ -85,6 +87,8 @@ export class EditorScene extends Engine.Scene {
   public readonly view: EditorView = new EditorView(this);
   /** A serra: planalto e escadas. (ver EditorRelief) */
   public readonly relief: EditorRelief = new EditorRelief(this);
+  /** O solo: grama ou terra pintada por cima da conta. (ver EditorSoil) */
+  public readonly soil: EditorSoil = new EditorSoil(this);
   /** O pincel, a borracha, o balde, o retângulo e o conta-gotas. (ver EditorTools) */
   public readonly tools: EditorTools = new EditorTools(this);
   /** O mouse no tabuleiro. (ver EditorPointer) */
@@ -223,13 +227,7 @@ export class EditorScene extends Engine.Scene {
       this.view.syncViewMode();
       if (this.uiState.viewMode === 'world') this.cam.fitView();
     } else if (change.cells) {
-      const seen = new Set<string>();
-      change.cells.forEach((cell) => {
-        const key = `${cell.wx},${cell.wy}`;
-        if (seen.has(key)) return;
-        seen.add(key);
-        this.board.refreshCell(cell.wx, cell.wy);
-      });
+      this.board.refreshCells(change.cells, change.soil === true);
       this.relief.drawRelief();
     }
     if (!change.structure && (change.entities || change.spawn)) {

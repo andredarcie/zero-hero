@@ -6,6 +6,7 @@ import { ASSET_KEYS, CHUNK_COLUMNS, CHUNK_ROWS, groundFrameAt, SOLID_GROUND_FRAM
 import { biomeWashAt, decorFrameAt } from '@/game/world/biomes';
 import type { EditorScene } from '../EditorScene';
 import { CAMERA_PAD, WORLD_TILE } from './editorDefs';
+import { SOIL_REACH } from './EditorSoil';
 
 /**
  * O BIOMA NO EDITOR: o tile veste a mesma decoração e leva a mesma cor que no jogo (world/biomes.ts),
@@ -29,7 +30,7 @@ const TREE_COLLISION_TEXTURE = 'editor-tree-collision-tile';
 /** O que EditorBoard usa de EditorScene. */
 export type EditorBoardHost = Pick<EditorScene,
   'add' | 'cameras' | 'chunkMaskGfx' | 'collisionLayer' | 'entityContainer' | 'fixtureContainer' | 'gridGfx'
-  | 'hoverGfx' | 'make' | 'pieces' | 'rectGfx' | 'relief' | 'reliefGfx' | 'store' | 'textures' | 'view'
+  | 'hoverGfx' | 'make' | 'pieces' | 'rectGfx' | 'relief' | 'reliefGfx' | 'soil' | 'store' | 'textures' | 'view'
 >;
 
 export class EditorBoard {
@@ -99,6 +100,8 @@ export class EditorBoard {
     this.upperLayer = this.map.createBlankLayer('upper', tiles, 0, 0)!.setDepth(1);
     this.host.collisionLayer = this.map.createBlankLayer('collision', [collisionTiles, treeCollisionTiles], 0, 0)!.setDepth(2);
 
+    // A terra do chão lê o solo pintado deste armazém (EditorSoil), não o do último mundo carregado.
+    this.host.soil.useLiveSource();
     for (let wy = 0; wy < tilesY; wy += 1) {
       for (let wx = 0; wx < tilesX; wx += 1) {
         biomeTint(this.groundLayer.putTileAt(groundFrameAt(store.readCell('ground', wx, wy) as number, wx, wy), wx, wy, false), wx, wy);
@@ -111,6 +114,7 @@ export class EditorBoard {
 
     this.host.reliefGfx = this.host.add.graphics().setDepth(1.5);
     this.host.relief.drawRelief();
+    this.host.soil.createMarks();
     this.host.gridGfx = this.host.add.graphics().setDepth(3);
     this.drawGrid();
     this.host.entityContainer = this.host.add.container(0, 0).setDepth(4);
@@ -149,6 +153,27 @@ export class EditorBoard {
     for (let cy = 0; cy <= store.world.meta.worldChunksY; cy += 1) {
       gfx.lineBetween(0, cy * CHUNK_ROWS * WORLD_TILE, worldW, cy * CHUNK_ROWS * WORLD_TILE);
     }
+  }
+
+  /**
+   * Refaz as células que o armazém mudou, cada uma uma vez. Quando o SOLO mudou, a terra em volta se reajusta (a regra
+   * do tile ilhado, ver EditorSoil.SOIL_REACH): a conta esquece o que sabia e a vizinhança inteira é redesenhada.
+   */
+  public refreshCells(cells: ReadonlyArray<{ wx: number; wy: number }>, soil: boolean): void {
+    if (soil) this.host.soil.useLiveSource();
+    const reach = soil ? SOIL_REACH : 0;
+    const seen = new Set<string>();
+    for (const cell of cells) {
+      for (let dy = -reach; dy <= reach; dy += 1) {
+        for (let dx = -reach; dx <= reach; dx += 1) {
+          const key = `${cell.wx + dx},${cell.wy + dy}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          this.refreshCell(cell.wx + dx, cell.wy + dy);
+        }
+      }
+    }
+    if (soil) this.host.soil.drawMarks();
   }
 
   public refreshCell(wx: number, wy: number): void {
