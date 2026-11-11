@@ -1,10 +1,14 @@
+import * as THREE from 'three';
+
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import { CHUNK_COLUMNS, CHUNK_ROWS, SOLID_UPPER_FRAMES } from '@/game/constants';
+import { buildHomeShell, homeSink } from '@/game/render3d/homeShell';
 import {
   HOME_PAINTERS, homeGlowTexture, homeTexture, homeYardTexture, YARD_DEPTH, YARD_WIDTH, type HomeKind,
 } from '@/game/render3d/homeTextures';
 import { WHITE_SAFE_TINT } from '@/game/render3d/pixelForms';
 import { world3d } from '@/game/render3d/World3D';
+import { terrainHeightAt } from '@/game/world/relief';
 import { getChunkTerrain } from '@/game/world/WorldData';
 
 /**
@@ -19,7 +23,11 @@ const HOME_SIZE = 3;
 /** A largura e o fundo do que é sólido, a partir do centro e da linha de baixo. */
 const HALF_WIDTH = 1;
 const DEPTH = 2;
-/** A luz do mundo estoura os tons claros de uma parede grande; o tom abaixa antes da luz, não a rampa. */
+/**
+ * A luz do mundo estoura os tons claros de uma parede grande; o tom abaixa antes da luz, não a rampa. O corpo 3D da
+ * casa (homeShell) usa o mesmo, então a parede do lado sai igual à fachada na quina. Só as casas de TELHA têm corpo
+ * (homeTextures.HOME_GABLES): o chapéu do cogumelo do Shui é uma cúpula.
+ */
 const HOME_TINT = 0xa8a4a0;
 
 /**
@@ -74,6 +82,7 @@ export class NpcHomes {
   private readonly glows = new Map<HomeKind, Billboard3D>();
   private readonly pools = new Map<HomeKind, { setVisible(on: boolean): void; destroy(): void }>();
   private readonly bodies: Billboard3D[] = [];
+  private readonly roofs: THREE.Mesh[] = [];
   private shown = '';
 
   public constructor() {
@@ -85,21 +94,59 @@ export class NpcHomes {
         .objects.addBillboard(homeYardTexture(kind), 0, { flat: true, flatY: YARD_Y })
         .setDisplaySize(YARD_WIDTH, YARD_DEPTH)
         .setPosition(x, y + YARD_FORWARD));
+      // a casa desce até a parede encostar no chão (o desenho tem uma ou duas fileiras vazias embaixo: homeSink)
+      const sink = homeSink(kind);
       this.bodies.push(world3d()
         .objects.addBillboard(homeTexture(kind), 0, { groundShadow: { rx: 1.25, rz: 0.6, alpha: 0.3 } })
         .setDisplaySize(HOME_SIZE, HOME_SIZE)
         .setTint(kind === 'astronaut' ? WHITE_SAFE_TINT : HOME_TINT)
-        .setPosition(x, y + 0.3));
+        .setPosition(x, y + 0.3)
+        .setElevation(-sink));
+      // o corpo 3D pisa onde a fachada pisa: o chão dela (o billboard sobe com o relevo sozinho) menos o afundado
+      this.addShell(kind, x, y + 0.3, terrainHeightAt(x, y + 0.3) - sink);
       this.glows.set(kind, world3d()
         .objects.addBillboard(homeGlowTexture(kind), 0, { emissive: true, fog: false })
         .setDisplaySize(HOME_SIZE, HOME_SIZE)
         .setPosition(x, y + 0.32)
+        .setElevation(-sink)
         .setVisible(false));
       this.pools.set(kind, world3d().lights.addStillGlow(x, y + WINDOW_POOL_FORWARD, WINDOW_POOL_TILES, WINDOW_POOL_ALPHA));
     }
   }
 
+  /**
+   * O CORPO DA CASA EM 3D (render3d/homeShell.ts): as paredes dos lados até o fundo do que é sólido e as outras três
+   * águas do telhado, com os pixels pintados no plano de cada face. É o que faz a casa ler como uma caixa e não como um
+   * cartão com um telhado em cima.
+   */
+  private addShell(kind: HomeKind, x: number, frontZ: number, base: number): void {
+    const shell = buildHomeShell(kind, x, frontZ, base);
+    if (!shell) return;
+    const tex = new THREE.CanvasTexture(shell.canvas);
+    tex.magFilter = THREE.NearestFilter;
+    tex.minFilter = THREE.NearestFilter;
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.needsUpdate = true;
+    const mesh = world3d().objects.addLitMesh(shell.geometry, tex);
+    const mat = mesh.material as THREE.MeshLambertMaterial;
+    // o tom da fachada: a parede (a tinta da fachada) sai igual a ela na quina; as águas de cima já vêm um tom abaixo
+    // na própria tinta (homeShell.ROOF_SHADE)
+    mat.color.setHex(HOME_TINT);
+    mat.flatShading = false; // a normal do vértice (para cima) manda, não a da face
+    mat.needsUpdate = true;
+    mesh.name = `home-roof-${kind}`;
+    this.roofs.push(mesh);
+  }
+
   public destroy(): void {
+    for (const mesh of this.roofs) {
+      mesh.removeFromParent();
+      mesh.geometry.dispose();
+      const mat = mesh.material as THREE.MeshLambertMaterial;
+      mat.map?.dispose();
+      mat.dispose();
+    }
+    this.roofs.length = 0;
     for (const bb of [...this.bodies, ...this.glows.values()]) bb.destroy();
     for (const pool of this.pools.values()) pool.destroy();
     this.bodies.length = 0;

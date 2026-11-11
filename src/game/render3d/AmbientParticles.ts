@@ -16,6 +16,12 @@ const MIST_COUNT = 48;
 const FIREFLY_BOX = 10;
 /** Quanto um vaga-lume se afasta da moita que escolheu, em tiles. */
 const FIREFLY_ROAM = 1.9;
+/**
+ * O HERÓI ABRE CAMINHO NO ENXAME (2026-11-11), como abre o capim: o vaga-lume a menos de 1,3 tile dele leva um empurrão
+ * para longe (mais forte quanto mais perto), sobe com a arrancada e volta devagar para a moita pela mola de sempre.
+ */
+const FIREFLY_SHY = 1.3;
+const FIREFLY_SHY_PUSH = 9;
 
 /**
  * Distancia no chao. `Math.hypot` daria o mesmo numero, mas aloca um array de argumentos por
@@ -134,13 +140,15 @@ export class AmbientParticles {
     }
 
     // Embers: reborn at the lit fire, fading amber as they climb. With no lit
-    // fire in view they park below the ground (invisible) rather than pop.
+    // fire in view they park below the ground (invisible) rather than pop. O HERÓI PERTO ATIÇA O FOGO (2026-11-11):
+    // a menos de 1,6 tile as brasas nascem mais vezes, sobem mais depressa e se espalham — a fagulha de quem passa.
+    const stir = fire ? Math.max(0, 1 - planarDist(target.x, target.z, fire.worldX, fire.worldY) / 1.6) : 0;
     for (let i = 0; i < EMBER_COUNT; i++) {
       const p = this.emberState[i];
       p.life += dt;
       if (p.life >= p.maxLife) {
         p.life = 0;
-        p.maxLife = 0.9 + Math.random() * 0.9;
+        p.maxLife = (0.9 + Math.random() * 0.9) * (1 - 0.45 * stir);
         if (fire) {
           this.embers.pos[i * 3] = fire.worldX + (Math.random() - 0.5) * 0.35;
           this.embers.pos[i * 3 + 1] = 0.5 + Math.random() * 0.2;
@@ -148,9 +156,9 @@ export class AmbientParticles {
         } else {
           this.embers.pos[i * 3 + 1] = -10;
         }
-        p.vx = (Math.random() - 0.5) * 0.35;
-        p.vy = 0.9 + Math.random() * 0.7;
-        p.vz = (Math.random() - 0.5) * 0.35;
+        p.vx = (Math.random() - 0.5) * (0.35 + 1.3 * stir);
+        p.vy = (0.9 + Math.random() * 0.7) * (1 + 0.5 * stir);
+        p.vz = (Math.random() - 0.5) * (0.35 + 1.3 * stir);
       }
       this.embers.pos[i * 3] += p.vx * dt;
       this.embers.pos[i * 3 + 1] += p.vy * dt;
@@ -266,6 +274,15 @@ export class AmbientParticles {
         const speed = 0.5 + Math.random() * 1.3;
         p.vx += Math.cos(angle) * speed;
         p.vz += Math.sin(angle) * speed;
+      }
+      // o herói (o alvo da câmera) espanta quem está perto
+      const ax = px - cx;
+      const az = pz - cz;
+      const ad = Math.sqrt(ax * ax + az * az);
+      if (ad < FIREFLY_SHY && ad > 0.001) {
+        const k = (1 - ad / FIREFLY_SHY) * FIREFLY_SHY_PUSH * dt;
+        p.vx += (ax / ad) * k;
+        p.vz += (az / ad) * k;
       }
       const drag = Math.exp(-2.6 * dt);
       p.vx = p.vx * drag + (p.hx - px) * 1.5 * dt;

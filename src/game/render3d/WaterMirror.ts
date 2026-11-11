@@ -104,6 +104,11 @@ export class WaterMirror {
     this.water.add(x, z);
   }
 
+  /** O tile é água? */
+  public isWaterTile(x: number, z: number): boolean {
+    return this.water.has(x, z);
+  }
+
   /** O terreno foi refeito: a água e o cenário voltam a ser marcados por ele. */
   public clearWater(): void {
     this.water.clear();

@@ -42,6 +42,12 @@ type WorldBounds = {
 // de random em UUID — ver a armadilha no CLAUDE.md).
 const VOID_FOREST_FRAMES: readonly number[] = [4, 14, 15, 16, 17, 18];
 const VOID_FLOOR_FRAMES: readonly number[] = [5, 6];
+/**
+ * A MATA DE FORA TEM CLAREIRA (2026-11-11): com uma árvore em todo tile, ela saía um pomar em grade — fileiras
+ * perfeitas de arvorezinhas ao sul do lago e na borda do campo, o único lugar do vale plantado com régua. Em 7 de cada
+ * 25 tiles não nasce árvore (o chão da mata aparece entre elas); a trava não muda, fora do mundo tudo bloqueia.
+ */
+const VOID_GAP_IN_25 = 7;
 
 /** Hash inteiro estável de um tile — o mesmo espírito do `seaVariant` do World3D. */
 const voidVariant = (wx: number, wy: number, n: number): number => {
@@ -169,7 +175,8 @@ const buildVoidChunk = (cx: number, cy: number): ChunkData => {
       const wx = cx * CHUNK_COLUMNS + col;
       const wy = cy * CHUNK_ROWS + row;
       groundRow.push(VOID_FLOOR_FRAMES[voidVariant(wx, wy, VOID_FLOOR_FRAMES.length)]);
-      upperRow.push(VOID_FOREST_FRAMES[voidVariant(wx + 7, wy, VOID_FOREST_FRAMES.length)]);
+      const gap = voidVariant(wx + 31, wy + 17, 25) < VOID_GAP_IN_25;
+      upperRow.push(gap ? null : VOID_FOREST_FRAMES[voidVariant(wx + 7, wy, VOID_FOREST_FRAMES.length)]);
     }
     ground.push(groundRow);
     upper.push(upperRow);

@@ -7,6 +7,7 @@ import {
   STAND_ACTOR_SLOTS, STAND_FRAGMENT_PARS_GLSL, STAND_FRAGMENT_SHADE_GLSL, STAND_RUSTLE_SLOTS, STAND_VERTEX_GLSL, STAND_WAKE_SLOTS,
   standActorsUniform, standFrontOffUniform, standRustleUniform, standUniform, standWakeUniform,
 } from './decorSway';
+import { WATER_RIPPLE_GLSL, WATER_RIPPLE_SLOTS, waterRipplesUniform } from './waterRipples';
 
 // ── The world's light treatment ───────────────────────────────────────────────
 //
@@ -929,6 +930,12 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
           // (shallow water), not a highlight laid over it: the light must fall on it like it
           // falls on everything else. The token itself is left standing for the texelAa patch.
           .replace('#include <map_fragment>', `#include <map_fragment>\n${SEA_SHALLOW_GLSL}`);
+        // OS ANÉIS DE QUEM ANDA NA BEIRA (waterRipples.ts): pendurados ANTES do reflexo e do céu no mesmo token, então
+        // caem DEPOIS deles no shader — e antes do brilho, que foi o primeiro a se pendurar.
+        shader.uniforms.uWaterRipples = waterRipplesUniform;
+        shader.fragmentShader = shader.fragmentShader
+          .replace('void main() {', `uniform vec4 uWaterRipples[${WATER_RIPPLE_SLOTS}];\nvoid main() {`)
+          .replace('#include <opaque_fragment>', `#include <opaque_fragment>\n${WATER_RIPPLE_GLSL}`);
       }
       if (opts.mirrorSurface && opts.worldFx !== 'lavaFlow') {
         // Logo depois do opaque_fragment e ANTES do glint (que já está pendurado no mesmo token):

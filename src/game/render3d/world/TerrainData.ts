@@ -8,6 +8,7 @@ import type { TreeLook } from '../forest';
 import type { MassHeightGrid, ReliefPoint } from '../terrainGeometry';
 import type { TerrainMaterials } from '../terrainMaterials';
 import type { StandingDecor } from './StandingDecor';
+import type { WaterRipples } from '../waterRipples';
 
 /**
  * A standing solid tile (tree/wall), as the shadow pass sees it. The optional fields are
@@ -132,4 +133,6 @@ export class TerrainData {
   public cubeMeshes: THREE.Mesh[] = [];
   /** A DECORAÇÃO EM PÉ (StandingDecor): nasce no primeiro assado e é refeita a cada um, com toda a decoração do mapa. */
   public standing?: StandingDecor;
+  /** OS ANÉIS NA ÁGUA de quem anda na beira (waterRipples): nascem no primeiro assado, como a decoração. */
+  public ripples?: WaterRipples;
 }

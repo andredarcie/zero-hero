@@ -16,6 +16,8 @@ import { TILESET as P, hash, sprite, window01, type NatureFrame, type NatureSyst
  */
 
 const C = { w: P.bone, W: P.boneDk, y: P.yellow, g: P.olive, G: P.oliveDk };
+/** Quanto do tom do chão a margarida veste: a pétala branca fica abaixo do bloom ao sol (ver o `stream`). */
+const DAISY_TONE = 0.5;
 // Do jeito das florzinhas do tileset: uma cruz de pétalas em volta de um olho amarelo de 1 px, num caule.
 const FRAMES = [
   // 0: fechada — o botão verde com a pontinha branca das pétalas dobradas por cima do olho.
@@ -102,9 +104,11 @@ export class Daisies implements NatureSystem {
           const bb = world3d().objects.addBillboard(FRAMES[0], 0, { depthLayer: 'ground' })
             .setDisplaySize(5 / 16, 5 / 16)
             .setPosition(x + (hash(x, i, 83) - 0.5) * 0.7, y + (hash(i, y, 84) - 0.5) * 0.6);
-          // O tom do chão do bioma, como as florzinhas do tileset (é a mesma família): sem ele, um branco solto.
+          // O tom do chão do bioma, como as florzinhas do tileset (é a mesma família): sem ele, um branco solto. E a
+          // pétala abaixo do bloom (2026-11-11): com 0,8 a margarida ao sol passava do limiar e cada touceira virava um
+          // punhado de bolinhas acesas, purpurina pelo prado; com 0,5 o sol ainda a pinta branca e ela não acende.
           const [r, g, b] = biomeWashAt(x, y);
-          (bb.mesh.material as THREE.MeshLambertMaterial).color.setRGB(r * 0.8, g * 0.8, b * 0.8);
+          (bb.mesh.material as THREE.MeshLambertMaterial).color.setRGB(r * DAISY_TONE, g * DAISY_TONE, b * DAISY_TONE);
           clump.push({ bb, lag: hash(x + i, y, 85) * 0.25, sway: hash(i, x, 86) * 6 });
         }
         this.clumps.set(key, clump);

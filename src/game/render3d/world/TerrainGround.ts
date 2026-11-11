@@ -14,6 +14,9 @@ import { RIVER_SURFACE_LIFT, WATER_DEPTH_TILES } from './worldDefs';
 
 /** As pinturas de terra nua (constants.groundFrameAt): é a beira delas que o capim morde. */
 const EARTH_FRAMES: ReadonlySet<number> = new Set(GROUND_DETAIL_FRAMES);
+/** O raio da quina da água, em tiles, e quanto a beira ondula além do mínimo (ver bakeGroundAndWater). */
+const WATER_CORNER = 0.42;
+const WATER_SHORE_VAR = 0.26;
 
 /** O que TerrainGround usa de World3D. */
 export type TerrainGroundHost = Pick<World3D,
@@ -24,7 +27,7 @@ export class TerrainGround {
   public constructor(private readonly host: TerrainGroundHost) {}
 
   public bakeRelief(t: TerrainSort, mats: TerrainMaterials): void {
-    const { bedTiles, seaTiles, lavaBedTiles, pitTiles, reliefNear, highGroundTiles, groundTiles, solidSet } = t;
+    const { bedTiles, seaTiles, lavaBedTiles, pitTiles, reliefNear, highGroundTiles, groundTiles, solidSet, treeSet } = t;
     // A SERRA COM A CURVA DA MARGEM (ver makeReliefField). Antes do chão: um tile alto com a quina
     // mordida precisa do chão de baixo por inteiro.
     if (reliefNear.length > 0) {
@@ -68,7 +71,8 @@ export class TerrainGround {
         else pieces.set(k, [t]);
       }
       for (const piece of pieces.values()) {
-        const contour = buildReliefContourGeometry(piece, frameOf, this.host.tiles.reliefField, reliefLevelAt, stairKeys, blocked, groundShadeAt(solidSet));
+        // Com a BEIRADA (reliefEdge.ts): por trás e pelos lados, o topo de capim emendava no chão de baixo sem risco.
+        const contour = buildReliefContourGeometry(piece, frameOf, this.host.tiles.reliefField, reliefLevelAt, stairKeys, blocked, groundShadeAt(solidSet, treeSet), { rim: true });
         highGroundTiles.push(...contour.whole.filter((t) => reliefLevelAt(t.x, t.z) > 0));
         groundTiles.push(...contour.bases);
         if (contour.tops.getIndex()?.count) this.host.terrain.addTerrainMesh(new THREE.Mesh(contour.tops, mats.ground));
@@ -80,9 +84,9 @@ export class TerrainGround {
 
   /** O chão (de baixo e do planalto), o leito do rio, a superfície do rio e do mar, e a margem. Devolve a água toda. */
   public bakeGroundAndWater(t: TerrainSort, mats: TerrainMaterials, groundFrame: ReadonlyMap<number, number>): TerrainTile[] {
-    const { groundTiles, highGroundTiles, bedTiles, seaTiles, solidSet } = t;
+    const { groundTiles, highGroundTiles, bedTiles, seaTiles, solidSet, treeSet } = t;
     // O bioma × a mancha larga × a sombra de copa (groundTintAt): a mesma cor que o beiço e a margem vestem.
-    const tint = groundTintAt(solidSet);
+    const tint = groundTintAt(solidSet, treeSet);
     this.host.terrain.addTerrainMesh(new THREE.Mesh(buildFlatTileGeometry(groundTiles, 0, solidSet, undefined, tint), mats.ground));
     if (highGroundTiles.length > 0) {
       this.host.terrain.addTerrainMesh(new THREE.Mesh(buildFlatTileGeometry(highGroundTiles, (x, z) => reliefLevelAt(x, z) * RELIEF_HEIGHT, solidSet, undefined, tint), mats.ground));
@@ -130,9 +134,12 @@ export class TerrainGround {
     // num contorno orgânico, e o barranco desce por esse contorno — não pela linha reta do tile.
     const wetTiles = seaTiles.length > 0 ? [...bedTiles, ...seaTiles] : bedTiles;
     if (wetTiles.length > 0) {
+      // A QUINA DA ÁGUA É CURVA (2026-11-11): sem `corner`, só a união suave das distâncias arredondava a quina, e
+      // ela tira no máximo um décimo de tile — o lago do prado saía um retângulo e o rio dobrava em ângulo reto. Com
+      // o raio, onde dois lados de terra se encontram a margem faz a curva; e ela ondula um pouco mais.
       const shore = buildShoreGeometry(
         wetKeys, wetTiles, (x, z) => groundFrame.get(tileKey(x, z)) ?? null, WATER_DEPTH_TILES,
-        { shadeAt: groundShadeAt(solidSet) },
+        { shadeAt: groundShadeAt(solidSet, treeSet), corner: WATER_CORNER, variance: WATER_SHORE_VAR },
       );
       this.host.terrain.addTerrainMesh(new THREE.Mesh(shore.lip, mats.ground));
       this.host.terrain.addTerrainMesh(new THREE.Mesh(shore.walls, mats.bank));
@@ -142,7 +149,7 @@ export class TerrainGround {
   }
 
   public bakeStoneEdges(t: TerrainSort, mats: TerrainMaterials): void {
-    const { groundTiles, reliefNear, solidSet } = t;
+    const { groundTiles, reliefNear, solidSet, treeSet } = t;
     // O CALÇAMENTO NÃO ACABA EM LINHA: o capim morde a beira dele, e pedras soltas avançam sobre o capim. Uma passada
     // por nível, porque há calçamento no planalto, e `keep` segura a borda onde aquele nível tem chão de verdade.
     const floorByLevel = new Map<number, Array<{ x: number; z: number; frame: number }>>();
@@ -174,14 +181,14 @@ export class TerrainGround {
       const keep = (px: number, pz: number): boolean => !field || field(px, pz) === level;
       const inward = buildShoreGeometry(
         stoneKeys, stoneFloor, (x, z) => frames.get(tileKey(x, z)) ?? null, 0,
-        { min: STONE_EDGE_MIN, variance: STONE_EDGE_VAR, round: 0.12, wobble: STONE_EDGE_WOBBLE, y, flatOnly: true, keep, shadeAt: groundShadeAt(solidSet) },
+        { min: STONE_EDGE_MIN, variance: STONE_EDGE_VAR, round: 0.12, wobble: STONE_EDGE_WOBBLE, y, flatOnly: true, keep, shadeAt: groundShadeAt(solidSet, treeSet) },
       );
       inward.walls.dispose();
       this.host.terrain.addTerrainMesh(new THREE.Mesh(inward.lip, mats.ground));
       const outward = buildShoreGeometry(
         new Set(ring.keys()), [...ring.values()],
         (x, z) => (stoneKeys.has(tileKey(x, z)) ? frames.get(tileKey(x, z)) ?? null : null), 0,
-        { min: -STONE_EDGE_MIN, variance: -STONE_EDGE_VAR, round: 0.12, wobble: STONE_EDGE_WOBBLE, y, flatOnly: true, sourceOnly: true, keep, shadeAt: groundShadeAt(solidSet) },
+        { min: -STONE_EDGE_MIN, variance: -STONE_EDGE_VAR, round: 0.12, wobble: STONE_EDGE_WOBBLE, y, flatOnly: true, sourceOnly: true, keep, shadeAt: groundShadeAt(solidSet, treeSet) },
       );
       outward.walls.dispose();
       this.host.terrain.addTerrainMesh(new THREE.Mesh(outward.lip, mats.ground));
@@ -196,7 +203,7 @@ export class TerrainGround {
    * sobre ela em texel inteiro. Só o capim morde (nunca a pedra), e só no nível de cada um.
    */
   public bakeEarthEdges(t: TerrainSort, mats: TerrainMaterials): void {
-    const { groundTiles, reliefNear, solidSet } = t;
+    const { groundTiles, reliefNear, solidSet, treeSet } = t;
     const byLevel = new Map<number, Array<{ x: number; z: number; frame: number }>>();
     for (const g of [...groundTiles.filter((g) => reliefLevelAt(g.x, g.z) === 0), ...reliefNear.filter((n) => n.level > 0)]) {
       const level = reliefLevelAt(g.x, g.z);
@@ -215,7 +222,7 @@ export class TerrainGround {
         (x, z) => (frames.get(tileKey(x, z)) === GROUND_TILE_FRAME ? GROUND_TILE_FRAME : null), 0,
         {
           min: 0.05, variance: 0.3, round: 0.2, wobble: 2.4, y: level * RELIEF_HEIGHT + STONE_LIP_Y, flatOnly: true,
-          keep: (px, pz) => !field || field(px, pz) === level, shadeAt: groundShadeAt(solidSet),
+          keep: (px, pz) => !field || field(px, pz) === level, shadeAt: groundShadeAt(solidSet, treeSet),
         },
       );
       lip.walls.dispose();

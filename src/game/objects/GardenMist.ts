@@ -38,6 +38,23 @@ const DAY_TINT_SCALE = 0.76;
  */
 const CLOUD_ALPHA = 0.5;
 const SHEET_ALPHA = 0.46;
+/**
+ * QUANTO DO VÉU FICA, da noite (0) ao meio-dia (1) (2026-11-11): de dia ela ainda passava por uma parede branca, e de
+ * noite, iluminada pela lua e acesa pelo bloom, virava um azul leitoso por cima de tudo — mais clara que a própria
+ * noite. O véu fica mais ralo nas duas pontas, mais ainda de noite.
+ */
+const NIGHT_VEIL = 0.42;
+const DAY_VEIL = 0.8;
+/**
+ * O HERÓI ABRE A NÉVOA (2026-11-11): ela é desenhada por cima de tudo, e quem andava dentro dela sumia. Em volta dele
+ * o véu rareia até um quinto (some até 1,2 tile, volta inteiro a 3), e a clareira vai atrás dele devagar, como névoa
+ * que se abre — nada de buraco seco andando de tile em tile.
+ */
+const HERO_FLOOR = 0.2;
+const HERO_CLEAR_IN = 1.2;
+const HERO_CLEAR_OUT = 3;
+/** Quão depressa a clareira acompanha o herói (por segundo). */
+const HERO_CLEAR_RATE = 2.5;
 /** A moldura do jardim, em tiles a partir da fogueira (o interior e a sebe; ao sul, até a sebe do portão). */
 const REACH = { x0: -6, x1: 5, y0: -6, y1: 4 };
 /** O raio em que a névoa começa a rarear: a borda dela some aos poucos, sem contorno de bloco. */
@@ -107,6 +124,18 @@ export const mistTint = (daylight: number): number => {
   return (ch(16) << 16) | (ch(8) << 8) | ch(0);
 };
 
+/** Quanto do véu fica para uma luz do dia de 0 (a noite) a 1 (o meio-dia). */
+export const mistVeil = (daylight: number): number => NIGHT_VEIL + (DAY_VEIL - NIGHT_VEIL) * Math.min(1, Math.max(0, daylight));
+
+/**
+ * Quanto da névoa sobra a `d` tiles do herói: um quinto em cima dele, inteira a partir de 3 tiles. A distância de uma
+ * nuvem é medida de onde ela aparece na tela (a altura dela a sobe para o norte), não do pé dela.
+ */
+export const heroClearing = (d: number): number => {
+  const t = Math.min(1, Math.max(0, (d - HERO_CLEAR_IN) / (HERO_CLEAR_OUT - HERO_CLEAR_IN)));
+  return HERO_FLOOR + (1 - HERO_FLOOR) * t * t * (3 - 2 * t);
+};
+
 const fadeAt = (d: number): number => {
   const t = Math.min(1, Math.max(0, (FADE_TO - d) / (FADE_TO - FADE_FROM)));
   return t * t * (3 - 2 * t);
@@ -129,6 +158,8 @@ interface Puff {
   phase: number;
   /** O sopro: quanto o vento já levou (0..1) e para onde. */
   gone: number;
+  /** Quanto dela o herói deixou (1 = inteira; ver heroClearing), já suavizado no tempo. */
+  clear: number;
 }
 
 export class GardenMist {
@@ -138,7 +169,12 @@ export class GardenMist {
   /** O degrau de luz do dia com que o tom foi escrito por último (ver DAY_TINT_SCALE): só reescreve quando muda. */
   private tintStep = -1;
 
-  public constructor(private readonly scene: Engine.Scene, center: { x: number; y: number }) {
+  public constructor(
+    private readonly scene: Engine.Scene,
+    center: { x: number; y: number },
+    /** Onde o herói está, em tiles (a névoa se abre em volta dele); sem ele, a névoa não se abre. */
+    private readonly heroAt: () => { x: number; y: number } | null = () => null,
+  ) {
     ensureTextures();
     const w3 = world3d();
     let n = 0;
@@ -156,7 +192,7 @@ export class GardenMist {
         const bb = overlay(w3.objects.addBillboard(CLOUD, 0, { centered: true, depthWrite: false, alphaTest: 0.01 })
           .setTint(TINT)
           .setDisplaySize(width, width * 0.6));
-        this.puffs.push({ bb, x: px, y: py, lift: 0.35 + noise(x, y, 5) * 1.1, alpha, phase: n * 1.7, gone: 0 });
+        this.puffs.push({ bb, x: px, y: py, lift: 0.35 + noise(x, y, 5) * 1.1, alpha, phase: n * 1.7, gone: 0, clear: 1 });
       }
     }
     // Os lençóis rente ao chão.
@@ -168,7 +204,7 @@ export class GardenMist {
         const bb = overlay(w3.objects.addBillboard(SHEET, 0, { flat: true, flatY: 0.18, depthWrite: false, alphaTest: 0.01 })
           .setTint(TINT)
           .setDisplaySize(4.6, 4.6));
-        this.puffs.push({ bb, x, y, lift: 0, alpha: SHEET_ALPHA * fade, phase: n * 2.3, gone: 0 });
+        this.puffs.push({ bb, x, y, lift: 0, alpha: SHEET_ALPHA * fade, phase: n * 2.3, gone: 0, clear: 1 });
       }
     }
     this.tick(0);
@@ -194,9 +230,13 @@ export class GardenMist {
 
   /** A deriva e a respiração. */
   private tick(deltaMs: number): void {
-    this.clock += deltaMs / 1000;
+    const dt = deltaMs / 1000;
+    this.clock += dt;
     const t = this.clock;
     this.syncTint();
+    const veil = mistVeil(world3d().params.daylight);
+    const hero = this.heroAt();
+    const follow = Math.min(1, dt * HERO_CLEAR_RATE);
     for (const p of this.puffs) {
       // CAMADAS EM RITMOS DIFERENTES (2026-11-10): a nuvem mais alta anda mais e mais depressa que o lençol rente ao
       // chão, como num vale de verdade — é o desencontro entre as camadas que dá profundidade ao véu.
@@ -208,7 +248,10 @@ export class GardenMist {
       p.bb.setPosition(x, y);
       if (p.lift > 0) p.bb.setElevation(p.lift + p.gone * 0.8 + Math.sin(t * 0.3 + p.phase) * 0.08);
       const breathe = 0.85 + 0.15 * Math.sin(t * 0.4 + p.phase);
-      p.bb.setAlpha(p.alpha * breathe * (1 - p.gone));
+      // na tela, a nuvem alta aparece mais ao norte do pé dela: é dali que se mede o herói
+      const target = hero ? heroClearing(Math.hypot(x - hero.x, y - p.lift - hero.y)) : 1;
+      p.clear += (target - p.clear) * (deltaMs > 0 ? follow : 1);
+      p.bb.setAlpha(p.alpha * breathe * (1 - p.gone) * veil * p.clear);
     }
   }
 

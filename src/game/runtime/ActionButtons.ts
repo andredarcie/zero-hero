@@ -29,6 +29,8 @@ import {
 const STYLE_ID = 'zh-action-style';
 const ROOT_ID = 'zh-action-pad';
 const HINT_ID = 'zh-controls-hint';
+/** O corpo da letra da dica, antes da escala de texto do jogador. */
+const HINT_FONT_PX = 18;
 const STICK_ID = 'zh-touch-stick';
 
 /** A MAO aberta, em pixel art (12×12): falar, acender, abrir. */
@@ -102,13 +104,16 @@ body.zh-solid-btns #${ROOT_ID} .zh-act {
   /* A dica e uma TABUINHA de madeira (a moldura do dialogo), nunca uma pilula. */
   ${WOOD_PANEL}
   border-width: 2px; padding: 0.35em 0.9em;
-  color: #d8d1c0; font-family: ${BOOK_FONT}; font-size: 15px; white-space: nowrap;
+  /* 18 px e não 15 (2026-11-11): na tela cheia a dica era a menor letra da tela, menor que a do diálogo que ela
+     anuncia; a sombra de um pixel separa a letra clara do veio da madeira. */
+  color: #e4ddcc; font-family: ${BOOK_FONT}; font-size: ${HINT_FONT_PX}px; white-space: nowrap;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.55);
   opacity: 0; transition: opacity 320ms ease;
 }
 /* No toque a tarja sobe: embaixo moram os botoes, e uma dica por cima do botao que ela explica
    esconde justamente o que ela aponta. */
 #${HINT_ID}.zh-hint-top {
-  bottom: auto; top: calc(64px + env(safe-area-inset-top, 0px)); font-size: 15px;
+  bottom: auto; top: calc(64px + env(safe-area-inset-top, 0px)); font-size: ${HINT_FONT_PX}px;
 }
 #${HINT_ID}.zh-show { opacity: 1; }
 /* O JOYSTICK QUE APARECE: um anel onde o polegar encostou e o pomo seguindo o dedo. */
@@ -284,7 +289,7 @@ export class ControlsHint {
     this.el.id = HINT_ID;
     if (top) this.el.classList.add('zh-hint-top');
     this.el.textContent = text;
-    this.el.style.fontSize = `${15 * getTextScale()}px`;
+    this.el.style.fontSize = `${HINT_FONT_PX * getTextScale()}px`;
     document.body.appendChild(this.el);
     requestAnimationFrame(() => this.el.classList.add('zh-show'));
     this.timer = window.setTimeout(() => this.el.classList.remove('zh-show'), showMs);

@@ -9,10 +9,13 @@ export const VINE_VARIANTS = 4;
 const CELL_W = 16;
 const CELL_H = 32;
 
-const LEAF_DARK = '#27482a';
-const LEAF_MID = '#3c6b35';
-const LEAF_LIGHT = '#5d9440';
-const STEM = '#2f4a22';
+// A PALETA DESCEU (2026-11-11): a trepadeira é acesa como a pedra, de cima, e com a luz do dia o verde-claro de antes
+// (#5d9440) estourava em neon; e a primeira fileira, inteira nesse verde, desenhava uma régua acesa no topo de cada
+// degrau do contorno — um retângulo verde, como caixa de seleção. Agora são os verdes fundos da folhagem do tileset.
+const LEAF_DARK = '#1f3824';
+const LEAF_MID = '#30552e';
+const LEAF_LIGHT = '#467536';
+const STEM = '#263f1f';
 
 let texture: THREE.CanvasTexture | undefined;
 
@@ -31,10 +34,14 @@ export const vineTexture = (): THREE.Texture => {
     };
     for (let v = 0; v < VINE_VARIANTS; v += 1) {
       const ox = v * CELL_W;
-      // A franja: capim dobrando por cima da beira, de altura irregular.
+      // A franja: capim dobrando por cima da beira, de altura irregular, em tufos — uma coluna aqui e ali fica só com
+      // a ponta, e o verde-claro é só a ponta de uma folha ou outra: a beira não vira uma régua acesa.
       for (let x = 0; x < CELL_W; x += 1) {
-        const depth = 2 + Math.floor(rand() * 4);
-        for (let y = 0; y < depth; y += 1) dot(y === depth - 1 ? LEAF_DARK : y === 0 ? LEAF_LIGHT : LEAF_MID, ox + x, y);
+        const depth = rand() < 0.2 ? 1 : 2 + Math.floor(rand() * 4);
+        for (let y = 0; y < depth; y += 1) {
+          const tip = y === 0 && rand() < 0.3 ? LEAF_LIGHT : LEAF_MID;
+          dot(y === depth - 1 && depth > 1 ? LEAF_DARK : tip, ox + x, y);
+        }
       }
       // Os ramos: cada um desce serpenteando, com folhas dos dois lados e um fim diferente.
       const strands = 2 + v % 3;

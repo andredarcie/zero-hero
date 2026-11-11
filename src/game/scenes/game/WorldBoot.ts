@@ -214,7 +214,11 @@ export class WorldBoot {
       this.host.valley.oldRoad = new OldRoad();
       this.host.valley.trails = new Trails();
       const garden = getHearths()[0];
-      if (garden && !this.host.arc.has('mist')) this.host.valley.gardenMist = new GardenMist(this.host, { x: garden.worldX, y: garden.worldY });
+      if (garden && !this.host.arc.has('mist')) {
+        // a névoa se abre em volta do herói (GardenMist.heroClearing)
+        const heroAt = (): { x: number; y: number } => ({ x: this.host.playerWorld.worldX, y: this.host.playerWorld.worldY });
+        this.host.valley.gardenMist = new GardenMist(this.host, { x: garden.worldX, y: garden.worldY }, heroAt);
+      }
       this.host.forage.mushroomKin = this.host.forage.makeMushroomKin();
       this.host.groundItems.enforceNpcFrontRule();
       this.host.groundItems.freeTrappedItems();

@@ -23,6 +23,11 @@ export class WaterIndex {
     this.tiles.clear();
   }
 
+  /** Este tile é água? (os anéis de quem anda na beira: waterRipples) */
+  public has(x: number, z: number): boolean {
+    return this.tiles.has(key(x, z));
+  }
+
   /**
    * Há água logo ao SUL deste ponto? A câmera olha para o norte, então o reflexo de uma coisa em pé cai na água que
    * fica entre ela e a câmera: até três tiles para o sul, um para cada lado.

@@ -97,14 +97,17 @@ export const makeFireGlowMaterial = (opts: {
          ${FIRE_WOBBLE_GLSL}
          ${SHADOW_MASK_GLSL}
          varying vec2 vGlowPos;
-         // The falloff the canvas gradient used to bake: a hot core that drops away fast,
-         // then a long soft skirt out to the rim.
+         // A hot core that drops away fast, then a long soft skirt out to the rim. TIGHTER
+         // since 2026-11-11: the old plateau (0.95 → 0.60 over the first fifth, still 0.25 at
+         // half the radius) added a near-white disc on top of the real firelight, and the grass
+         // around a campfire washed to pale yellow — a spotlight, not a fire. The real light
+         // already lights the ground; the pool is the haze over it.
          float glowCurve(float r) {
            if (r >= 1.0) return 0.0;
-           if (r < 0.18) return mix(0.95, 0.60, r / 0.18);
-           if (r < 0.45) return mix(0.60, 0.25, (r - 0.18) / 0.27);
-           if (r < 0.75) return mix(0.25, 0.06, (r - 0.45) / 0.30);
-           return mix(0.06, 0.0, (r - 0.75) / 0.25);
+           if (r < 0.12) return mix(0.80, 0.45, r / 0.12);
+           if (r < 0.38) return mix(0.45, 0.15, (r - 0.12) / 0.26);
+           if (r < 0.70) return mix(0.15, 0.035, (r - 0.38) / 0.32);
+           return mix(0.035, 0.0, (r - 0.70) / 0.30);
          }
          void main() {`,
       )

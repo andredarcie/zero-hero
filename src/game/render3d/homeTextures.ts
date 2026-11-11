@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import {
   INK, paintColumn, paintDome, RAMPS, toneOf, type Paint, type Ramp,
 } from '@/game/render3d/pixelForms';
+import { paintYard, YARD_DEPTH, YARD_TEXELS, YARD_WIDTH } from '@/game/render3d/homeYard';
 import { registerTexture3D } from '@/game/render3d/textures3d';
 import type { NpcKind } from '@/game/world/ScreenContent';
 import { createCanvas } from '@/game/platform/platform';
@@ -35,6 +36,60 @@ const windowPane = (rect: Paint, glow: boolean, x: number, y: number, w: number,
   rect(frame, x, y + Math.floor(h / 2), w, 1);
 };
 
+/**
+ * O TELHADO DE CADA CASA, de frente: o meio (cx), a fileira da cumeeira, quantas fileiras, a meia largura na cumeeira,
+ * quanto ela cresce por fileira e a rampa das telhas. A fachada o pinta (paintGable), e o NpcHomes monta com ele as águas
+ * de trás e dos lados (render3d/homeShell.ts) — uma medida só, nunca lida de volta dos pixels.
+ */
+export interface GableSpec { cx: number; top: number; rows: number; startHalf: number; grow: number; ramp: Ramp }
+export const HOME_GABLES: Readonly<Partial<Record<HomeKind, GableSpec>>> = {
+  businessMan: { cx: 24, top: 7, rows: 16, startHalf: 5, grow: 1.42, ramp: RAMPS.thatch },
+  painter: { cx: 23, top: 2, rows: 19, startHalf: 3, grow: 1.28, ramp: RAMPS.pink },
+};
+
+/**
+ * AS PAREDES DE CADA CASA, no desenho da fachada: a primeira e a última coluna do contorno, a fileira de cima e a de
+ * baixo, e as colunas de onde as paredes dos LADOS tiram a tinta (a da esquerda na luz, a da direita na sombra; longe
+ * do contorno, das pontas das toras e das janelas). São os mesmos números do `rect(INK, …)` de cada pintor. `rightMix`
+ * puxa a parede da direita para a tinta da luz: a da Sisi sai da faixa de quina, escura demais para uma parede inteira.
+ */
+export interface WallSpec {
+  left: number; right: number; top: number; bottom: number; sampleLeft: number; sampleRight: number; rightMix?: number;
+}
+export const HOME_WALLS: Readonly<Partial<Record<HomeKind, WallSpec>>> = {
+  // (a última tora desce uma fileira abaixo do contorno: a parede vai até a 46)
+  businessMan: { left: 3, right: 44, top: 22, bottom: 46, sampleLeft: 6, sampleRight: 40 },
+  painter: { left: 5, right: 42, top: 21, bottom: 45, sampleLeft: 6, sampleRight: 40, rightMix: 0.45 },
+};
+
+/**
+ * O QUE SAI DA FACHADA EM VOLUME (as colunas e fileiras do desenho, e quantos pixels de fundo): a lenha empilhada
+ * encostada na quina do Marco — desenhada de frente, em pé no plano da fachada, ela era um cartão. A frente dela é o
+ * próprio desenho; em 3D vêm o topo e o lado de fora (a lenha encosta na parede).
+ */
+export interface HomeBoxSpec { left: number; right: number; top: number; bottom: number; depth: number }
+export const HOME_BOXES: Readonly<Partial<Record<HomeKind, readonly HomeBoxSpec[]>>> = {
+  businessMan: [{ left: 0, right: 2, top: 38, bottom: 45, depth: 9 }],
+};
+
+/**
+ * A CHAMINÉ, inteira em 3D (no desenho de frente ela é pintada atrás do telhado): as colunas e a fileira do topo dela no
+ * desenho, e o lado do quadrado. Ela nasce de dentro do telhado, na linha da cumeeira.
+ */
+export interface ChimneySpec { left: number; right: number; top: number }
+export const HOME_CHIMNEYS: Readonly<Partial<Record<HomeKind, ChimneySpec>>> = {
+  businessMan: { left: 32, right: 40, top: 2 },
+};
+
+/** A fileira `i` de uma fiada de telhas: o tom de cada pixel (a borda de baixo da fiada mais escura, o desencontro). */
+export const shingleTone = (ramp: Ramp, base: string, row: number, x: number): string => {
+  const course = Math.floor(row / 3);
+  const stagger = (((x + course * 3) % 6) + 6) % 6;
+  if (row % 3 === 2) return stagger === 0 ? ramp[3] : ramp[2];
+  if (stagger === 0 && row % 3 === 1) return ramp[2];
+  return base;
+};
+
 /** O telhado de duas águas, de frente: fiadas desencontradas, cada uma com a borda de baixo mais escura. */
 const paintGable = (rect: Paint, cx: number, top: number, rows: number, startHalf: number, grow: number, ramp: Ramp): void => {
   for (let i = 0; i < rows; i += 1) {
@@ -42,18 +97,12 @@ const paintGable = (rect: Paint, cx: number, top: number, rows: number, startHal
     const half = Math.round(startHalf + i * grow);
     rect(INK, cx - half - 1, y, half * 2 + 2, 1);
     const left = cx - half;
-    for (let x = left; x < cx + half; x += 1) {
-      const course = Math.floor(i / 3);
-      const stagger = (x + course * 3) % 6;
-      const lit = x < cx ? 0.5 : -0.05;
-      let tone = toneOf(ramp, lit);
-      if (i % 3 === 2) tone = stagger === 0 ? ramp[3] : ramp[2];
-      else if (stagger === 0 && i % 3 === 1) tone = ramp[2];
-      rect(tone, x, y, 1, 1);
-    }
+    // a luz vem da esquerda: a metade esquerda clara, a direita na sombra
+    for (let x = left; x < cx + half; x += 1) rect(shingleTone(ramp, toneOf(ramp, x < cx ? 0.5 : -0.05), i, x), x, y, 1, 1);
   }
   rect(INK, cx - Math.round(startHalf + (rows - 1) * grow) - 1, top + rows, Math.round(startHalf + (rows - 1) * grow) * 2 + 2, 1);
 };
+const paintGableSpec = (rect: Paint, g: GableSpec): void => paintGable(rect, g.cx, g.top, g.rows, g.startHalf, g.grow, g.ramp);
 
 const theaHome = (rect: Paint, glow: boolean): void => {
   if (glow) {
@@ -101,19 +150,21 @@ const theaHome = (rect: Paint, glow: boolean): void => {
   }
 };
 
-const marcoHome = (rect: Paint, glow: boolean): void => {
+const marcoHome = (rect: Paint, glow: boolean, bare = false): void => {
   if (glow) {
     windowPane(rect, true, 10, 28, 6, 6, RAMPS.door[3]);
     windowPane(rect, true, 33, 28, 6, 6, RAMPS.door[3]);
     return;
   }
-  // A chaminé de pedra, atrás do telhado, em blocos desencontrados.
-  rect(INK, 32, 2, 9, 16);
-  for (let y = 3; y < 18; y += 1) {
-    for (let x = 33; x < 40; x += 1) {
-      const course = Math.floor((y - 3) / 3);
-      const seam = (y - 3) % 3 === 2 || (x + course * 2) % 4 === 0;
-      rect(seam ? RAMPS.stone[3] : (x < 36 ? RAMPS.stone[0] : RAMPS.stone[1]), x, y, 1, 1);
+  // A chaminé de pedra, atrás do telhado, em blocos desencontrados (no 3D ela é uma caixa: homeShell).
+  if (!bare) {
+    rect(INK, 32, 2, 9, 16);
+    for (let y = 3; y < 18; y += 1) {
+      for (let x = 33; x < 40; x += 1) {
+        const course = Math.floor((y - 3) / 3);
+        const seam = (y - 3) % 3 === 2 || (x + course * 2) % 4 === 0;
+        rect(seam ? RAMPS.stone[3] : (x < 36 ? RAMPS.stone[0] : RAMPS.stone[1]), x, y, 1, 1);
+      }
     }
   }
   // As paredes: cada tora é redonda (claro em cima, escuro embaixo) e sobra no canto.
@@ -141,7 +192,7 @@ const marcoHome = (rect: Paint, glow: boolean): void => {
   rect(RAMPS.wood[3], 4, 23, 40, 3);
   rect('#2e1d1e', 4, 23, 40, 1);
   // O telhado, com o beiral sobrando dois pixels de cada lado.
-  paintGable(rect, 24, 7, 16, 5, 1.42, RAMPS.thatch);
+  if (!bare) paintGableSpec(rect, HOME_GABLES.businessMan as GableSpec);
   windowPane(rect, false, 10, 28, 6, 6, RAMPS.door[3]);
   windowPane(rect, false, 33, 28, 6, 6, RAMPS.door[3]);
   // A porta de tábuas, com a luz na da esquerda.
@@ -160,7 +211,7 @@ const marcoHome = (rect: Paint, glow: boolean): void => {
   }
 };
 
-const sisiHome = (rect: Paint, glow: boolean): void => {
+const sisiHome = (rect: Paint, glow: boolean, bare = false): void => {
   if (glow) {
     windowPane(rect, true, 8, 26, 14, 9, RAMPS.door[3]);
     return;
@@ -190,7 +241,7 @@ const sisiHome = (rect: Paint, glow: boolean): void => {
   splat('#f2c230', '#b48a24', 8, 39);
   splat('#a868d0', '#6c3e96', 33, 30);
   // O telhado, torto de propósito.
-  paintGable(rect, 23, 2, 19, 3, 1.28, RAMPS.pink);
+  if (!bare) paintGableSpec(rect, HOME_GABLES.painter as GableSpec);
   // A janela de ateliê, com a jardineira.
   windowPane(rect, false, 8, 26, 14, 9, RAMPS.door[3]);
   rect(INK, 7, 36, 16, 3);
@@ -249,7 +300,11 @@ const shuiHome = (rect: Paint, glow: boolean): void => {
   for (const [x, y, w] of [[3, 45, 9], [36, 45, 10], [7, 44, 3], [38, 44, 2], [1, 46, 3], [44, 46, 3]] as const) rect(RAMPS.stem[1], x, y, w, 1);
 };
 
-export const HOME_PAINTERS: Readonly<Record<HomeKind, (rect: Paint, glow: boolean) => void>> = {
+/**
+ * Os pintores das fachadas. `bare`: só as paredes, sem o telhado e a chaminé — a versão do 3D, onde eles são volume
+ * (render3d/homeShell.ts); o 2D (o editor) continua com o desenho inteiro.
+ */
+export const HOME_PAINTERS: Readonly<Record<HomeKind, (rect: Paint, glow: boolean, bare?: boolean) => void>> = {
   astronaut: theaHome,
   businessMan: marcoHome,
   painter: sisiHome,
@@ -260,147 +315,9 @@ export const homeTexture = (kind: HomeKind): string => `home-${kind}`;
 export const homeGlowTexture = (kind: HomeKind): string => `home-${kind}-glow`;
 export const homeYardTexture = (kind: HomeKind): string => `home-${kind}-yard`;
 
-/** O terreiro, em tiles: a mancha de terra batida em volta da casa. */
-export const YARD_WIDTH = 5;
-export const YARD_DEPTH = 3.5;
-const YARD_TEXELS = 16;
-/** Da terra pisada, mais clara, até o fundo das rachaduras. */
-const YARD_TONES = ['#8f7a57', '#7c6849', '#6b593e', '#584930', '#433724'] as const;
-const YARD_LIT = 0;
-const YARD_MID = 1;
-const YARD_SHADE = 2;
-const YARD_DARK = 3;
-const YARD_DEEP = 4;
-const YARD_GRASS = ['#55702f', '#3f5a26'] as const;
-const YARD_PEBBLE = ['#a89a7c', '#837763', '#4c4231'] as const;
-const YARD_LEAF = '#a2652c';
-/** Até onde vai a terra inteira; dali até 1 ela se desfaz em torrões soltos no capim. */
-const YARD_SOLID_REACH = 0.86;
 
-const yardNoise = (x: number, y: number, seed: number): number => {
-  const s = Math.sin(x * 127.1 + y * 311.7 + seed * 74.7) * 43758.5453;
-  return s - Math.floor(s);
-};
-
-/** Ruído liso: manchas de contorno orgânico, em vez do grão de um pixel ou das ondas regulares. */
-const yardBlotch = (x: number, y: number, seed: number, cell: number): number => {
-  const fx = x / cell;
-  const fy = y / cell;
-  const ix = Math.floor(fx);
-  const iy = Math.floor(fy);
-  const sx = (fx - ix) * (fx - ix) * (3 - 2 * (fx - ix));
-  const sy = (fy - iy) * (fy - iy) * (3 - 2 * (fy - iy));
-  const top = yardNoise(ix, iy, seed) * (1 - sx) + yardNoise(ix + 1, iy, seed) * sx;
-  const bottom = yardNoise(ix, iy + 1, seed) * (1 - sx) + yardNoise(ix + 1, iy + 1, seed) * sx;
-  return top * (1 - sy) + bottom * sy;
-};
-
-/**
- * O TERREIRO, no mesmo nível de detalhe do capim e da terra da fogueira: pixel a pixel, com cinco tons
- * em manchas, a beira comida por lobos e torrões, a borda de baixo escura (a terra é um degrau abaixo do
- * capim), o caminho pisado que sai da porta, rachaduras, pedrinhas com luz e sombra, gravetos, folhas
- * secas e tufos de capim voltando pela beira.
- */
-const paintYard = (rect: Paint, seed: number): void => {
-  const w = YARD_WIDTH * YARD_TEXELS;
-  const h = YARD_DEPTH * YARD_TEXELS;
-  const reachAt = (x: number, y: number): number => {
-    const nx = (x + 0.5 - w / 2) / (w / 2);
-    const ny = (y + 0.5 - h / 2) / (h / 2);
-    return Math.hypot(nx, ny)
-      + (yardBlotch(x, y, seed + 4, 13) - 0.5) * 0.5
-      + (yardBlotch(x, y, seed + 5, 4) - 0.5) * 0.16;
-  };
-  const solid = (x: number, y: number): boolean => x >= 0 && y >= 0 && x < w && y < h && reachAt(x, y) < YARD_SOLID_REACH;
-  // O caminho desce da porta com uma curva só dele, e abre um pouco antes de chegar no capim.
-  const doorY = Math.round(h * 0.3);
-  const pathX = (y: number): number => w / 2 + Math.sin(y * 0.09 + seed * 1.7) * 5;
-  const onPath = (x: number, y: number): number => {
-    if (y < doorY) return 2;
-    const half = 6 + (y - doorY) * 0.09 + (yardBlotch(x, y, seed + 6, 3) - 0.5) * 3;
-    return Math.abs(x - pathX(y)) / half;
-  };
-
-  for (let y = 0; y < h; y += 1) {
-    for (let x = 0; x < w; x += 1) {
-      const reach = reachAt(x, y);
-      if (reach >= YARD_SOLID_REACH) {
-        // Os torrões soltos: cada vez mais raros para fora, e nunca um pixel só.
-        if (reach < 1 && yardBlotch(x, y, seed + 7, 2) > 0.5 + (reach - YARD_SOLID_REACH) * 1.6) {
-          rect(YARD_TONES[yardNoise(x, y, seed + 8) > 0.5 ? YARD_SHADE : YARD_DARK], x, y, 1, 1);
-        }
-        continue;
-      }
-      // De dois em dois pixels, como os torrões do chão em volta: grão de um pixel só parecia areia fina.
-      const bx = x & ~1;
-      const by = y & ~1;
-      const stain = yardBlotch(bx, by, seed + 1, 13) * 0.7 + yardBlotch(bx, by, seed + 2, 5) * 0.3;
-      let tone = stain > 0.58 ? YARD_MID : stain > 0.45 ? YARD_SHADE : YARD_DARK;
-      const path = onPath(x, y);
-      if (path < 0.8) tone = YARD_LIT;
-      else if (path < 1.15) tone = Math.min(tone, YARD_MID);
-      // A terra afunda na beira, antes de virar capim.
-      if (reach > YARD_SOLID_REACH - 0.09) tone = Math.min(YARD_DARK, tone + 1);
-      // O grão: um ou outro pixel foge do tom da mancha.
-      const grain = yardNoise(bx, by, seed + 3);
-      if (grain > 0.93) tone = Math.max(YARD_LIT, tone - 1);
-      else if (grain < 0.08) tone = Math.min(YARD_DARK, tone + 1);
-      // O degrau: embaixo a terra mostra o corte, em cima o capim faz sombra nela.
-      if (!solid(x, y + 1) || !solid(x, y + 2)) tone = YARD_DEEP;
-      else if (!solid(x, y - 1)) tone = YARD_DARK;
-      rect(YARD_TONES[tone], x, y, 1, 1);
-    }
-  }
-
-  /** Sorteia lugares de terra firme: `want` diz se aquele pixel serve. */
-  const scatter = (count: number, salt: number, want: (x: number, y: number) => boolean, draw: (x: number, y: number, i: number) => void): void => {
-    let placed = 0;
-    for (let i = 0; i < count * 12 && placed < count; i += 1) {
-      const x = Math.floor(yardNoise(i, salt, seed + 9) * w);
-      const y = Math.floor(yardNoise(salt, i, seed + 10) * h);
-      if (!want(x, y)) continue;
-      draw(x, y, i);
-      placed += 1;
-    }
-  };
-  const firm = (x: number, y: number): boolean => reachAt(x, y) < YARD_SOLID_REACH - 0.12 && y > doorY - 6;
-
-  // As rachaduras: passos curtos que mudam de rumo, sempre fora do caminho.
-  scatter(9, 1, (x, y) => firm(x, y) && onPath(x, y) > 1.4, (x, y, i) => {
-    let cx = x;
-    let cy = y;
-    for (let n = 0; n < 5 + (i % 5); n += 1) {
-      if (firm(cx, cy)) rect(YARD_TONES[YARD_DEEP], cx, cy, 1, 1);
-      if (yardNoise(n, i, seed + 11) > 0.45) cx += i % 2 === 0 ? 1 : -1;
-      else cy += 1;
-    }
-  });
-  // As pedrinhas: luz em cima à esquerda e a sombra colada embaixo, para não boiarem.
-  scatter(13, 2, firm, (x, y, i) => {
-    const big = i % 3 === 0;
-    rect(YARD_PEBBLE[2], x, y + 1, big ? 3 : 2, 1);
-    rect(YARD_PEBBLE[1], x, y, big ? 3 : 2, 1);
-    rect(YARD_PEBBLE[0], x, y, 1, 1);
-    if (big) { rect(YARD_PEBBLE[1], x + 1, y - 1, 1, 1); }
-  });
-  // Os gravetos caídos.
-  scatter(4, 3, (x, y) => firm(x, y) && onPath(x, y) > 1.2, (x, y, i) => {
-    const down = i % 2 === 0 ? 1 : -1;
-    rect(YARD_TONES[YARD_DEEP], x, y, 3, 1);
-    rect(YARD_TONES[YARD_DARK], x + 3, y + down, 2, 1);
-  });
-  // As folhas secas.
-  scatter(7, 4, firm, (x, y) => rect(YARD_LEAF, x, y, 1, 1));
-  // O capim voltando: tufos em V na beira, e um ou outro mais para dentro.
-  scatter(20, 5, (x, y) => {
-    const reach = reachAt(x, y);
-    return reach > YARD_SOLID_REACH - 0.34 && reach < YARD_SOLID_REACH - 0.02 && onPath(x, y) > 1.2 && y > 2;
-  }, (x, y, i) => {
-    rect(YARD_GRASS[1], x, y, 1, 2);
-    rect(YARD_GRASS[0], x + 1, y - 1, 1, 3);
-    if (i % 2 === 0) rect(YARD_GRASS[1], x + 2, y, 1, 2);
-  });
-};
+/** O terreiro (a terra batida debaixo e em frente da casa) mora em homeYard.ts; as medidas saem daqui também. */
+export { YARD_DEPTH, YARD_WIDTH };
 
 export const paintedCanvas = (paint: (rect: Paint) => void, width = 48, height = 48): HTMLCanvasElement => {
   const canvas = createCanvas();
@@ -426,7 +343,9 @@ export const registerHomeTextures = (scene: Engine.Scene): void => {
       [homeGlowTexture(kind), paintedCanvas((rect) => painter(rect, true))],
       [homeYardTexture(kind), paintedCanvas((rect) => paintYard(rect, seed + 1), YARD_WIDTH * YARD_TEXELS, YARD_DEPTH * YARD_TEXELS)],
     ];
-    for (const [key, canvas] of sheets) {
+    for (const [key, canvas2d] of sheets) {
+      // no 3D, a casa de telha veste só as paredes: o telhado e a chaminé são volume (homeShell)
+      const canvas = key === homeTexture(kind) && HOME_GABLES[kind] ? paintedCanvas((rect) => painter(rect, false, true)) : canvas2d;
       if (!threeRegistered) {
         const tex = new THREE.CanvasTexture(canvas);
         tex.magFilter = THREE.NearestFilter;
@@ -435,7 +354,7 @@ export const registerHomeTextures = (scene: Engine.Scene): void => {
         tex.needsUpdate = true;
         registerTexture3D(key, tex);
       }
-      if (!scene.textures.exists(key)) scene.textures.addCanvas(key, canvas);
+      if (!scene.textures.exists(key)) scene.textures.addCanvas(key, canvas2d);
     }
   });
   threeRegistered = true;

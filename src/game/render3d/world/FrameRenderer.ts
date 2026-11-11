@@ -45,6 +45,7 @@ export class FrameRenderer {
     // A decoração em pé: o knob hd3d.stand (em pé / deitada), o pisão e quem passa por ela.
     profiler.begin('decor');
     this.host.tiles.standing?.update(dt);
+    this.host.tiles.ripples?.update(); // os anéis de quem anda na beira da água
     profiler.end('decor');
     this.host.chunkShroud.update(dtMs); // avança (e encerra) as dissoluções de compra de chunk
 

@@ -1,7 +1,9 @@
 // A VARREDURA DO TERRENO: cada tile do mundo (e da margem de fora dele) no seu balde — chão, rio, mar, lava, poço,
 // decoração, sólido, serra, escada, vazio — numa passada só, para os passos do assado.
 
-import { CHUNK_COLUMNS, CHUNK_ROWS, groundFrameAt, SEA_TILE_FRAME, SEA_TILE_FRAMES, terrainVariant, SOLID_UPPER_FRAMES } from '@/game/constants';
+import {
+  CHUNK_COLUMNS, CHUNK_ROWS, groundFrameAt, SEA_TILE_FRAME, SEA_TILE_FRAMES, terrainVariant, SOLID_UPPER_FRAMES, TREE_UPPER_FRAMES,
+} from '@/game/constants';
 import { getBridgeSpots, getChunkTerrain, getLavaTiles, getWaterTiles, getWorldBounds, isInsideWorld } from '@/game/world/WorldData';
 import { reliefAt, reliefLevelAt, stairBase, stairUp } from '@/game/world/relief';
 import { decorFrameAt } from '@/game/world/biomes';
@@ -37,6 +39,8 @@ export interface TerrainSort {
   reliefNear: Array<TerrainTile & { level: number; far: boolean }>;
   voidTiles: Array<{ x: number; z: number }>;
   solidSet: Set<number>;
+  /** Os sólidos que são ÁRVORE (TREE_UPPER_FRAMES): a mata fechada, para a sombra e o sub-bosque dela. */
+  treeSet: Set<number>;
 }
 
 /** O que TerrainSorter usa de World3D. */
@@ -149,7 +153,10 @@ export class TerrainSorter {
     // Where the standing tiles are, so the ground can bake an ambient-occlusion corner shade
     // under them (see buildFlatTileGeometry).
     const solidSet = new Set(this.host.tiles.solidTiles.map((t) => tileKey(t.x, t.z)));
+    const treeSet = new Set(this.host.tiles.solidTiles.filter((t) => TREE_UPPER_FRAMES.has(t.frame)).map((t) => tileKey(t.x, t.z)));
 
-    return { b, pitSet, pitTiles, groundTiles, bedTiles, seaTiles, lavaBedTiles, decorTiles, highGroundTiles, reliefNear, voidTiles, solidSet };
+    return {
+      b, pitSet, pitTiles, groundTiles, bedTiles, seaTiles, lavaBedTiles, decorTiles, highGroundTiles, reliefNear, voidTiles, solidSet, treeSet,
+    };
   }
 }

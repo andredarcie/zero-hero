@@ -2,12 +2,12 @@
 // negra de fora do mapa, e as sombras assadas (o blob de cada sólido e os campos instanciados do fogo e da lua).
 
 import * as THREE from 'three';
-import { DUNGEON_TILES } from '@/game/constants';
+import { DUNGEON_TILES, TREE_UPPER_FRAMES } from '@/game/constants';
 import { RELIEF_HEIGHT, reliefLevelAt } from '@/game/world/relief';
 import { isLifeHome } from '@/game/world/biomeLife';
 import { ANCIENT_GROVE, BIOME_DECOR, biomeTreeTintAt } from '@/game/world/biomes';
 import { SolidCastField } from '../CastShadow3D';
-import { treeLookAt } from '../forest';
+import { FOREST_FLOOR_REACH, forestUnderstory, treeLookAt, type TreeLook } from '../forest';
 import { buildShadowBlobGeometry } from '../groundShadow';
 import { getBaseTexture3D } from '../textures3d';
 import { bucketKey, buildBankGeometry, buildFlatTileGeometry, buildLavaSurface, buildScorchGeometry, buildShoreGeometry, buildUprightTileGeometry, CLIFF_WALL_SET, DUNGEON_WALL_SET, LAVA_BANK_BANDS, LAVA_DEPTH_TILES, LAVA_RIM_TINT, tileKey } from '../terrainGeometry';
@@ -21,6 +21,8 @@ import { decorShown } from './decorScatter';
 // A altura da CORTINA de névoa. As árvores medem 1; 1.3 cobre a copa com folga, para nenhuma
 // ponta de pinheiro furar a névoa por cima.
 const VOID_MIST_HEIGHT = 1.3;
+/** As plantas do sub-bosque balançam como o pinheiro (o quadro que o vento lê). */
+const PLANT_WIND_FRAME = 4;
 /**
  * O POÇO DA ESCADA: um buraco DE VERDADE no chão da superfície, pelo mesmo caminho do rio — o
  * quad de chão daquele tile desce, e paredes fecham o vão onde ele encontra a terra.
@@ -155,7 +157,25 @@ export class TerrainFeatures {
       outside: (x: number, z: number): boolean => voidSet.has(tileKey(x, z)),
     };
     for (const tile of quadTiles) tile.look = treeLookAt(tile.frame, tile.x, tile.z, forest) ?? undefined;
-    this.host.terrain.addTerrainMesh(new THREE.Mesh(buildUprightTileGeometry(quadTiles, (x, z) => reliefLevelAt(x, z) * RELIEF_HEIGHT, biomeTreeTintAt), mats.trees));
+    // O SUB-BOSQUE (forest.forestUnderstory): as próprias árvores, pequenas ou com a copa afundada, nos VÃOS entre os
+    // troncos (nunca colada num deles nem noutra planta) — na mesma malha, com a mesma cor; e o meio das clareiras da
+    // mata de fora, perto da borda (depois das árvores do mapa na malha: a ordem das que já existiam não muda)
+    const { b } = t;
+    const near = (x: number, z: number, r: number): boolean => x >= b.minTileX - r && x <= b.maxTileX + r && z >= b.minTileY - r && z <= b.maxTileY + r;
+    // os troncos vão um tile além do alcance: uma planta na beira dele também mede a folga do tronco de lá
+    const woods = quadTiles.filter(
+      (q): q is typeof q & { look: TreeLook } => !!q.look && TREE_UPPER_FRAMES.has(q.frame) && near(q.x, q.z, FOREST_FLOOR_REACH + 1),
+    );
+    const clearings = t.voidTiles.filter((v) => !solidSet.has(tileKey(v.x, v.z)) && near(v.x, v.z, FOREST_FLOOR_REACH));
+    // a MATA é árvore da família ou clareira da mata de fora — nunca o penhasco da serra, a alvenaria, a lápide ou a
+    // anciã do jardim, que também são sólidos: um canto com um deles não é vão, e planta nenhuma nasce no tile deles
+    const clearingSet = new Set(clearings.map((c) => tileKey(c.x, c.z)));
+    const mata = (x: number, z: number): boolean => t.treeSet.has(tileKey(x, z)) || clearingSet.has(tileKey(x, z));
+    const plants = forestUnderstory(woods, mata, clearings)
+      .filter((p) => near(p.x, p.z, FOREST_FLOOR_REACH))
+      .map((p) => ({ x: p.x, z: p.z, frame: PLANT_WIND_FRAME, look: p.look }));
+    const lift = (x: number, z: number): number => reliefLevelAt(x, z) * RELIEF_HEIGHT;
+    this.host.terrain.addTerrainMesh(new THREE.Mesh(buildUprightTileGeometry([...quadTiles, ...plants], lift, biomeTreeTintAt), mats.trees));
 
     // Quem é CUBO é MASSA. As duas listas ficam guardadas porque a massa é a única geometria do
     // mundo que se REFAZ inteira quando um tile some (a bomba na parede rachada): a poda de faces

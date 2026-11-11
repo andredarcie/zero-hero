@@ -60,6 +60,11 @@ export interface StandingPiece {
   frame: number;
   /** A fração vazia embaixo do desenho (frameFootPad): ela sai do quad. */
   pad: number;
+  /**
+   * PARADA: a peça inteira, sem vento nem pisão, e sem a margem de balanço (o quad é só o desenho). É o capim do meio
+   * da mata (forest.forestGrass): ali ninguém pisa, e fio a fio, com física, ele custava mais que o vale inteiro.
+   */
+  still?: boolean;
   r: number;
   g: number;
   b: number;
@@ -136,19 +141,23 @@ interface QuadSpec {
   r: number; g: number; b: number;
 }
 
-/** O tile inteiro em pé, mais a margem de balanço dos dois lados (a arte fica no meio, no lugar dela). */
+/**
+ * O tile inteiro em pé, mais a margem de balanço dos dois lados (a arte fica no meio, no lugar dela). A peça PARADA
+ * não balança: não tem margem nem é planta para o shader.
+ */
 const pieceQuad = (p: StandingPiece): QuadSpec => {
   const f = tilesetFrameUv(p.frame);
   const h = pieceHeight(p.pad);
+  const margin = p.still ? 0 : SWING_MARGIN;
   // a margem em u: a mesma fração do quadro (16 pixels de arte por tile)
-  const mu = (f.u1 - f.u0) * SWING_MARGIN;
+  const mu = (f.u1 - f.u0) * margin;
   return {
-    x0: p.x - 0.5 - SWING_MARGIN, x1: p.x + 0.5 + SWING_MARGIN, y0: p.y, y1: p.y + h, z: p.footZ,
+    x0: p.x - 0.5 - margin, x1: p.x + 0.5 + margin, y0: p.y, y1: p.y + h, z: p.footZ,
     // o v da fileira mais baixa do desenho (o v0 é o pé do quadro no atlas)
     u0: f.u0 - mu, u1: f.u1 + mu, v0: f.v0 + p.pad * (f.v1 - f.v0), v1: f.v1,
     bounds: [f.cu0, f.cv0, f.cu1, f.cv1],
     sx: p.rootX, sz: p.rootZ, h0: 0, h1: h, phase: 0,
-    flex: isFlexibleDecor(p.frame) ? 1 : 0, blade: [0, 0, 0, 0], r: p.r, g: p.g, b: p.b,
+    flex: !p.still && isFlexibleDecor(p.frame) ? 1 : 0, blade: [0, 0, 0, 0], r: p.r, g: p.g, b: p.b,
   };
 };
 

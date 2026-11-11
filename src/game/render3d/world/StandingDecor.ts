@@ -91,10 +91,11 @@ export class StandingDecor {
   public constructor(private readonly host: StandingDecorHost) {}
 
   public bake(
-    tiles: ReadonlyArray<{ x: number; z: number; frame: number }>,
+    tiles: ReadonlyArray<{ x: number; z: number; frame: number; still?: boolean }>,
     solidSet: ReadonlySet<number>,
     material: THREE.Material,
     frontMaterial?: THREE.Material,
+    trees?: ReadonlySet<number>,
   ): void {
     this.mesh = undefined; // a malha velha o re-assado já tirou da cena (é malha de terreno)
     this.quads.clear();
@@ -103,14 +104,16 @@ export class StandingDecor {
     this.count = 0;
     this.blades = 0;
     if (tiles.length === 0) return;
-    const shade = groundShadeAt(solidSet);
+    // a luz do chão em que cada peça pisa, com a sombra da mata (a moita debaixo das árvores escurece com o chão)
+    const shade = groundShadeAt(solidSet, trees);
     const items: Item[] = [];
-    for (const { x, z, frame } of tiles) {
+    for (const { x, z, frame, still } of tiles) {
       // o MESMO espalhamento e o MESMO tom do adesivo deitado: a peça fica de pé onde estava
       const sc = decorScatterAt(x, z, frame);
       const y = 0.02 + reliefLevelAt(x, z) * RELIEF_HEIGHT;
       const tile = tileKey(x, z);
-      const grass = BLADE_FRAMES.has(frame) ? this.bladesOf(frame) : null;
+      // a peça PARADA (o capim do meio da mata) fica inteira, mesmo sendo grama: fio a fio é para o que se pisa
+      const grass = !still && BLADE_FRAMES.has(frame) ? this.bladesOf(frame) : null;
       if (grass && grass.blades.length > 0) {
         this.pushBlades(items, grass, { x, z, frame, y, tile, sc, shade });
         continue;
@@ -121,7 +124,7 @@ export class StandingDecor {
       const footZ = cz + 0.5 - pad;
       const c = shade(cx, footZ);
       items.push({
-        x: cx, footZ, y, rootX: cx, rootZ: cz, frame, pad,
+        x: cx, footZ, y, rootX: cx, rootZ: cz, frame, pad, still,
         r: c[0] * sc.shade, g: c[1] * sc.shade, b: c[2] * sc.shade, tile,
       });
     }
@@ -136,7 +139,7 @@ export class StandingDecor {
       const list = this.quads.get(p.tile);
       if (list) list.push(quad);
       else this.quads.set(p.tile, [quad]);
-      if (isFlexibleDecor(p.frame)) this.flexible.add(p.tile);
+      if (isFlexibleDecor(p.frame) && !('still' in p && p.still)) this.flexible.add(p.tile);
     });
     this.count = tiles.length;
     this.mesh = mesh;

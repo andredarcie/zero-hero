@@ -24,6 +24,11 @@ const LEAF_MAX = 6;
 /** Quanto tempo a folha descansa no chao antes de sumir (e quanto leva sumindo). */
 const LEAF_REST_MS = 2600;
 const LEAF_FADE_MS = 900;
+/**
+ * O HERÓI ESPANTA OS BICHOS (2026-11-11), como abre o capim: a borboleta a menos disto foge para o lado oposto, mais
+ * depressa, e volta a vaguear; o vaga-lume é empurrado para longe e volta no voo de sempre. Em tiles.
+ */
+const SHY_TILES = 1.3;
 
 /** O que ValleyLife usa de GameScene. */
 export type ValleyLifeHost = Pick<GameScene,
@@ -45,6 +50,8 @@ export class ValleyLife {
   }> = [];
   public readonly leaves: Array<{
     bb: Billboard3D; x: number; y: number; elev: number; t: number; sway: number; spin: number; landedMs: number;
+    /** Solta pelo esbarrão: aparece de noite também (a do dia segue a rampa do dia). */
+    shaken: boolean;
   }> = [];
 
   public constructor(private readonly host: ValleyLifeHost) {}
@@ -86,6 +93,13 @@ export class ValleyLife {
       }
       fly.ox += Math.sin(fly.phase * 0.37) * delta * 0.00018;
       fly.oy += Math.cos(fly.phase * 0.29) * delta * 0.00014;
+      const fx = fly.ox + Math.sin(fly.phase) * 0.45 - at.x;
+      const fy = fly.oy + Math.cos(fly.phase * 0.8) * 0.3 - at.y;
+      const fd = Math.hypot(fx, fy);
+      if (fd < SHY_TILES && fd > 0.001) {
+        fly.ox += (fx / fd) * delta * 0.003 * (1 - fd / SHY_TILES);
+        fly.oy += (fy / fd) * delta * 0.003 * (1 - fd / SHY_TILES);
+      }
       const blink = Math.max(0, Math.sin(fly.phase * 2.3));
       fly.bb
         .setPosition(fly.ox + Math.sin(fly.phase) * 0.45, fly.oy + Math.cos(fly.phase * 0.8) * 0.3)
@@ -126,10 +140,14 @@ export class ValleyLife {
       // Longe do quadro ela volta por outro lado; perto do alvo, escolhe outro.
       if (Math.abs(b.x - at.x) > 6 || Math.abs(b.y - at.y) > 5) [b.x, b.y] = pickTarget();
       if (Math.hypot(b.tx - b.x, b.ty - b.y) < 0.3) [b.tx, b.ty] = pickTarget();
+      // perto do herói ela foge: o alvo vira um ponto do outro lado dele, e o voo apressa
+      const hd = Math.hypot(b.x - at.x, b.y - at.y) || 1;
+      const shy = hd < SHY_TILES;
+      if (shy) [b.tx, b.ty] = [b.x + ((b.x - at.x) / hd) * 3, b.y + ((b.y - at.y) / hd) * 2.5];
       const dx = b.tx - b.x;
       const dy = b.ty - b.y;
       const d = Math.hypot(dx, dy) || 1;
-      const step = delta * 0.0011;
+      const step = delta * 0.0011 * (shy ? 2.6 : 1);
       // O voo de borboleta nunca e reto: um zigue-zague por cima da reta ate o alvo.
       const wob = Math.sin(b.phase * 5.3) * 0.7;
       b.x += (dx / d - (dy / d) * wob) * step;
@@ -160,13 +178,7 @@ export class ValleyLife {
         if (upper === null || !TREE_UPPER_FRAMES.has(upper)) continue;
         // A árvore DESENHADA manda (world/biomes): pinheiro que o bioma veste de árvore morta não solta folha.
         if (isBareTreeAt(upper, wx, wy)) continue;
-        const bb = w3.objects.addBillboard(LEAF_TEXTURE, 0, { centered: true, depthWrite: false })
-          .setTint(leafTints[Math.floor(Math.random() * leafTints.length)])
-          .setDisplaySize(0.17, 0.13);
-        this.leaves.push({
-          bb, x: wx + (Math.random() - 0.5) * 0.6, y: wy + 0.15, elev: 0.95 + Math.random() * 0.3,
-          t: 0, sway: Math.random() * 6, spin: Math.random() < 0.5 ? -1 : 1, landedMs: -1,
-        });
+        this.addLeaf(wx, wy, leafTints, false);
         break;
       }
     }
@@ -194,8 +206,30 @@ export class ValleyLife {
           continue;
         }
       }
-      leaf.bb.setPosition(leaf.x, leaf.y).setElevation(leaf.elev).setAlpha(alpha * this.daylifeLevel);
+      leaf.bb.setPosition(leaf.x, leaf.y).setElevation(leaf.elev).setAlpha(alpha * (leaf.shaken ? 1 : this.daylifeLevel));
     }
+  }
+
+  private addLeaf(wx: number, wy: number, tints: readonly number[], shaken: boolean): void {
+    const bb = this.host.world3d?.objects.addBillboard(LEAF_TEXTURE, 0, { centered: true, depthWrite: false })
+      .setTint(tints[Math.floor(Math.random() * tints.length)])
+      .setDisplaySize(0.17, 0.13);
+    if (!bb) return;
+    this.leaves.push({
+      bb, x: wx + (Math.random() - 0.5) * 0.6, y: wy + 0.15, elev: 0.95 + Math.random() * 0.3,
+      t: 0, sway: Math.random() * 6, spin: Math.random() < 0.5 ? -1 : 1, landedMs: -1, shaken,
+    });
+  }
+
+  /** A ÁRVORE QUE O HERÓI ESBARRA solta duas ou três folhas (2026-11-11): o mesmo cair das folhas do dia, daquela árvore. */
+  public shakeTree(wx: number, wy: number): void {
+    const chunks = this.host.chunkManager;
+    const tints = SEASON_LEAVES[this.host.valley.weather?.season ?? 'summer'];
+    if (!chunks || tints.length === 0 || !chunks.hasChunkCoordinate(Math.floor(wx / CHUNK_COLUMNS), Math.floor(wy / CHUNK_ROWS))) return;
+    const { upper } = chunks.getTile(wx, wy);
+    if (upper === null || !TREE_UPPER_FRAMES.has(upper) || isBareTreeAt(upper, wx, wy)) return;
+    const n = 2 + Math.floor(Math.random() * 2);
+    for (let i = 0; i < n && this.leaves.length < LEAF_MAX + 6; i += 1) this.addLeaf(wx, wy, tints, true);
   }
 
   /**

@@ -3,12 +3,14 @@
 // de massa assada aos poucos. São funções puras de dado → BufferGeometry: o World3D (buildTerrain) as chama.
 
 import * as THREE from 'three';
-import { CLIFF_WALL_FRAMES, DUNGEON_WALL_FRAMES, MASS_TILE_FRAMES, terrainVariant } from '@/game/constants';
+import { CLIFF_WALL_FRAMES, DUNGEON_WALL_FRAMES, GROUND_TILE_FRAME, MASS_TILE_FRAMES, terrainVariant } from '@/game/constants';
 import { RELIEF_HEIGHT } from '@/game/world/relief';
 import { ANCIENT_GROVE, BIOME_DECOR, biomeTintAt } from '@/game/world/biomes';
 import { VINE_VARIANTS, type VineQuad } from './vineTexture';
 import { tilesetFrameUv } from './textures3d';
 import { FOREST_FRAMES, type TreeLook } from './forest';
+import { lipTuft, RIM_SHADE, rimClass, stepFacesAway } from './reliefEdge';
+import { CLIFF_FOOT, cliffFaceFrame, facetShade, FRINGE_AHEAD, FRINGE_SHADE, fringeDrop, ROCK_TOP_FRAMES, ROCK_TOP_LIFT } from './cliffRock';
 
 /** Trepadeira em uma face a cada tantas (de cem), escolhidas pela coordenada. */
 const VINE_CHANCE = 42;
@@ -85,8 +87,8 @@ const AO_CORNERS: ReadonlyArray<readonly [number, number]> = [[-1, -1], [1, -1],
  * emendar no chão comum sem risco. Antes o beiço saía sem sombra de canto, e a montanha nem com o bioma:
  * onde os dois se encostavam, a cor saltava numa linha reta.
  */
-export const groundShadeAt = (solids: ReadonlySet<number>) => {
-  const tint = groundTintAt(solids);
+export const groundShadeAt = (solids: ReadonlySet<number>, trees?: ReadonlySet<number>) => {
+  const tint = groundTintAt(solids, trees);
   return (px: number, pz: number): readonly [number, number, number] => {
     const tx = Math.round(px);
     const tz = Math.round(pz);
@@ -107,49 +109,96 @@ export const groundShadeAt = (solids: ReadonlySet<number>) => {
 //   · a MANCHA larga (~7 tiles): um ruído que clareia e esquenta um lado, escurece e esfria o outro (±7%);
 //   · a SOMBRA DE COPA: o chão a até dois tiles de árvores e paredes escurece aos poucos (até 11%) — a sombra de canto
 //     (AO_MAX) já fecha o encosto; esta é a penumbra larga da mata, que faltava.
+//
+// (2026-11-11) Medido nas fotos, ±7% não aparecia: o campo aberto continuava um verde só de ponta a ponta. A mancha
+// subiu para ±11%, e veio uma terceira camada, de COR e não de valor: o capim SECO e o VIÇOSO (~4 tiles), que puxa
+// para o oliva-amarelado ou para o verde fundo (±6%). É o que um campo de verdade tem, e o que as referências HD-2D
+// têm no chão.
 const PATCH_GRAIN = 7;
-const PATCH_AMOUNT = 0.07;
+const PATCH_AMOUNT = 0.11;
+const DRY_GRAIN = 4;
+const DRY_AMOUNT = 0.06;
 const CANOPY_MAX = 0.11;
-const patchHash = (x: number, z: number): number => {
-  let h = (x * 73856093) ^ (z * 19349663) ^ 0x2f6b1a;
+/**
+ * A SOMBRA DA MATA FECHADA (2026-11-11, pedido do autor: "o chão da floresta densa parece vazio, e o herói parece capaz
+ * de passar"): debaixo das árvores o chão era o mesmo capim claro do prado onde se anda. Contando SÓ árvores (nunca
+ * muro nem pedra: é a sombra de copa, não o bloco escuro colado na parede que o autor já recusou), o chão escurece e
+ * esfria até 30%, a partir de ~3,5 árvores-peso em volta do canto (a beira da mata) até ~8 (o miolo). Suave, no ponto:
+ * a beira é um degradê, nunca um risco.
+ */
+const FOREST_SHADE = 0.3;
+const FOREST_SHADE_FROM = 3.5;
+const FOREST_SHADE_TO = 8;
+const patchHash = (x: number, z: number, salt: number): number => {
+  let h = (x * 73856093) ^ (z * 19349663) ^ salt;
   h = (h ^ (h >>> 13)) >>> 0;
   return (Math.imul(h, 0x5bd1e995) >>> 0) / 4294967295;
 };
-const patchNoise = (x: number, z: number): number => {
-  const fx = x / PATCH_GRAIN; const fz = z / PATCH_GRAIN;
+/** Um ruído de valor suave (0..1) na grade de `grain` tiles, lido no ponto. */
+const smoothNoise = (x: number, z: number, grain: number, salt: number): number => {
+  const fx = x / grain; const fz = z / grain;
   const cx = Math.floor(fx); const cz = Math.floor(fz);
   const tx = fx - cx; const tz = fz - cz;
   const sx = tx * tx * (3 - 2 * tx); const sz = tz * tz * (3 - 2 * tz);
-  const top = patchHash(cx, cz) * (1 - sx) + patchHash(cx + 1, cz) * sx;
-  const bottom = patchHash(cx, cz + 1) * (1 - sx) + patchHash(cx + 1, cz + 1) * sx;
+  const top = patchHash(cx, cz, salt) * (1 - sx) + patchHash(cx + 1, cz, salt) * sx;
+  const bottom = patchHash(cx, cz + 1, salt) * (1 - sx) + patchHash(cx + 1, cz + 1, salt) * sx;
   return top * (1 - sz) + bottom * sz;
+};
+const patchNoise = (x: number, z: number): number => smoothNoise(x, z, PATCH_GRAIN, 0x2f6b1a);
+
+/**
+ * O TOPO DA SERRA EM MANCHAS (2026-11-11): todo tile do planalto veste a mesma pedra no mesmo lugar, e de longe a
+ * repetição lia como um tapete. Espelhar a arte por tile quebraria as pedras na emenda (o quadro 39 emenda com o
+ * vizinho), então o que varia é o TOM, lido no ponto como a mancha do chão (os vizinhos chegam ao mesmo cinza no mesmo
+ * canto): uma mancha larga (~5 tiles, ±12%) e uma miúda (~2 tiles, ±7%). Cinza puro: pedra não tem bioma.
+ */
+export const rockToneAt = (x: number, z: number): [number, number, number] => {
+  const t = 1 + (smoothNoise(x, z, 5, 0x51ed27) - 0.5) * 0.24 + (smoothNoise(x, z, 2, 0x1b873) - 0.5) * 0.14;
+  return [t, t, t];
+};
+/** O mesmo tom no ALTO da serra, um passo acima (cliffRock.ROCK_TOP_LIFT: ele olha para o sol, a parede não). */
+export const rockTopToneAt = (x: number, z: number): [number, number, number] => {
+  const t = rockToneAt(x, z)[0] * ROCK_TOP_LIFT;
+  return [t, t, t];
 };
 
 /**
  * A COR DO CHÃO antes da sombra de canto: o bioma × a mancha larga × a sombra de copa. É ela que toda malha de chão
  * veste (`groundShadeAt` multiplica a sombra de canto por cima) — o chão comum, o do planalto, o beiço, a margem e a
- * decoração rasteira.
+ * decoração rasteira. `trees`: os tiles de ÁRVORE (o chão debaixo da mata fechada escurece — ver FOREST_SHADE).
  */
-export const groundTintAt = (solids?: ReadonlySet<number>) => {
-  // A sombra de copa na grade dos CANTOS de tile (um número por canto, lembrado), e interpolada dentro do tile.
+export const groundTintAt = (solids?: ReadonlySet<number>, trees?: ReadonlySet<number>) => {
+  // As sombras de copa na grade dos CANTOS de tile (um número por canto, lembrado), e interpoladas dentro do tile:
+  // a de todo sólido (a penumbra larga, CANOPY_MAX) e a de mata (só árvores, FOREST_SHADE).
+  const near = (set: ReadonlySet<number>, ix: number, iz: number): number => {
+    // o canto (ix - 0.5, iz - 0.5): os tiles num raio de ~2,5 em volta dele
+    let sum = 0;
+    for (let dz = -3; dz <= 2; dz++) {
+      for (let dx = -3; dx <= 2; dx++) {
+        if (!set.has(tileKey(ix + dx, iz + dz))) continue;
+        const d = Math.hypot(dx + 0.5, dz + 0.5);
+        sum += Math.max(0, 1 - (d - 0.7) / 1.9);
+      }
+    }
+    return sum;
+  };
   const memo = new Map<number, number>();
   const canopyCorner = (ix: number, iz: number): number => {
     const k = tileKey(ix, iz);
     let v = memo.get(k);
     if (v !== undefined) return v;
-    let sum = 0;
-    if (solids) {
-      // o canto (ix - 0.5, iz - 0.5): os tiles num raio de ~2,5 em volta dele
-      for (let dz = -3; dz <= 2; dz++) {
-        for (let dx = -3; dx <= 2; dx++) {
-          if (!solids.has(tileKey(ix + dx, iz + dz))) continue;
-          const d = Math.hypot(dx + 0.5, dz + 0.5);
-          sum += Math.max(0, 1 - (d - 0.7) / 1.9);
-        }
-      }
-    }
-    v = 1 - CANOPY_MAX * Math.min(1, sum / 5);
+    v = 1 - CANOPY_MAX * Math.min(1, (solids ? near(solids, ix, iz) : 0) / 5);
     memo.set(k, v);
+    return v;
+  };
+  const forestMemo = new Map<number, number>();
+  const forestCorner = (ix: number, iz: number): number => {
+    const k = tileKey(ix, iz);
+    let v = forestMemo.get(k);
+    if (v !== undefined) return v;
+    const t = trees ? Math.min(1, Math.max(0, (near(trees, ix, iz) - FOREST_SHADE_FROM) / (FOREST_SHADE_TO - FOREST_SHADE_FROM))) : 0;
+    v = FOREST_SHADE * t * t * (3 - 2 * t);
+    forestMemo.set(k, v);
     return v;
   };
   return (px: number, pz: number): [number, number, number] => {
@@ -161,8 +210,19 @@ export const groundTintAt = (solids?: ReadonlySet<number>) => {
     const u = gx - ix; const v = gz - iz;
     const canopy = canopyCorner(ix, iz) * (1 - u) * (1 - v) + canopyCorner(ix + 1, iz) * u * (1 - v)
       + canopyCorner(ix + 1, iz + 1) * u * v + canopyCorner(ix, iz + 1) * (1 - u) * v;
-    // a mancha clara esquenta, a escura esfria (a mesma regra da rampa: sombra fria, luz quente)
-    return [t[0] * (1 + k * 1.25) * canopy, t[1] * (1 + k) * canopy, t[2] * (1 + k * 0.4) * canopy];
+    const forest = trees
+      ? forestCorner(ix, iz) * (1 - u) * (1 - v) + forestCorner(ix + 1, iz) * u * (1 - v)
+        + forestCorner(ix + 1, iz + 1) * u * v + forestCorner(ix, iz + 1) * (1 - u) * v
+      : 0;
+    // a mancha clara esquenta, a escura esfria (a mesma regra da rampa: sombra fria, luz quente); o capim seco puxa o
+    // vermelho e tira o azul (oliva-amarelado), o viçoso o contrário (verde fundo) — a luz quase não muda. A sombra da
+    // mata esfria também: tira mais vermelho que verde, e menos azul.
+    const dry = (smoothNoise(px, pz, DRY_GRAIN, 0x6a09e6) - 0.5) * 2 * DRY_AMOUNT;
+    return [
+      t[0] * (1 + k * 1.25 + dry) * canopy * (1 - forest * 1.1),
+      t[1] * (1 + k + dry * 0.15) * canopy * (1 - forest * 0.9),
+      t[2] * (1 + k * 0.4 - dry * 0.9) * canopy * (1 - forest * 0.75),
+    ];
   };
 };
 
@@ -934,8 +994,7 @@ const VINE_MIN_RUN = 0.35;
 /** O muro: negativo morde o próprio tile, positivo avança sobre o vizinho. */
 const ROCK_LIP_MIN = -0.24;
 const ROCK_LIP_VAR = 0.56;
-/** O topo do muro mistura pedras grandes e pequenas: uma pintura só repetida lia como piso de pátio. */
-const ROCK_TOP_FRAMES: readonly number[] = [39, 40, 57, 58, 59, 60];
+// O topo da serra é laje de rocha (cliffRock.ROCK_TOP_FRAMES): o calçamento deitado ali lia como praça.
 
 export type ReliefPoint = (px: number, pz: number) => number;
 
@@ -1068,7 +1127,9 @@ export const shapeRock = (
     for (let dz = -1; dz <= 1; dz++) {
       for (let dx = -1; dx <= 1; dx++) {
         const k = tileKey(x + dx, z + dz);
-        if (!near.has(k)) near.set(k, { x: x + dx, z: z + dz, frame, level: levelAt(x + dx, z + dz), far: false });
+        // A pintura do PRÓPRIO tile quando ele é pedra: herdar a do vizinho que o achou primeiro punha a mesma
+        // variante em faixas inteiras do alto (com o calçamento, uniforme, não se via; com laje grande, sim).
+        if (!near.has(k)) near.set(k, { x: x + dx, z: z + dz, frame: frameOf.get(k) ?? frame, level: levelAt(x + dx, z + dz), far: false });
       }
     }
   }
@@ -1096,6 +1157,8 @@ export const buildReliefContourGeometry = (
    * saía branco e o miolo tingido, e onde o beiço encosta no chão comum a cor saltava numa linha reta.
    */
   tintAt?: (x: number, z: number) => readonly [number, number, number],
+  /** A BEIRADA no topo (reliefEdge.ts): o contorno escuro e o beiço aceso. Só o planalto de chão; a pedra tem a dela. */
+  opts: { rim?: boolean } = {},
 ): {
   tops: THREE.BufferGeometry; walls: THREE.BufferGeometry; vines: VineQuad[];
   whole: Array<{ x: number; z: number; frame: number }>; bases: Array<{ x: number; z: number; frame: number }>;
@@ -1137,6 +1200,30 @@ export const buildReliefContourGeometry = (
       for (let i = -1; i <= N; i++) cells[(j + 1) * (N + 2) + i + 1] = field(x0 + (i + 0.5) * step, z0 + (j + 0.5) * step);
     }
     const at = (i: number, j: number): number => cells[(j + 1) * (N + 2) + i + 1];
+    // O nível em qualquer célula, também além da moldura de uma célula (a beirada olha dois pixels, a face de lado
+    // olha um quarto de tile): o que cai fora dela vem do campo, uma vez por célula.
+    const beyond = new Map<number, number>();
+    const lv = (i: number, j: number): number => {
+      if (i >= -1 && i <= N && j >= -1 && j <= N) return at(i, j);
+      const k = (j + 64) * 512 + i + 64;
+      let v = beyond.get(k);
+      if (v === undefined) {
+        v = field(x0 + (i + 0.5) * step, z0 + (j + 0.5) * step);
+        beyond.set(k, v);
+      }
+      return v;
+    };
+    // A BEIRADA (reliefEdge.rimClass): a classe de cada célula entra na chave da corrida, então o topo continua em
+    // peças grandes e só a fita da beira sai em pedaços.
+    const rimOf = new Int8Array(N * N);
+    if (opts.rim && !far) {
+      const open = (i: number, j: number): boolean => !blocked(Math.round(x0 + (i + 0.5) * step), Math.round(z0 + (j + 0.5) * step));
+      const keep = (i: number, j: number): boolean => lipTuft(tx * N + i, tz * N + j);
+      for (let j = 0; j < N; j++) {
+        for (let i = 0; i < N; i++) rimOf[j * N + i] = rimClass(lv, open, keep, i, j);
+      }
+    }
+    const kindAt = (i: number, j: number): number => at(i, j) * 4 + rimOf[j * N + i];
     // O beiço veste a arte do tile mais perto daquele nível.
     const artFor = (c: number): number => {
       if (level >= c) return frame;
@@ -1163,15 +1250,17 @@ export const buildReliefContourGeometry = (
         const c = at(i, j);
         if (c <= 0) { if (level > 0) opensToGround = true; i++; continue; }
         if (used[j * N + i]) { i++; continue; }
+        const kind = kindAt(i, j);
         let e = i;
-        while (e + 1 < N && at(e + 1, j) === c && !used[j * N + e + 1]) e++;
+        while (e + 1 < N && kindAt(e + 1, j) === kind && !used[j * N + e + 1]) e++;
         let rows = 1;
         grow: while (j + rows < N) {
           for (let r = i; r <= e; r++) {
-            if (at(r, j + rows) !== c || used[(j + rows) * N + r]) break grow;
+            if (kindAt(r, j + rows) !== kind || used[(j + rows) * N + r]) break grow;
           }
           rows++;
         }
+        const rimShade = RIM_SHADE[rimOf[j * N + i]];
         for (let m = 0; m < rows; m++) used.fill(1, (j + m) * N + i, (j + m) * N + e + 1);
         const f = tilesetFrameUv(artFor(c));
         const ax = x0 + i * step;
@@ -1188,7 +1277,7 @@ export const buildReliefContourGeometry = (
           tb.push(f.cu0, f.cv0, f.cu1, f.cv1);
           tn.push(0, 1, 0);
           const t = tintAt ? tintAt(cx, cz) : [1, 1, 1];
-          tc.push(t[0], t[1], t[2]);
+          tc.push(t[0] * rimShade, t[1] * rimShade, t[2] * rimShade);
         }
         ti.push(b, b + 3, b + 2, b, b + 2, b + 1);
         i = e + 1;
@@ -1202,7 +1291,8 @@ export const buildReliefContourGeometry = (
       high: number, low: number, nx: number, nz: number, lit: number,
     ): void => {
       for (let y = low; y < high; y++) {
-        const f = tilesetFrameUv(CLIFF_WALL_FRAMES[terrainVariant(tx, tz + y * 7, CLIFF_WALL_FRAMES.length)]);
+        // A rocha fraturada (cliffRock), não o calçamento em pé.
+        const f = tilesetFrameUv(cliffFaceFrame(tx, tz, y));
         const base = wp.length / 3;
         const y0 = y * RELIEF_HEIGHT;
         const y1 = (y + 1) * RELIEF_HEIGHT;
@@ -1210,10 +1300,12 @@ export const buildReliefContourGeometry = (
         const u0 = f.u0 + s0 * (f.u1 - f.u0);
         const u1 = f.u0 + s1 * (f.u1 - f.u0);
         wuv.push(u0, f.v1, u1, f.v1, u1, f.v0, u0, f.v0);
+        const tone = [facetShade(ax, az, y), facetShade(bx, bz, y)];
         for (let k = 0; k < 4; k++) {
           wb.push(f.cu0, f.cv0, f.cu1, f.cv1);
           wn.push(nx, 0, nz);
-          const s = k < 2 ? lit : lit * shade.foot;
+          // o tom da pedra corre liso ao longo da parede; o pé desce para o escuro
+          const s = lit * tone[k === 0 || k === 3 ? 0 : 1] * (k < 2 ? 1 : CLIFF_FOOT);
           wc.push(s, s, s);
         }
         wi.push(base, base + 2, base + 1, base, base + 3, base + 2);
@@ -1246,6 +1338,33 @@ export const buildReliefContourGeometry = (
         while (e + 1 < N && at(e + 1, j) === c && at(e + 1, j + 1) === n && !across(e + 1, j + 1)) e++;
         const z = z0 + (j + 1) * step;
         face(x0 + i * step, z, x0 + (e + 1) * step, z, i * step, (e + 1) * step, c, n, 0, 1, shade.south);
+        // A FRANJA (cliffRock.fringeDrop): o capim do topo cai uns pixels pela frente da pedra, coluna a coluna.
+        if (opts.rim && artFor(c) === GROUND_TILE_FRAME) {
+          const g = tilesetFrameUv(GROUND_TILE_FRAME);
+          for (let r = i; r <= e; r++) {
+            const drop = fringeDrop(tx * N + r, tz * N + j) / 16;
+            if (drop <= 0) continue;
+            const ax = x0 + r * step;
+            const bx = ax + step;
+            const fz = z + FRINGE_AHEAD;
+            const top = c * RELIEF_HEIGHT + 0.001;
+            const b = tp.length / 3;
+            tp.push(ax, top, fz, bx, top, fz, bx, top - drop, fz, ax, top - drop, fz);
+            // o fio veste o capim da própria coluna, das fileiras de cima da arte
+            const ua = g.u0 + (r / N) * (g.u1 - g.u0);
+            const ub = g.u0 + ((r + 1) / N) * (g.u1 - g.u0);
+            const vb = g.v1 - drop * (g.v1 - g.v0);
+            tuv.push(ua, g.v1, ub, g.v1, ub, vb, ua, vb);
+            const t = tintAt ? tintAt(ax + step / 2, z - step / 2) : [1, 1, 1];
+            for (let k = 0; k < 4; k++) {
+              tb.push(g.cu0, g.cv0, g.cu1, g.cv1);
+              tn.push(0, 1, 0); // aceso como o topo de onde ele cai (a lei normalUp do jogo)
+              const s = FRINGE_SHADE[k < 2 ? 0 : 1];
+              tc.push(t[0] * s, t[1] * s, t[2] * s);
+            }
+            ti.push(b, b + 2, b + 1, b, b + 3, b + 2);
+          }
+        }
         i = e + 1;
       }
     }
@@ -1259,6 +1378,9 @@ export const buildReliefContourGeometry = (
           if (c <= n || across(i + side, j)) { j++; continue; }
           let e = j;
           while (e + 1 < N && at(i, e + 1) === c && at(i + side, e + 1) === n && !across(i + side, e + 1)) e++;
+          // A face de lado de uma beira que olha para o norte está de costas para a câmera: de quina, era um dente bege
+          // espetado no capim (reliefEdge.stepFacesAway). Sem ela, a fresta mostra o chão de baixo, do mesmo capim.
+          if (stepFacesAway(lv, c, side > 0 ? i + 1 : i, j, e, N / 4)) { j = e + 1; continue; }
           const x = x0 + (side > 0 ? i + 1 : i) * step;
           const a = z0 + j * step;
           const b = z0 + (e + 1) * step;
@@ -1323,6 +1445,8 @@ export const buildMassHeightGrid = (
   const w = (maxX - minX + 1) * S;
   const h = (maxZ - minZ + 1) * S;
   const heights = new Int8Array(w * h);
+  /** Quem desenhou o contorno de cada sub-célula (0 nenhum, 1 a serra de pedra, 2 o relevo): a beira é refinada abaixo. */
+  const source = new Uint8Array(w * h);
   let top = 0;
   for (let tz = minZ; tz <= maxZ; tz++) {
     for (let tx = minX; tx <= maxX; tx++) {
@@ -1342,15 +1466,37 @@ export const buildMassHeightGrid = (
         for (let i = 0; i < S; i++) {
           let v = cube;
           if (floorless) v = -1;
-          else if (curved) v = rock!.field(tx - 0.5 + (i + 0.5) / S, tz - 0.5 + (j + 0.5) / S);
-          else if (near && field && cube === 0) v = field(tx - 0.5 + (i + 0.5) / S, tz - 0.5 + (j + 0.5) / S);
+          else if (curved) { v = rock!.field(tx - 0.5 + (i + 0.5) / S, tz - 0.5 + (j + 0.5) / S); source[row + i] = 1; }
+          else if (near && field && cube === 0) { v = field(tx - 0.5 + (i + 0.5) / S, tz - 0.5 + (j + 0.5) / S); source[row + i] = 2; }
           heights[row + i] = v;
           if (v > top) top = v;
         }
       }
     }
   }
-  return { heights, minX, minZ, w, h, top };
+  // O PÉ DA PAREDE NÃO VAZA LUZ (2026-11-11). A sub-célula da sombra tem dois pixels de arte, e a parede é desenhada
+  // pixel a pixel: quando o pé dela cortava a sub-célula e o centro caía do lado alto, a sub-célula inteira ficava sem
+  // sombra, e sobrava um fio de capim aceso entre a parede e a sombra dela. Na BEIRA (a sub-célula alta com um vizinho
+  // mais baixo), ela só conta como alta onde os quatro pixels dela são altos: a sombra que passa por baixo do pé fica
+  // escondida pela própria parede.
+  const refined = heights.slice();
+  for (let gz = 1; gz < h - 1; gz++) {
+    for (let gx = 1; gx < w - 1; gx++) {
+      const k = gz * w + gx;
+      const v = heights[k];
+      if (v <= 0 || source[k] === 0) continue;
+      if (heights[k - 1] >= v && heights[k + 1] >= v && heights[k - w] >= v && heights[k + w] >= v) continue;
+      const sample = source[k] === 1 ? rock!.field : field!;
+      const x0 = minX - 0.5 + gx / S;
+      const z0 = minZ - 0.5 + gz / S;
+      let low = v;
+      for (const [qx, qz] of [[0.25, 0.25], [0.75, 0.25], [0.25, 0.75], [0.75, 0.75]] as const) {
+        low = Math.min(low, sample(x0 + qx / S, z0 + qz / S));
+      }
+      refined[k] = low;
+    }
+  }
+  return { heights: refined, minX, minZ, w, h, top };
 };
 
 export const bakeMassShadow = function* (
@@ -1509,9 +1655,12 @@ export const buildUprightTileGeometry = (
     const height = look?.tall ? 2 : 1;
     const fx = x + (look?.dx ?? 0);
     const fz = z + (look?.dz ?? 0);
-    const lift = liftAt(x, z);
+    // O SUB-BOSQUE (forest.forestUnderstory) afunda a copa no chão — o chão esconde o tronco e sobra a moita — e espelha
+    // a arte para a mesma forma não se repetir
+    const lift = liftAt(x, z) - (look?.sink ?? 0);
+    const [u0, u1] = look?.flip ? [f.u1, f.u0] : [f.u0, f.u1];
     pos.push(fx - 0.5, lift + height, fz, fx + 0.5, lift + height, fz, fx + 0.5, lift, fz, fx - 0.5, lift, fz);
-    uv.push(f.u0, top.v1, f.u1, top.v1, f.u1, f.v0, f.u0, f.v0);
+    uv.push(u0, top.v1, u1, top.v1, u1, f.v0, u0, f.v0);
     for (let k = 0; k < 4; k++) bounds.push(f.cu0, f.cv0, f.cu1, top.cv1);
     nrm.push(0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1);
     // Quem obedece ao VENTO, e o centro do tile de onde a onda é lida (ver WIND_WAVE_GLSL). É
@@ -1535,132 +1684,6 @@ export const buildUprightTileGeometry = (
   return geo;
 };
 
-/**
- * A ESCADA DA SERRA: quatro degraus que vencem um nível (RELIEF_HEIGHT) dentro de um tile, no rumo da subida
- * (`ux`, `uz`). Ela era pedra bruta do paredão nos espelhos e nos lados, e lia como uma rampa enfiada na parede
- * (pedido do autor: "melhore drasticamente o visual da escadaria"). Agora é PEDRA LAVRADA:
- *
- *  · o piso de cada degrau é o calçamento, com uma QUINA mais escura na frente — é a quina que faz o olho
- *    contar degraus de cima;
- *  · o espelho é a mesma pedra, em sombra (talhada do bloco, não o paredão);
- *  · dos lados, uma MURETA que sobe com a escada e acaba num PILAR embaixo e em cima. Só pedra: lanternas em
- *    cima dos pilares chegaram a existir e saíram a pedido do autor ("deixa a escada pura de pedra").
- *
- * Escadas lado a lado, no mesmo rumo e no mesmo andar, são UMA escadaria: entre elas não há mureta, e o piso
- * corre inteiro. A arte de cada face é RECORTADA, não esticada, então os pisos juntos desenham o calçamento uma
- * vez só, no grão do resto do mundo.
- */
-const STAIR_STEPS = 4;
-/** O calçamento liso (as pracinhas de pedra do mundo). */
-const STAIR_TREAD_FRAME = 23;
-const STAIR_SHADE = { tread: 1.14, nose: 0.62, riser: 0.46, wall: 0.68, cap: 1.16, post: 0.82 };
-/** A quina da frente de cada degrau, em fração do fundo do degrau. */
-const STAIR_NOSE = 0.22;
-/** A mureta: espessura (em tiles), altura acima da linha dos degraus, e o pilar das pontas. */
-const STAIR_WALL = 0.14;
-const STAIR_PARAPET = 0.3;
-const STAIR_POST = { len: 0.17, wide: 0.04, rise: 0.2 };
+/** Os degraus de uma escada da serra (a malha dela mora em stairGeometry.ts; a sombra acima também conta por eles). */
+export const STAIR_STEPS = 4;
 
-export const buildStairGeometry = (
-  stairs: ReadonlyArray<{ x: number; z: number; ux: number; uz: number; base: number }>,
-): THREE.BufferGeometry => {
-  const pos: number[] = [];
-  const uv: number[] = [];
-  const bounds: number[] = [];
-  const nrm: number[] = [];
-  const col: number[] = [];
-  const idx: number[] = [];
-  type Corner = readonly [number, number, number, number, number]; // x, y, z, a, b (a,b em 0..1)
-  const quad = (frame: number, corners: readonly [Corner, Corner, Corner, Corner], shade: number): void => {
-    const f = tilesetFrameUv(frame);
-    const base = pos.length / 3;
-    for (const [x, y, z, a, b] of corners) {
-      pos.push(x, y, z);
-      uv.push(f.u0 + Math.min(1, Math.max(0, a)) * (f.u1 - f.u0), f.v0 + Math.min(1, Math.max(0, b)) * (f.v1 - f.v0));
-      bounds.push(f.cu0, f.cv0, f.cu1, f.cv1);
-      nrm.push(0, 1, 0);
-      col.push(shade, shade, shade);
-    }
-    idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
-  };
-  // As escadas gêmeas: o mesmo rumo, o mesmo andar, encostadas de lado.
-  const keyOf = (t: { x: number; z: number; ux: number; uz: number; base: number }): string => `${t.x},${t.z},${t.ux},${t.uz},${t.base}`;
-  const all = new Set(stairs.map(keyOf));
-  const T = STAIR_TREAD_FRAME;
-  for (const st of stairs) {
-    const { x, z, ux, uz, base } = st;
-    // `s` corre na subida (0 na borda de baixo, 1 na de cima), `t` atravessa a escada. `h` conta a partir
-    // do andar de onde a escada sai (`base`): a do cume nasce em cima do planalto.
-    const vx = -uz;
-    const vz = ux;
-    const at = (s0: number, t0: number, h: number, a: number, b: number): Corner => [
-      x + (s0 - 0.5) * ux + (t0 - 0.5) * vx, (base + h) * RELIEF_HEIGHT, z + (s0 - 0.5) * uz + (t0 - 0.5) * vz, a, b,
-    ];
-    // Gêmea do lado t=0 fica em -v, a do lado t=1 em +v.
-    const twin = [
-      all.has(keyOf({ ...st, x: x - vx, z: z - vz })),
-      all.has(keyOf({ ...st, x: x + vx, z: z + vz })),
-    ];
-    const t0 = twin[0] ? 0 : STAIR_WALL;
-    const t1 = twin[1] ? 1 : 1 - STAIR_WALL;
-
-    // OS DEGRAUS: piso com a quina escura na frente, e o espelho em sombra.
-    for (let k = 0; k < STAIR_STEPS; k += 1) {
-      const s0 = k / STAIR_STEPS;
-      const s1 = (k + 1) / STAIR_STEPS;
-      const sn = s0 + (s1 - s0) * STAIR_NOSE;
-      const h0 = k / STAIR_STEPS;
-      const h1 = (k + 1) / STAIR_STEPS;
-      quad(T, [at(s0, t0, h1, t0, s0), at(s0, t1, h1, t1, s0), at(sn, t1, h1, t1, sn), at(sn, t0, h1, t0, sn)], STAIR_SHADE.nose);
-      quad(T, [at(sn, t0, h1, t0, sn), at(sn, t1, h1, t1, sn), at(s1, t1, h1, t1, s1), at(s1, t0, h1, t0, s1)], STAIR_SHADE.tread);
-      quad(T, [at(s0, t0, h0, t0, h0 * 4 % 1), at(s0, t1, h0, t1, h0 * 4 % 1), at(s0, t1, h1, t1, 1), at(s0, t0, h1, t0, 1)], STAIR_SHADE.riser);
-    }
-
-    // A MURETA de cada lado sem gêmea: sobe com a escada, a uma altura fixa acima da linha dos degraus.
-    for (const side of [0, 1] as const) {
-      if (twin[side]) continue;
-      const out = side === 0 ? 0 : 1;
-      const inn = side === 0 ? STAIR_WALL : 1 - STAIR_WALL;
-      const top = (sv: number): number => sv + STAIR_PARAPET;
-      // a face de fora, do chão até o topo inclinado
-      quad(T, [at(0, out, 0, 0, 0), at(1, out, 0, 1, 0), at(1, out, top(1), 1, 1), at(0, out, top(0), 0, 1)], STAIR_SHADE.wall);
-      // a face de dentro, dos degraus até o topo (por degrau, para não atravessar o piso)
-      for (let k = 0; k < STAIR_STEPS; k += 1) {
-        const s0 = k / STAIR_STEPS;
-        const s1 = (k + 1) / STAIR_STEPS;
-        const h1 = (k + 1) / STAIR_STEPS;
-        quad(T, [at(s0, inn, h1, s0, 0), at(s1, inn, h1, s1, 0), at(s1, inn, top(s1), s1, 1), at(s0, inn, top(s0), s0, 1)], STAIR_SHADE.wall);
-      }
-      // o capeamento, mais claro: é a linha que desenha a escadaria de cima
-      quad(T, [at(0, out, top(0), out, 0), at(0, inn, top(0), inn, 0), at(1, inn, top(1), inn, 1), at(1, out, top(1), out, 1)], STAIR_SHADE.cap);
-      // a ponta de baixo da mureta
-      quad(T, [at(0, out, 0, 0, 0), at(0, inn, 0, 1, 0), at(0, inn, top(0), 1, 1), at(0, out, top(0), 0, 1)], STAIR_SHADE.wall);
-      // OS PILARES, embaixo e em cima: um bloco um nada mais largo e mais alto que a mureta — e um nada mais
-      // comprido também, para FORA da escada. Com a face no mesmo plano da ponta da mureta e do espelho do
-      // primeiro degrau (s = 0), as duas brigavam pela frente e o pé do pilar piscava (o autor viu).
-      const wide = STAIR_POST.wide;
-      const pOut = side === 0 ? -wide : 1 + wide;
-      const pIn = side === 0 ? STAIR_WALL + wide : 1 - STAIR_WALL - wide;
-      for (const [sa, sb, floor] of [[-wide, STAIR_POST.len, 0], [1 - STAIR_POST.len, 1 + wide, 1]] as const) {
-        const hTop = floor + STAIR_PARAPET + STAIR_POST.rise;
-        const hBot = floor === 0 ? 0 : 0.5;
-        const box = (ta: number, tb: number, s0: number, s1: number, shade: number): void => {
-          quad(T, [at(s0, ta, hBot, 0, 0), at(s1, tb, hBot, 1, 0), at(s1, tb, hTop, 1, 1), at(s0, ta, hTop, 0, 1)], shade);
-        };
-        box(pOut, pOut, sa, sb, STAIR_SHADE.post); // fora
-        box(pIn, pIn, sa, sb, STAIR_SHADE.post); // dentro
-        box(pOut, pIn, sa, sa, STAIR_SHADE.post * 0.92); // de frente (o lado de baixo da escada)
-        box(pOut, pIn, sb, sb, STAIR_SHADE.post * 0.92); // de trás
-        quad(T, [at(sa, pOut, hTop, 0, 0), at(sa, pIn, hTop, 1, 0), at(sb, pIn, hTop, 1, 1), at(sb, pOut, hTop, 0, 1)], STAIR_SHADE.cap);
-      }
-    }
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-  geo.setAttribute('aUvBounds', new THREE.Float32BufferAttribute(bounds, 4));
-  geo.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
-  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  geo.setIndex(idx);
-  return geo;
-};

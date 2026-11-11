@@ -115,6 +115,8 @@ const TOP_SHADE = '1.06';
 const TIP_LIFT = '1.24';
 const LIT_SIDE = '1.08';
 const DARK_SIDE = '0.9';
+/** O canal mais claro que a decoração pode ter (ver o fim de STAND_FRAGMENT_SHADE_GLSL): a pétala branca abaixo do bloom. */
+const DECOR_WHITE_CAP = '0.55';
 
 /**
  * Entra logo depois do `#include <begin_vertex>`, ANTES das outras injeções (ver patchPixelMaterial): a luz em
@@ -261,5 +263,13 @@ export const STAND_FRAGMENT_SHADE_GLSL = /* glsl */ `
       if (zhStandAlphaAt(zhTx + vec2(1.0, 0.0), vUvBounds) < 0.5) zhShade *= ${DARK_SIDE};
     }
     diffuseColor.rgb *= mix(1.0, zhShade, uStand);
+  }
+  // A PÉTALA BRANCA NÃO É LÂMPADA (2026-11-11): ao sol do meio-dia, uma flor quase branca passava do limiar do bloom e
+  // cada uma virava uma bolinha acesa, uma purpurina pelo prado que chamava mais que o herói. O claro da decoração
+  // para em ${DECOR_WHITE_CAP} (o mesmo tom, só mais baixo): acesa pelo sol ela fica logo abaixo do limiar, e o tone
+  // mapping ainda a pinta branca. O que deve brilhar (fogo, lava, janela, cristal) tem luz própria, fora deste shader.
+  {
+    float zhPeak = max(diffuseColor.r, max(diffuseColor.g, diffuseColor.b));
+    if (zhPeak > ${DECOR_WHITE_CAP}) diffuseColor.rgb *= ${DECOR_WHITE_CAP} / zhPeak;
   }
 `;

@@ -7,10 +7,17 @@ import { bakedShadowAlpha, bakedShadowLength, WIDTH_FACTOR as CAST_WIDTH_FACTOR 
 import { buildVineGeometry } from '../vineTexture';
 import { getBaseTexture3D } from '../textures3d';
 import { solidCastArt } from './SolidCastEmitter';
-import { buildFlatTileGeometry, buildMassHeightGrid, buildReliefContourGeometry, buildStairGeometry, buildTileCubeGeometry, collapseQuad, isMassFrame, shapeRock, tileKey } from '../terrainGeometry';
+import {
+  buildFlatTileGeometry, buildMassHeightGrid, buildReliefContourGeometry, buildTileCubeGeometry, collapseQuad, isMassFrame,
+  rockTopToneAt, shapeRock, tileKey,
+} from '../terrainGeometry';
+import { buildStairGeometry } from '../stairGeometry';
 import { makeTerrainMaterials, type TerrainMaterials } from '../terrainMaterials';
 import type { SolidTileEntry } from './TerrainData';
 import { StandingDecor } from './StandingDecor';
+import { FOREST_GRASS_REACH, forestGrass } from '../forest';
+import type { TerrainSort } from './TerrainSorter';
+import { WaterRipples } from '../waterRipples';
 import type { World3D } from '../World3D';
 import { MIN_CAST_LEN } from './worldDefs';
 
@@ -85,11 +92,33 @@ export class TerrainBaker {
       stand: () => this.host.params.stand,
       now: () => this.host.elapsed,
     });
-    this.host.tiles.standing.bake(decor, t.solidSet, mats.standing, mats.standingFront);
+    // e o CHÃO DA MATA (forest.forestGrass): o capim e o mato alto do mapa nos tiles de árvore e nas clareiras da mata de
+    // fora, até perto da borda. A luz do chão de cada peça leva a sombra da mata (`treeSet`).
+    this.host.tiles.standing.bake([...decor, ...this.forestFloor(t)], t.solidSet, mats.standing, mats.standingFront, t.treeSet);
+    // os anéis na água de quem anda na beira (waterRipples): a água ela pergunta ao espelho, que é refeito no assado
+    this.host.tiles.ripples ??= new WaterRipples({
+      actors: () => this.host.mirror?.actorBodies ?? [],
+      isWater: (x, z) => this.host.mirror?.isWaterTile(x, z) ?? false,
+      now: () => this.host.elapsed,
+    });
     this.host.features.bakeSolids(t, mats);
     this.host.features.bakeMistAndShadows(t, mats, wetTiles);
     this.fillMoonCastField();
     this.rebuildCubes(mats);
+  }
+
+  /** O capim e o mato alto do chão da mata (forest.forestGrass): os tiles de árvore e as clareiras de fora, perto da borda. */
+  private forestFloor(t: TerrainSort): Array<{ x: number; z: number; frame: number }> {
+    const { b } = t;
+    const within = (x: number, z: number, r: number): boolean => x >= b.minTileX - r && x <= b.maxTileX + r && z >= b.minTileY - r && z <= b.maxTileY + r;
+    const r = FOREST_GRASS_REACH;
+    const voidSet = new Set(t.voidTiles.map((v) => tileKey(v.x, v.z)));
+    const floor = [
+      ...this.host.tiles.solidTiles.filter((s) => t.treeSet.has(tileKey(s.x, s.z)) && within(s.x, s.z, r)),
+      ...t.voidTiles.filter((v) => !t.solidSet.has(tileKey(v.x, v.z)) && within(v.x, v.z, r)),
+    ];
+    const mata = (x: number, z: number): boolean => t.solidSet.has(tileKey(x, z)) || voidSet.has(tileKey(x, z));
+    return forestGrass(floor, mata, (x, z) => !within(x, z, 0));
   }
 
   /**
@@ -135,13 +164,23 @@ export class TerrainBaker {
       // O topo da montanha é PEDRA, não chão: fica sem a cor do bioma e sem a sombra de canto (a pedra conta a si
       // mesma como obstáculo e escureceria inteira). O `whole` só leva o que está no alto — o chão em volta já é
       // desenhado pelo terreno, e por cima dele saía uma segunda camada branca.
-      const contour = buildReliefContourGeometry(rock.near, rock.frameOf, rock.field, rock.levelAt, stairSet, rock.blocked);
-      push(new THREE.Mesh(contour.tops, mats.ground));
+      // o tom da pedra em manchas (rockToneAt): o mesmo no topo inteiro e no beiço, para a borda não saltar
+      // O topo vai no material da PEDRA, não no do chão: o do chão troca a rampa da folha pelo capim do bioma, e a
+      // laje de rocha (cliffRock, cinza neutro) passava por folha e saía verde.
+      const contour = buildReliefContourGeometry(rock.near, rock.frameOf, rock.field, rock.levelAt, stairSet, rock.blocked, rockTopToneAt);
+      const tops = new THREE.Mesh(contour.tops, mats.rock);
+      tops.userData.flatTop = true; // é chão: na água ele seria verso, e o espelho pagaria por nada
+      push(tops);
       push(new THREE.Mesh(contour.walls, mats.rock));
       if (contour.vines.length > 0) push(new THREE.Mesh(buildVineGeometry(contour.vines), mats.vines));
       const highWhole = contour.whole.filter((t) => rock.levelAt(t.x, t.z) > 0);
       if (highWhole.length > 0) {
-        push(new THREE.Mesh(buildFlatTileGeometry(highWhole, (x, z) => rock.levelAt(x, z) * RELIEF_HEIGHT), mats.ground));
+        const whole = new THREE.Mesh(
+          buildFlatTileGeometry(highWhole, (x, z) => rock.levelAt(x, z) * RELIEF_HEIGHT, undefined, undefined, rockTopToneAt),
+          mats.rock,
+        );
+        whole.userData.flatTop = true;
+        push(whole);
       }
     }
 
@@ -174,7 +213,7 @@ export class TerrainBaker {
     // chão não: visto de baixo ele é verso, e a água não se reflete em si mesma.
     const mats = this.host.tiles.terrainMats;
     const m = mesh.material;
-    if (mats && (Array.isArray(m) || m === mats.trees || m === mats.solid || m === mats.rock || m === mats.stair || m === mats.standing)) {
+    if (mats && !mesh.userData.flatTop && (Array.isArray(m) || m === mats.trees || m === mats.solid || m === mats.rock || m === mats.stair || m === mats.standing)) {
       this.host.mirror.addScenery(mesh);
     }
   }

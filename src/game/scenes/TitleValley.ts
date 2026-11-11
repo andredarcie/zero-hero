@@ -45,11 +45,12 @@ export class TitleValley {
     // A clareira, no espaço da foto (a mesma conta da escala e do deslocamento).
     const gx = ox + (GLADE_IN_ART.x - 0.5) * artW;
     const gy = oy + (GLADE_IN_ART.y - 0.5) * artH;
-    // O luar: um halo frio sobre a clareira que respira devagar, como nuvem passando na frente da lua.
+    // O luar: um halo frio sobre a clareira que respira devagar, como nuvem passando na frente da lua. Mais fraco
+    // (2026-11-11): a 0,32 ele lia como um borrão de névoa branca no meio da tela, apagando a clareira que ele acende.
     const moonR = Math.max(120, artH * 0.42);
     const moon = this.host.add.image(gx, gy, MOON_TEXTURE).setDisplaySize(moonR * 2.4, moonR * 1.6)
-      .setBlendMode(Engine.BlendModes.ADD).setAlpha(0.32);
-    this.host.tweens.add({ targets: moon, alpha: 0.18, duration: 5200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      .setBlendMode(Engine.BlendModes.ADD).setAlpha(0.2);
+    this.host.tweens.add({ targets: moon, alpha: 0.11, duration: 5200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     valley.add([bg, moon]);
 
     const px = Math.max(2, Math.round(cover * 3));

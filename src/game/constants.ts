@@ -340,6 +340,9 @@ export const TREE_STICK_YIELD = 1;
 // de dungeon autorado a partir do 42.
 //
 // Ela entra em SOLID_UPPER_FRAMES logo abaixo: nada no jogo abre montanha.
+//
+// (2026-11-11) O que o mundo GUARDA continua sendo 39/40; o que o 3D DESENHA na parede e no alto da serra é a rocha
+// fraturada de render3d/cliffRock.ts (quadros 120..129): o calçamento em pé lia como muro de tijolo.
 export const CLIFF_WALL_FRAMES: readonly number[] = [39, 40];
 
 // OS TILES DE DUNGEON, instalados no atlas a partir do frame 42 (spritefactory/sprites/

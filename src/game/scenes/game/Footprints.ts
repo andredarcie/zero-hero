@@ -7,6 +7,13 @@ import * as Engine from '@/game/engine';
 
 /** Quanto uma pegada leva para sumir (era a duração do tween dela). */
 const FOOTPRINT_FADE_MS = 700;
+/**
+ * NA TERRA A PEGADA FICA (2026-11-11): no capim ela some logo (o capim se levanta), mas na terra batida ela durava os
+ * mesmos 0,7 s e o caminho nunca guardava a passagem de ninguém. Na terra ela fica inteira uns segundos e some devagar:
+ * olhar para trás e ver o rastro na trilha é o mesmo gosto do capim abrindo.
+ */
+const DIRT_HOLD_MS = 6000;
+const DIRT_FADE_MS = 4000;
 
 /** O que Footprints usa de GameScene. */
 export type FootprintsHost = Pick<GameScene,
@@ -17,7 +24,11 @@ export class Footprints {
   // Footprints (world-anchored so they scroll with the ground)
   private footprintStep = false;
 
-  public readonly footprints: Array<{ obj: Engine.GameObjects.Ellipse; worldX: number; worldY: number; offX: number; offY: number; bornAt: number }> = [];
+  public readonly footprints: Array<{
+    obj: Engine.GameObjects.Ellipse; worldX: number; worldY: number; offX: number; offY: number; bornAt: number;
+    /** Quanto ela fica inteira, e quanto leva para sumir depois (ms): na terra, muito mais que no capim. */
+    holdMs: number; fadeMs: number;
+  }> = [];
   /**
    * Pegadas apagadas, prontas para a próxima. Criar uma elipse 2D (e um tween) a cada tile e
    * destruir 700ms depois custava 0,4ms por passo — 2,5ms no celular fraco, um tranco a cada tile.
@@ -47,7 +58,7 @@ export class Footprints {
     const now = this.host.time.now;
     for (let i = this.footprints.length - 1; i >= 0; i--) {
       const f = this.footprints[i];
-      const t = (now - f.bornAt) / FOOTPRINT_FADE_MS;
+      const t = Math.max(0, now - f.bornAt - f.holdMs) / f.fadeMs;
       if (t >= 1) {
         f.obj.setVisible(false);
         this.footprintPool.push(f.obj);
@@ -88,7 +99,9 @@ export class Footprints {
 
   public spawnFootprint(fromWorldX: number, fromWorldY: number, dx: number, dy: number): void {
     if (!this.host.camera) return;
-    getSoundManager().work.playStep(this.host.query.surfaceAt(fromWorldX, fromWorldY));
+    const surface = this.host.query.surfaceAt(fromWorldX, fromWorldY);
+    getSoundManager().work.playStep(surface);
+    const dirt = surface === 'dirt';
 
     // Alternate left / right foot using perpendicular offset
     const sign = this.footprintStep ? 1 : -1;
@@ -114,6 +127,9 @@ export class Footprints {
     // A forma muda com a direção do passo; refazer o contorno só quando ela muda de fato.
     if (reused && (reused.width !== w || reused.height !== h)) reused.setSize(w, h);
 
-    this.footprints.push({ obj: print, worldX: fromWorldX, worldY: fromWorldY, offX, offY, bornAt: this.host.time.now });
+    this.footprints.push({
+      obj: print, worldX: fromWorldX, worldY: fromWorldY, offX, offY, bornAt: this.host.time.now,
+      holdMs: dirt ? DIRT_HOLD_MS : 0, fadeMs: dirt ? DIRT_FADE_MS : FOOTPRINT_FADE_MS,
+    });
   }
 }

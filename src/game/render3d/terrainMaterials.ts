@@ -127,7 +127,9 @@ export const makeTerrainMaterials = (tileset: THREE.Texture): TerrainMaterials =
   // continua preto) e Basic e o caminho mais curto ate esse resultado.
   const wallTop = new THREE.MeshBasicMaterial({ color: 0x000000 });
   // As trepadeiras: acesas como a pedra em que estão encostadas (`normalUp`), e sem mistura.
-  const vines = new THREE.MeshLambertMaterial({ map: vineTexture(), alphaTest: 0.5 });
+  // Um pouco abaixo da pedra (0xb8): folha numa parede vertical pega menos sol que a crista, e com a luz inteira o
+  // verde virava neon.
+  const vines = new THREE.MeshLambertMaterial({ map: vineTexture(), alphaTest: 0.5, color: 0xb8b8b8 });
   patchPixelMaterial(vines, { quantize: true, normalUp: true });
   vines.name = 'terrain-vines';
   return {

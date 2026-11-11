@@ -25,7 +25,7 @@ const UNIQUE_TOOL_GIVERS: Partial<Record<HeldItemKind, NpcKind | null>> = {
 
 /** O que BodyBumps usa de GameScene. */
 export type BodyBumpsHost = Pick<GameScene,
-  'heldItem' | 'inventory' | 'itemManager' | 'npcManager' | 'playerWorld' | 'query' | 'questSetup' | 'steps'
+  'heldItem' | 'inventory' | 'itemManager' | 'life' | 'npcManager' | 'playerWorld' | 'query' | 'questSetup' | 'steps'
   | 'swing' | 'torch'
 >;
 
@@ -46,6 +46,8 @@ export class BodyBumps {
     // must happen from the canonical centre origin — otherwise the hero visibly jumps up
     // half a tile. Bumps aren't steps, so nothing else stops breathing here.
     this.host.steps.stopBreathing();
+    // A ÁRVORE ESBARRADA solta duas ou três folhas (ValleyLife.shakeTree; o que não é árvore não solta nada)
+    this.host.life.shakeTree(wx, wy);
 
     // O COGUMELO NASCENDO sem faca na mochila: o heroi PENSA nela (a Shui tem uma). O icone,
     // nunca a palavra — a mesma lingua da fogueira do fim.

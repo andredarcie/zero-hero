@@ -100,6 +100,19 @@ describe('a malha da decoração em pé', () => {
     expect(stand.getZ(6)).toBeGreaterThan(0);
   });
 
+  it('a peça PARADA (o capim do meio da mata) é grama mas não balança, e o quad é só o desenho, sem margem', () => {
+    const p = piece({ frame: 19, still: true });
+    const f = tilesetFrameUv(p.frame);
+    const geo = buildStandingDecorGeometry([p]);
+    const pos = geo.attributes.position as THREE.BufferAttribute;
+    const uv = geo.attributes.uv as THREE.BufferAttribute;
+    expect(isFlexibleDecor(19)).toBe(true);
+    expect(flexOf(geo, 0)).toBe(0);
+    expect([pos.getX(0), pos.getX(1)]).toEqual([9.5, 10.5]);
+    expect(uv.getX(0)).toBeCloseTo(f.u0);
+    expect(uv.getX(1)).toBeCloseTo(f.u1);
+  });
+
   it('uma peça de tile não é fio: aBlade zerado, e a fase do tremular é a de sempre (0)', () => {
     const geo = buildStandingDecorGeometry([piece()]);
     const blade = geo.attributes.aBlade as THREE.BufferAttribute;

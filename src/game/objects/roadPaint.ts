@@ -2,8 +2,11 @@
 // paleta e o mesmo ruído, para as três lerem como um caminho só, de idades diferentes.
 
 export const ROAD_PX = 16;
-export const ROAD_DIRT = ['#8f7a57', '#7c6849', '#6b593e', '#584930'] as const;
-export const ROAD_PEBBLE = ['#a89a7c', '#4c4231'] as const;
+// A TERRA MAIS APAGADA (2026-11-11): com o sol dourado do dia, a paleta de antes (#8f7a57…, saturação ~0,39) saía
+// uma faixa laranja-viva, a coisa mais saturada do prado — uma trilha de tinta. Mesma terra, um pouco mais escura e
+// bem menos saturada (~0,28): ao sol ela ainda esquenta, mas para em marrom de chão batido.
+export const ROAD_DIRT = ['#81745e', '#706450', '#615644', '#504737'] as const;
+export const ROAD_PEBBLE = ['#9c937f', '#463f33'] as const;
 
 export const roadNoise = (x: number, y: number, seed: number): number => {
   const s = Math.sin(x * 127.1 + y * 311.7 + seed * 74.7) * 43758.5453;
