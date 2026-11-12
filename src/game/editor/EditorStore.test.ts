@@ -165,7 +165,8 @@ describe('peças', () => {
   it('as contas do mundo: estatísticas e o mundo copiado', () => {
     const stats = store.checks.stats();
     expect(stats.npcs).toBe(5);
-    expect(stats.pickups).toBe(6);
+    // Os oito cogumelos (os seis do pedido da Shui e os dois opcionais): os únicos itens soltos no mapa.
+    expect(stats.pickups).toBe(8);
     expect(stats.props).toBe(store.world.props.length);
     const copy = store.snapshotWorld();
     expect(copy).toEqual(store.world);
