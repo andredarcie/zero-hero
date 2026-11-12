@@ -9,6 +9,13 @@ import type { SoundManager } from './SoundManager';
 
 /** Os degraus de quem apanha em seguida, em semitons: a pentatônica de fá, sem nunca passar da oitava. */
 const PICK_SCALE = [0, 2, 4, 7, 9, 12];
+/**
+ * O volume de pico do sopro da meditação (Synth.swell). Medido em janela de 400 ms: uns 8 dB abaixo do "notar" (que
+ * é gesto do jogador), para se seguir de ouvido sem incomodar repetindo a cada 5 s. O "tss" de antes ficava 16 dB
+ * abaixo e sumia debaixo da música.
+ */
+const BREATH_IN_VOL = 0.028;
+const BREATH_OUT_VOL = 0.03;
 
 /** O que UiSounds usa de SoundManager. */
 export type UiSoundsHost = Pick<SoundManager,
@@ -126,6 +133,24 @@ export class UiSounds {
     this.host.synth.osc('sine', 110, 110, 0.16, 3.6);
   }
 
+  /**
+   * O FÔLEGO DA MEDITAÇÃO (scenes/game/Meditation): o AR ENTRANDO enquanto o guia sobe (um sopro que cresce devagar e
+   * clareia, 4 s) e SAINDO enquanto ele desce (mais grave, escurecendo, 6 s). Sopro de verdade, que cresce e se
+   * desfaz (Synth.swell), e não um "tss" que entra de golpe. Baixinho: é para quem medita seguir o ritmo de ouvido,
+   * mesmo de olhos fechados, e não um aviso.
+   */
+  public playBreathCue(inhale: boolean): void {
+    if (inhale) this.host.synth.swell('bandpass', 420, 1050, 0.7, BREATH_IN_VOL, 1.7, 3.7);
+    else this.host.synth.swell('lowpass', 900, 300, 0.5, BREATH_OUT_VOL, 1.0, 5.4);
+  }
+
+  /** PERCEBER um pensamento: um toque de madeira e uma nota curta, como quem anota a lápis. */
+  public playNotice(): void {
+    this.host.synth.noise('bandpass', 1800, 2.4, 0.03, 0.05);
+    this.host.synth.osc('triangle', 784, 784, 0.045, 0.32, 0.03);
+    this.host.synth.osc('sine', 1175, 1175, 0.018, 0.5, 0.08);
+  }
+
   public playHeartPickup(): void {
     if (this.host.synth.playSample('heartPickup')) return;
     this.host.synth.osc('triangle', 220, 220, 0.26, 0.22);
@@ -169,6 +194,17 @@ export class UiSounds {
     this.host.synth.osc('square', 240, 300, 0.055, 0.05);
     this.host.synth.noise('lowpass', 260, 1.3, 0.16, 0.1, 0.06); // o baque da tampa voltando
     this.host.synth.osc('sine', 130, 80, 0.075, 0.12, 0.06);
+  }
+
+  /** A PENA no papel (o caderno de desenho): um risco curto e baixo, repetido enquanto se desenha. */
+  public playPenScratch(): void {
+    this.host.synth.noise('bandpass', 2100 + Math.random() * 700, 1.6, 0.022, 0.07);
+  }
+
+  /** O BICHO SE ASSUSTA: um farfalho rápido subindo, de quem sai correndo do mato. */
+  public playStartle(): void {
+    this.host.synth.noise('bandpass', 1200, 1.1, 0.06, 0.16);
+    this.host.synth.osc('triangle', 380, 640, 0.04, 0.09, 0.03);
   }
 
   /** O PAPEL abrindo: dois farfalhos secos, o segundo mais grave (a folha assentando). */

@@ -3,6 +3,8 @@
 
 import { CatCompanion } from '@/game/entities/CatCompanion';
 import type { CampfireObject } from '@/game/objects/CampfireObject';
+import { adventureState } from '@/game/runtime/adventureState';
+import type { AnimalKind } from '@/game/runtime/sketches';
 import type { GameScene } from '@/game/scenes/GameScene';
 
 type Tile = readonly [number, number];
@@ -62,5 +64,16 @@ export const campProbe = (s: GameScene) => {
       if (index >= 0) s.camp.notebook.overlay?.go(index);
     },
     closeNotebook: (): void => { s.camp.notebook.overlay?.close(); },
+
+    /** O caderno de desenho: o bicho que o Z desenharia agora, e o desenho aberto (progresso, o que o bicho faz). */
+    sketch: () => ({ target: s.camp.sketching.target(), open: s.camp.sketching.overlay?.state ?? null, cue: s.camp.sketching.cueText }),
+    /** Abre o desenho de um bicho (sem precisar achá-lo no mundo), e segura ou solta a pena. */
+    openSketch: (kind: AnimalKind): void => s.camp.sketching.open(kind),
+    holdPen: (on: boolean): void => { s.camp.sketching.overlay?.hold(on); },
+    /** A meditação: a sessão por dentro (null sem sessão), e a profundidade forçada para fotografar o fundo. */
+    meditation: () => s.camp.meditation.state,
+    meditationDepth: (depth: number): void => s.camp.meditation.setDepth(depth),
+    /** A pedra que quica: mirando, quantos quiques deu a última, e o recorde. */
+    skip: () => ({ aiming: s.camp.skipping.aiming, last: s.camp.skipping.lastSkips, best: adventureState().skipBest }),
   };
 };

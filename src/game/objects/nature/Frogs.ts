@@ -62,7 +62,8 @@ interface Ring { bb: Billboard3D; t: number }
 interface Drop { bb: Billboard3D; x: number; y: number; z: number; vx: number; vy: number; vz: number }
 
 const MAX_FROGS = 3;
-const SCARE = 2.3;
+/** Só pula na água com o herói a 2 tiles ou menos (pedido do autor: os bichos menos ariscos). */
+const SCARE = 2.0;
 
 export class Frogs implements NatureSystem {
   private readonly frogs: Frog[] = [];

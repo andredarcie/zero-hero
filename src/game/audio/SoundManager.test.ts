@@ -5,6 +5,7 @@ import { installPlatform } from '@/game/platform/platform';
 import { RecordingAudioContext } from '@/test-support/recordingAudio';
 import { createTestPlatform, type TestPlatform } from '@/test-support/testPlatform';
 import { getSoundManager } from './SoundManager';
+import { swellCurve } from './Synth';
 
 // O SOM, pela porta da plataforma: o contexto de áudio aqui só ANOTA (recordingAudio.ts). Cobra-se o que o jogo pede
 // ao áudio — o efeito nasce, liga no barramento dos efeitos e começa; a música troca com fade; o volume da pessoa vai
@@ -48,6 +49,9 @@ describe('os efeitos', () => {
       ['playAnvilStrike', [true]], ['playForgeHammerPickup', []], ['playForgeHammerSetDown', []], ['playKeyJingle', []],
       ['playKeyInsert', []], ['playLockTick', []], ['playLockClunk', []], ['playOldGateCreak', []], ['playGateSwing', []],
       ['playGateStrain', []], ['playMoonflowerBloom', []], ['playMoonflowerClose', []],
+      // O lazer: o fôlego e o perceber da meditação, a pena e o susto do desenho, a pedra que quica e a que afunda.
+      ['playBreathCue', [true]], ['playBreathCue', [false]], ['playNotice', []], ['playPenScratch', []], ['playStartle', []],
+      ['playStoneSkip', [1]], ['playStoneSkip', [6]], ['playStonePlunk', []],
     ];
     // Cada efeito mora numa das peças do som (WorkSounds, UiSounds, NatureSounds, StorySounds).
     const m = sm();
@@ -68,6 +72,17 @@ describe('os efeitos', () => {
     const before = ctx.nodes.length;
     for (const syllable of syllables) sm().ui.playDialogSyllable(syllable);
     expect(ctx.nodes.length).toBeGreaterThan(before);
+  });
+
+  it('o sopro (o fôlego da meditação) cresce devagar e se desfaz: começa e termina em zero, sem quina', () => {
+    const curve = swellCurve(0.03, 0.4);
+    expect(curve[0]).toBe(0);
+    expect(curve[curve.length - 1]).toBeLessThan(1e-9);
+    const top = Math.max(...curve);
+    expect(top).toBeCloseTo(0.03, 3);
+    // O pico cai perto de 40% da duração, e nenhum passo da curva salta (o golpe de 3 ms do `noise` seria um salto).
+    expect(curve.indexOf(top) / (curve.length - 1)).toBeCloseTo(0.4, 1);
+    for (let i = 1; i < curve.length; i += 1) expect(Math.abs(curve[i] - curve[i - 1])).toBeLessThan(0.03 * 0.1);
   });
 });
 
@@ -112,6 +127,23 @@ describe('música e ambiente', () => {
     expect(out).not.toBeNull();
     sm().setListening(true);
     sm().setListening(false);
+    sm().ambience.stopAmbience();
+  });
+
+  it('a meditação funda afasta o vale sem calar: os leitos descem a 45% e voltam, e o mix do lugar respeita isso', async () => {
+    sm().ambience.startAmbience();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    sm().ambience.setAmbienceMix(0, 0, 0);
+    const day = (): number => sm().ambienceBeds.get('day')?.gain.gain.value ?? -1;
+    const full = day();
+    expect(full).toBeGreaterThan(0);
+    sm().ambience.setHush(1);
+    expect(day()).toBeCloseTo(full * 0.45, 5);
+    // O mix do lugar (chamado a cada quadro pelo mundo) não desfaz o calar.
+    sm().ambience.setAmbienceMix(0, 0, 0);
+    expect(day()).toBeCloseTo(full * 0.45, 5);
+    sm().ambience.setHush(0);
+    expect(day()).toBeCloseTo(full, 5);
     sm().ambience.stopAmbience();
   });
 });

@@ -129,7 +129,8 @@ export default {
     await shot('02a-sapo-na-margem', { note: 'O sapo na margem, virado para a água' });
     const frog = await n(() => window.gameDebug.valley.nature().frogs.list.find((f) => f.mode === 'sit'));
     const divesBefore = await n(() => window.gameDebug.valley.nature().frogs.dives);
-    await put(Math.round(frog.x), Math.round(frog.y) - 2, 0, 1);
+    // A 1 tile: os bichos só se espantam com o herói a 2 tiles ou menos (pedido do autor, 2026-11-11).
+    await put(Math.round(frog.x), Math.round(frog.y) - 1, 0, 1);
     await sleep(170);
     await focus('02b-sapo-saltando', frog.x, frog.y + 0.4, 0.1);
     await frozenShot('02b-sapo-saltando', 'O sapo saltando na água');
@@ -152,7 +153,7 @@ export default {
     { const q = await n(() => window.gameDebug.valley.nature().squirrel); await focus('01a-esquilo-no-chao', q.x, q.y, q.z + 0.2); }
     await shot('01a-esquilo-no-chao', { note: 'O esquilo catando no pé do carvalho' });
     const sq = await n(() => window.gameDebug.valley.nature().squirrel);
-    await put(Math.round(sq.x), Math.round(sq.y) + 2);
+    await put(Math.round(sq.x), Math.round(sq.y) + 1);
     await sleep(450);
     { const q = await n(() => window.gameDebug.valley.nature().squirrel); await focus('01b-esquilo-fugindo', q.x, q.y, q.z + 0.2); }
     await frozenShot('01b-esquilo-fugindo', 'O esquilo correndo para o tronco');
@@ -211,7 +212,7 @@ export default {
     await sleep(1800);
     { const h = await n(() => window.gameDebug.valley.nature().hares.state); if (h) await focus('04a-lebre-pastando', h.x, h.y, 0.25); }
     await frozenShot('04a-lebre-pastando', 'A lebre pastando');
-    await put(Math.round(hare.x) + 2, Math.round(hare.y), -1, 0);
+    await put(Math.round(hare.x) + 1, Math.round(hare.y), -1, 0);
     await sleep(450);
     { const h = await n(() => window.gameDebug.valley.nature().hares.state); if (h) await focus('04b-lebre-fugindo', h.x, h.y, 0.25); }
     await frozenShot('04b-lebre-fugindo', 'A lebre fugindo em zigue-zague');

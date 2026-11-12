@@ -286,6 +286,14 @@ export const framePixelReader = (key: string, frame: number): ((x: number, y: nu
   };
 };
 
+/** O tamanho de um quadro (px), ou null quando a chave não existe (ainda não registrada, ou o ambiente de teste). */
+export const frameSize = (key: string): { w: number; h: number } | null => {
+  const def = DEFS[key];
+  const img = baseTextures.get(key)?.image as { width?: number; height?: number } | undefined;
+  if (!def || !img?.width || !img.height) return null;
+  return { w: def.frameW ?? img.width, h: def.frameH ?? img.height };
+};
+
 /**
  * How much of a frame is EMPTY below its art, as a fraction of the frame's height.
  *

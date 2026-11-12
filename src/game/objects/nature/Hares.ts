@@ -75,8 +75,10 @@ const FRAMES = {
 
 type Mode = 'graze' | 'alert' | 'flee';
 
-const ALERT = 4.2;
-const FLEE = 3.0;
+// MENOS ARISCA (pedido do autor, 2026-11-11: os bichos só correm com o herói a dois tiles ou menos; fora isso, ficam
+// de boa). Ela senta de orelhas em pé um pouco antes, e foge a 2 (o `ALERT - 0,4` do alerta também dá 2).
+const ALERT = 2.4;
+const FLEE = 2.0;
 
 export class Hares implements NatureSystem {
   private bb: Billboard3D | null = null;

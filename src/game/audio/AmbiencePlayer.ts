@@ -9,6 +9,8 @@ export const clamp01 = (v: number): number => Math.min(1, Math.max(0, v));
  * o atraso do decodificador de MP3 cai nessa sobra, e o que toca é só o miolo, sem estalo na emenda.
  */
 export const LOOP_WRAP_S = 0.25;
+/** Com o vale todo calado (`setHush(1)`), os leitos ficam nesta fração do volume: mais longe, nunca mudos. */
+const HUSHED = 0.45;
 /**
  * OS LEITOS DE AMBIENTE. Eram um vento so; agora sao tres, tocando juntos o tempo todo, e o jogo
  * so mexe no VOLUME de cada um (`setAmbienceMix`): passaros e brisa de dia, grilos e um sapo de
@@ -33,6 +35,8 @@ export class AmbiencePlayer {
   // continua soando quando a musica baixa para um dialogo.
   private readonly ambienceBuffers = new Map<AmbienceBed, AudioBuffer>();
   private wantAmbience = false;
+  /** O quanto o vale se cala agora (0..1; ver setHush). */
+  private hush = 0;
 
   public constructor(private readonly host: AmbiencePlayerHost) {}
 
@@ -67,11 +71,28 @@ export class AmbiencePlayer {
    */
   public setAmbienceMix(night: number, water: number, rain = 0): void {
     this.host.ambienceMix = { day: 1 - clamp01(night), night: clamp01(night), water: clamp01(water), rain: clamp01(rain) };
+    this.applyMix(0.8);
+  }
+
+  /**
+   * O VALE SE CALA (0..1): a meditação funda afasta os pássaros, a brisa e a água, sem calar (com 1, ficam em
+   * HUSHED do volume). Desliza devagar, e o mix do lugar continua valendo por baixo.
+   */
+  public setHush(level: number): void {
+    const next = clamp01(level);
+    if (next === this.hush) return;
+    this.hush = next;
+    this.applyMix(1.6);
+  }
+
+  private volumeOf(bed: AmbienceBed): number {
+    return AMBIENCE_VOL * this.host.ambienceMix[bed] * (1 - (1 - HUSHED) * this.hush);
+  }
+
+  private applyMix(glideS: number): void {
     if (!this.host.ctx) return;
     const now = this.host.ctx.currentTime;
-    for (const [bed, { gain }] of this.host.ambienceBeds) {
-      gain.gain.setTargetAtTime(AMBIENCE_VOL * this.host.ambienceMix[bed], now, 0.8);
-    }
+    for (const [bed, { gain }] of this.host.ambienceBeds) gain.gain.setTargetAtTime(this.volumeOf(bed), now, glideS);
   }
 
   private startAmbienceNow(): void {
@@ -81,7 +102,7 @@ export class AmbiencePlayer {
     for (const [bed, buffer] of this.ambienceBuffers) {
       if (this.host.ambienceBeds.has(bed)) continue;
       const gain = ctx.createGain();
-      gain.gain.value = AMBIENCE_VOL * this.host.ambienceMix[bed];
+      gain.gain.value = this.volumeOf(bed);
       gain.connect(this.host.musicUserBus);
       const src = ctx.createBufferSource();
       src.buffer = buffer;

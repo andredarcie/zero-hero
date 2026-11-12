@@ -15,6 +15,8 @@ export interface NotebookPage {
   /** A seção, já no idioma: a lista põe um título a cada troca. */
   section: string;
   known: boolean;
+  /** Um desenho de bicho pela metade: a arte é o desenho como está (não o vulto), mas sem nome nem nota. */
+  partial?: boolean;
   /** A arte pequena da lista e a grande da página (data URLs do motor 2D). */
   icon: string;
   art: string;
@@ -28,12 +30,16 @@ export interface NotebookPage {
 
 export interface NotebookView {
   title: string;
+  /** O nome do botão de fechar (o "×" a pena no canto). */
+  close: string;
   /** "12 de 29": quanto da coleção já está no caderno. */
   count: string;
   pages: NotebookPage[];
   foot: string;
   unknownName: string;
   unknownText: string;
+  /** A nota do desenho pela metade. */
+  partialText: string;
 }
 
 export interface NotebookCallbacks {
@@ -58,8 +64,11 @@ const CSS = `
 .zh-book-backdrop.zh-in { opacity: 1; }
 /* A CAPA: couro gasto com um filete de costura, e o caderno aberto em cima, um tico torto na mesa. */
 .zh-book {
+  position: relative;
   display: grid; grid-template-columns: minmax(220px, 300px) minmax(260px, 400px);
-  height: min(560px, calc(100vh - 2rem)); max-width: 100%;
+  /* A altura VISÍVEL (dvh): no celular, 100vh passa da tela por causa da barra do navegador, e o pé do caderno
+     sumia embaixo dela. O vh fica só para navegador que não conhece dvh. */
+  height: min(560px, calc(100vh - 2rem)); height: min(560px, calc(100dvh - 2rem)); max-width: 100%;
   padding: 10px;
   background: #5a3220 linear-gradient(160deg, rgba(255, 220, 170, 0.08), rgba(0, 0, 0, 0.25));
   border-radius: 6px;
@@ -97,7 +106,7 @@ const CSS = `
 /* A linha que está sendo lida: uma mancha de lápis por baixo. */
 .zh-book-row.zh-at { background: rgba(122, 82, 40, 0.2); }
 .zh-book-row img { width: 32px; height: 32px; object-fit: contain; image-rendering: pixelated; flex: none; }
-.zh-book-row.zh-unknown span { opacity: 0.45; }
+.zh-book-row.zh-unknown span, .zh-book-row.zh-partial span { opacity: 0.45; }
 /* O QUE AINDA NÃO FOI ACHADO: só o vulto, em tinta. */
 .zh-unknown img { filter: brightness(0); opacity: 0.5; }
 .zh-book-foot {
@@ -105,6 +114,15 @@ const CSS = `
   font-family: ${HAND_FONT}; font-weight: 600; font-size: 1rem; color: ${INK}; opacity: 0.65; text-align: center;
 }
 button.zh-book-foot { cursor: pointer; opacity: 0.85; text-decoration: underline; text-underline-offset: 3px; }
+/* O FECHAR, sempre à vista no canto: um "×" de dois traços de pena, com alvo de dedo inteiro (44px). */
+.zh-book-close {
+  position: absolute; top: 12px; right: 12px; z-index: 2; width: 44px; height: 44px; padding: 8px;
+  border: 0; background: transparent; cursor: pointer;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+.zh-book-close svg { display: block; width: 100%; height: 100%; }
+.zh-book-close path { fill: none; stroke: ${INK}; stroke-width: 2.6; stroke-linecap: round; }
+.zh-book-close:hover path, .zh-book-close:focus-visible path { stroke: ${INK_RED}; }
 .zh-book-detail {
   flex: 1; min-height: 0; overflow-y: auto;
   display: flex; flex-direction: column; align-items: center; text-align: center;
@@ -132,7 +150,11 @@ button.zh-book-foot { cursor: pointer; opacity: 0.85; text-decoration: underline
 .zh-book-notes li { margin: 3px 0; }
 /* No celular em pé, as duas folhas uma em cima da outra: a lista em cima, a página embaixo. */
 @media (max-width: 640px) {
-  .zh-book { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 1.15fr); width: 100%; height: calc(100vh - 2rem); }
+  .zh-book {
+    grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 1.15fr); width: 100%;
+    height: calc(100vh - 2rem); height: calc(100dvh - 2rem);
+  }
+  .zh-book-head { padding-right: 40px; }
   .zh-book-left { box-shadow: inset 0 -18px 18px -14px ${FOLD}; border-radius: 3px 3px 0 0; }
   .zh-book-right { box-shadow: inset 0 18px 18px -14px ${FOLD}; border-radius: 0 0 3px 3px; padding-left: 16px; }
   .zh-book-art { width: 96px; height: 96px; }
@@ -160,6 +182,20 @@ const img = (src: string, alt: string): HTMLImageElement => {
   node.src = src;
   node.alt = alt;
   return node;
+};
+
+/** O "×" a pena: dois traços um tico tortos, como quem risca à mão. */
+const inkCross = (): SVGSVGElement => {
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', '0 0 32 32');
+  svg.setAttribute('aria-hidden', 'true');
+  for (const d of ['M6 7 C 12 12, 19 20, 26 27', 'M26 6 C 20 12, 13 19, 7 27']) {
+    const path = document.createElementNS(ns, 'path');
+    path.setAttribute('d', d);
+    svg.appendChild(path);
+  }
+  return svg;
 };
 
 const CLOSE_KEYS: ReadonlySet<string> = new Set(['escape', 'x', 'k', 'i', 'z', 'j', 'enter', ' ']);
@@ -208,7 +244,13 @@ export class NotebookOverlay {
     const right = this.sheet('zh-book-right');
     this.detail = el('div', 'zh-book-detail');
     right.appendChild(this.detail);
-    book.append(left, right);
+    const shut = el('button', 'zh-book-close');
+    shut.type = 'button';
+    shut.title = view.close;
+    shut.setAttribute('aria-label', view.close);
+    shut.appendChild(inkCross());
+    shut.addEventListener('click', () => this.close());
+    book.append(left, right, shut);
     this.root.appendChild(book);
     this.root.addEventListener('pointerdown', (e) => { if (e.target === this.root) this.close(); });
     document.body.appendChild(this.root);
@@ -233,7 +275,7 @@ export class NotebookOverlay {
   }
 
   private row(page: NotebookPage, index: number): HTMLButtonElement {
-    const row = el('button', `zh-book-row${page.known ? '' : ' zh-unknown'}`);
+    const row = el('button', `zh-book-row${page.known ? '' : page.partial ? ' zh-partial' : ' zh-unknown'}`);
     row.type = 'button';
     row.dataset.kind = page.kind;
     const name = page.known ? page.name : this.cb.view.unknownName;
@@ -266,12 +308,12 @@ export class NotebookOverlay {
   private writePage(page: NotebookPage | undefined): void {
     this.detail.replaceChildren();
     if (!page) return;
-    const { unknownName, unknownText } = this.cb.view;
-    const art = el('div', `zh-book-art${page.known ? '' : ' zh-unknown'}`);
+    const { unknownName, unknownText, partialText } = this.cb.view;
+    const art = el('div', `zh-book-art${page.known || page.partial ? '' : ' zh-unknown'}`);
     art.appendChild(img(page.art, page.known ? page.name : unknownName));
     this.detail.append(art, el('h2', 'zh-book-name', page.known ? page.name : unknownName));
     if (!page.known) {
-      this.detail.appendChild(el('p', 'zh-book-text zh-faint', unknownText));
+      this.detail.appendChild(el('p', 'zh-book-text zh-faint', page.partial ? partialText : unknownText));
       return;
     }
     if (page.latin) this.detail.appendChild(el('p', 'zh-book-latin', page.latin));

@@ -188,6 +188,7 @@ export class WorldBoot {
         return q !== undefined && isQuestDone(q);
       });
       this.host.camp.catCare.build();
+      this.host.camp.meditation.build();
       this.host.valley.waterfall = new Waterfall(this.host);
       this.host.valley.koiPond = new KoiPond(this.host, () => ({ x: this.host.playerWorld.worldX, y: this.host.playerWorld.worldY }));
       this.host.valley.bigTrees = new BigTrees(this.host);

@@ -188,6 +188,10 @@
     "getUp": "Levantar",
     "knock": "Bater",
     "read": "Ler",
+    "sketch": "Desenhar",
+    "meditate": "Meditar",
+    "skip": "Quicar pedra",
+    "throw": "Jogar",
     "look": "Olhar",
     "touch": "Tocar",
     "light": "Acender",
@@ -381,15 +385,18 @@
   },
   "notebook": {
     "title": "Caderno de campo",
+    "close": "Fechar",
     "count": "{n} de {total}",
     "sections": {
       "tools": "Ferramentas",
       "materials": "Materiais",
       "neighbours": "Para os vizinhos",
-      "mushrooms": "Cogumelos"
+      "mushrooms": "Cogumelos",
+      "animals": "Bichos"
     },
     "unknownName": "???",
     "unknownText": "Ainda não achei isto.",
+    "partial": "Desenho pela metade.",
     "keys": "Setas folheiam  ·  X fecha",
     "keysTouch": "Fechar o caderno",
     "entry": {
@@ -414,6 +421,96 @@
       "dyeBundle": "As quatro flores de tinta, colhidas. Delas saem as cores do quadro da Sisi.",
       "brush": "O pincel da Sisi. Com ele, o quadro no cavalete ganha as cores das flores.",
       "telescope": "O telescópio da Thea, com a lente de vidro. Lá do alto do planalto, ele aproxima as estrelas."
+    }
+  },
+  "meditation": {
+    "title": "Meditação",
+    "close": "Levantar",
+    "notice": "Notar",
+    "labels": {
+      "memory": "lembrando",
+      "plan": "planejando",
+      "worry": "se preocupando",
+      "want": "querendo"
+    },
+    "stats": {
+      "breathsOne": "1 fôlego",
+      "breathsMany": "{n} fôlegos",
+      "returnsOne": "1 volta",
+      "returnsMany": "{n} voltas",
+      "underMinute": "menos de um minuto",
+      "minutes": "{n} min"
+    },
+    "facts": [
+      "A mente divaga quase metade do tempo acordado: 47%, numa pesquisa com 2.250 pessoas. Meditar não é parar isso; é perceber quando acontece.",
+      "O exercício é a volta: a mente sai, você percebe e traz a atenção de volta. Cada volta é uma repetição, como um peso levantado.",
+      "Respirar devagar, umas seis vezes por minuto, deixa o batimento variar mais com o fôlego: sinal do nervo vago, o freio do coração, trabalhando.",
+      "Pôr nome numa emoção (\"raiva\", \"medo\") diminui a resposta da amígdala, o alarme do cérebro. Por isso, aqui, cada pensamento ganha um nome.",
+      "Meditar costuma ser seguro, mas algumas pessoas sentem desconforto. Se ficar ruim, pare. E meditação não substitui tratamento.",
+      "Há dois jeitos clássicos de meditar: focar num ponto só, como o fôlego, ou observar o que vier sem se prender. Aqui você pratica o primeiro.",
+      "Ao inspirar, o coração acelera um pouco; ao expirar, desacelera. É a arritmia sinusal respiratória, e é sinal de saúde.",
+      "Treze minutos por dia, durante oito semanas, melhoraram a atenção, a memória e o humor de quem nunca tinha meditado. Com quatro semanas, ainda não.",
+      "Em 47 estudos com 3.515 pessoas, programas de atenção plena aliviaram ansiedade, depressão e dor de forma modesta, sem superar outros tratamentos.",
+      "Em quem medita há anos, a rede do cérebro que puxa a mente para longe, a rede de modo padrão, fica mais quieta durante a prática.",
+      "Num estudo de Stanford, cinco minutos por dia de suspiros com a expiração longa melhoraram o humor mais do que cinco minutos de meditação.",
+      "Em quem já teve depressão mais de uma vez, oito semanas de terapia com atenção plena baixaram a recaída, em pouco mais de um ano, de 49% para 38%.",
+      "Para o coração, a meditação pode ajudar como complemento, mas os dados ainda são modestos.",
+      "Um curso de oito semanas não mudou a estrutura do cérebro de 218 pessoas na ressonância. Nem tudo o que se diz sobre meditação foi confirmado."
+    ],
+    "sources": [
+      "Killingsworth e Gilbert, Science, 2010",
+      "Hasenkamp e colegas, NeuroImage, 2012",
+      "Lehrer e Gevirtz, Frontiers in Psychology, 2014",
+      "Lieberman e colegas, Psychological Science, 2007",
+      "Goldberg, Britton e colegas, Psychotherapy Research, 2021",
+      "Lutz e colegas, Trends in Cognitive Sciences, 2008",
+      "Yasuma e Hayano, Chest, 2004",
+      "Basso e colegas, Behavioural Brain Research, 2019",
+      "Goyal e colegas, JAMA Internal Medicine, 2014",
+      "Brewer e colegas, PNAS, 2011",
+      "Balban e colegas, Cell Reports Medicine, 2023",
+      "Kuyken e colegas, JAMA Psychiatry, 2016",
+      "Levine e colegas, American Heart Association, 2017",
+      "Kral e colegas, Science Advances, 2022"
+    ]
+  },
+  "sketch": {
+    "animals": {
+      "squirrel": {
+        "name": "Esquilo-vermelho",
+        "latin": "Sciurus vulgaris",
+        "fact": "Enterra nozes e sementes para o inverno e esquece muitas delas. As esquecidas viram árvores."
+      },
+      "bird": {
+        "name": "Pisco-de-peito-ruivo",
+        "latin": "Erithacus rubecula",
+        "fact": "Segue quem revira a terra, esperando as minhocas que aparecem."
+      },
+      "hare": {
+        "name": "Lebre-europeia",
+        "latin": "Lepus europaeus",
+        "fact": "Nasce de olhos abertos e já com pelo, pronta para correr."
+      },
+      "frog": {
+        "name": "Rã-verde",
+        "latin": "Pelophylax perezi",
+        "fact": "Respira também pela pele, e por isso vive perto da água: a pele precisa ficar úmida."
+      },
+      "dragonfly": {
+        "name": "Libélula-imperador",
+        "latin": "Anax imperator",
+        "fact": "Caça em pleno voo: junta as pernas numa cesta e apanha mosquitos no ar."
+      },
+      "koi": {
+        "name": "Carpa koi",
+        "latin": "Cyprinus rubrofuscus",
+        "fact": "Vive décadas, e aprende quem traz comida: vem à beira quando alguém para ali."
+      },
+      "cat": {
+        "name": "Gato-preto",
+        "latin": "Felis catus",
+        "fact": "Dorme de doze a dezesseis horas por dia. Este escolheu o barril."
+      }
     }
   },
   "ending": {
@@ -479,6 +576,16 @@
   },
   "garden": {},
   "minigame": {
+    "meditation": {
+      "breath": {
+        "keys": "Segure {Z} enquanto o anel pontilhado cresce e solte quando ele encolher  ·  {Esc} levanta",
+        "touch": "Segure o dedo na tela enquanto o anel pontilhado cresce e solte quando ele encolher  ·  o × levanta"
+      },
+      "notice": {
+        "keys": "Um pensamento chegou. Tudo bem: aperte {X} para perceber e volte ao fôlego",
+        "touch": "Um pensamento chegou. Tudo bem: toque {B} para perceber e volte ao fôlego"
+      }
+    },
     "forage": {
       "cut": {
         "keys": "Aperte {Z} quando a faca estiver entre as marcas, para cortar.",

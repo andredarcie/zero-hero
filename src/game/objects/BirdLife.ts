@@ -124,8 +124,8 @@ interface Bird {
   flap: number;
 }
 
-/** O herói a menos disto espanta o bando. */
-const FLUSH_DIST = 2.4;
+/** O herói a menos disto espanta o bando (2 tiles: pedido do autor, os bichos menos ariscos). */
+const FLUSH_DIST = 2.0;
 const GROUND_BIRDS = 4;
 const FLOCK_SIZE = 6;
 /** Tamanho de um passarinho na tela (tiles). */

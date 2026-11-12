@@ -19,7 +19,7 @@ const ACTION_BUFFER_MS = 130;
 /** O que ActionInput usa de GameScene. */
 export type ActionInputHost = Pick<GameScene,
   'arc' | 'bumps' | 'camp' | 'craft' | 'cutsceneActive' | 'dialog' | 'dialogCam' | 'forage' | 'forge' | 'hand'
-  | 'heldItem' | 'input' | 'intro' | 'machines' | 'movementController' | 'orders' | 'pause' | 'playerWorld'
+  | 'heldItem' | 'input' | 'intro' | 'itemManager' | 'machines' | 'movementController' | 'orders' | 'pause' | 'playerWorld'
   | 'questSetup' | 'roastEnding' | 'sparkle' | 'steps' | 'swing' | 'swordPlanting' | 'textures' | 'use'
   | 'useGround' | 'verbs'
 >;
@@ -122,7 +122,7 @@ export class ActionInput {
       && !this.host.hand.itemGetOpen && !this.host.cutsceneActive
       && !this.host.pause.pauseMenu
       && !this.host.orders.orderOverlay && !this.host.forage.foraging && !this.host.camp.notebook.overlay
-      && this.host.movementController !== undefined;
+      && !this.host.camp.sketching.overlay && this.host.movementController !== undefined;
   }
 
   /**
@@ -151,8 +151,12 @@ export class ActionInput {
     // Uma tecla SEGURADA repete o `keydown` no navegador; o sinal certo pra ignorar a repeticao e
     // o `repeat` do proprio evento, nunca um booleano nosso que um `keyup` perdido deixaria preso.
     if (event?.repeat) return;
+    // Meditando, o Z é o fôlego, e quem o escuta é a meditação (MeditationOverlay).
+    if (this.host.camp.meditation.active) return;
     // Descansando, o Z só levanta — e dormindo, nem isso: quem acorda o herói é a manhã (ver Resting.canGetUp).
     if (this.host.camp.rest.isResting) { this.host.camp.rest.getUp(); return; }
+    // O seixo na mão: o Z joga (StoneSkipping).
+    if (this.host.camp.skipping.aiming) { this.host.camp.skipping.release(); return; }
     if (!this.canAct()) return;
     const front = this.host.verbs.facingTile();
     // O balão promete o Z para o que está debaixo do herói: conversar é a única coisa que passa na frente.
@@ -170,6 +174,7 @@ export class ActionInput {
     if (this.host.forage.harvestMushroomAt(front.x, front.y)) return;
     if (this.host.camp.useFindAt(front.x, front.y)) return;
     if (this.host.camp.useCampAt(front.x, front.y)) return;
+    if (this.host.camp.meditation.useAt(front.x, front.y)) return;
     if (this.host.camp.catCare.useBarrelAt(front.x, front.y)) return;
     // A espada fincada não sai do chão. Tocada, ela canta um pouco, e o que ela fez aparece como um
     // pensamento (pedido do autor).
@@ -184,6 +189,11 @@ export class ActionInput {
     if (this.host.craft.openCraftMenuAt(front.x, front.y)) return;
     if (this.host.forge.placeOnAltarAt(front.x, front.y)) return;
     if (this.host.forge.workAltarAt(front.x, front.y)) return;
+    // O LAZER: diante de água aberta, um seixo para quicar (o balão diz "Quicar pedra"); com um bicho perto e nada na
+    // frente para a mão, o caderno de desenho (a etiqueta "Desenhar" embaixo da tela diz, e fica apagada quando a
+    // frente pede outra coisa). Pousar no chão livre saiu (HandItems.handAt), então nenhum dos dois rouba gesto.
+    if (this.host.camp.skipping.startAt(front.x, front.y)) return;
+    if (!this.host.itemManager?.kindAt(front.x, front.y) && this.host.camp.sketching.tryOpen()) return;
     // A MÃO: pegar, trocar ou pousar a coisa do tile da frente.
     if (this.host.hand.handAt(front.x, front.y)) return;
     this.host.bumps.thinkOfNeed(front.x, front.y, true);
@@ -203,7 +213,10 @@ export class ActionInput {
     // Segurar o X um instante a mais para equipar fazia o primeiro keydown CONFIRMAR o item e a
     // repetição seguinte, já com a bolsa fechada, USÁ-LO. Quem quer usar duas vezes aperta duas.
     if (event?.repeat) return;
+    if (this.host.camp.meditation.active) return;
     if (this.host.camp.rest.isResting) { this.host.camp.rest.getUp(); return; }
+    // O seixo na mão: o X desiste de jogar.
+    if (this.host.camp.skipping.aiming) { this.host.camp.skipping.cancel(); return; }
     // A BOLSA ABERTA SEQUESTRA O X — e este é o único lugar do código onde isso pode ser decidido.
     if (!this.canAct()) return;
     // A cadencia adia, nao descarta (ver ACTION_BUFFER_MS).

@@ -67,6 +67,10 @@ export class ActionVerbs {
   public currentPrompt(at: { readonly x: number; readonly y: number }): { view: ActionPromptView; at: { x: number; y: number } } | null {
     const hero = { x: this.host.playerWorld.worldX, y: this.host.playerWorld.worldY };
     if (at.x !== hero.x || at.y !== hero.y || this.host.bumps.heroThought?.visibleIcon) return null;
+    // Meditando, nenhum balão: o "Levantar" do descanso mentiria (o Z ali é o fôlego).
+    if (this.host.camp.meditation.active) return null;
+    // O seixo na mão: o Z joga (e só isso; o X desiste).
+    if (this.host.camp.skipping.aiming) return { view: { rows: [{ label: t('actions.throw'), key: 'hand' }] }, at: hero };
     if (!this.host.actions.canAct()) return null;
     // Dormindo não há "Levantar": o sono acaba sozinho, de manhã (Resting.canGetUp).
     if (this.host.camp.rest.isResting) return this.host.camp.rest.canGetUp ? { view: { rows: [{ label: t('actions.getUp'), key: 'hand' }] }, at: hero } : null;
@@ -96,6 +100,7 @@ export class ActionVerbs {
         if (there && !isMushroomKind(there) && there !== held && !(isMushroomKind(held) && !this.host.inventory.fits(there))) offerItem(there);
       }
     }
+    // O CADERNO DE DESENHO não entra aqui: ele tem a etiqueta fixa dele embaixo da tela (AnimalSketching, SketchCue).
     const ahead = reach ? this.useVerbAt(front.x, front.y) ?? this.toolFor(front.x, front.y, 'use')?.verb ?? null : null;
     // De pé numa cova rachada, o X cava ali mesmo quando a frente não pede nada (ItemUseGround.digUnderfoot).
     const digHere = !ahead && this.canDigUnderfoot(hero);
@@ -140,6 +145,9 @@ export class ActionVerbs {
     if (this.host.camp.catCare.isBarrelAt(x, y)) return this.host.camp.catCare.barrelVerb();
     const camp = this.host.valley.heroCamp?.at(x, y);
     if (camp) return camp === 'log' ? 'sit' : camp === 'bed' ? 'sleep' : camp === 'notebook' ? 'read' : 'look';
+    // A pedra do alto da colina: meditar (a pilha de pedras ao lado é só para ver).
+    const stone = this.host.camp.meditation.at(x, y);
+    if (stone) return stone === 'seat' ? 'meditate' : null;
     const find = this.host.valley.valleyFinds?.at(x, y);
     if (find) {
       if (find.view) return 'sit';
@@ -163,7 +171,8 @@ export class ActionVerbs {
       if (altar.carrying === null) return this.host.heldItem !== 'none' ? 'put' : null;
       return hammerResult(altar.carrying) !== undefined ? 'hammer' : 'takeBack';
     }
-    return null;
+    // Água aberta à frente: um seixo da beira para quicar (StoneSkipping).
+    return this.host.camp.skipping.canSkipAt(x, y) ? 'skip' : null;
   }
 
   /** O que o X faz no tile da frente, na ordem de `pressUse` e da tabela de `useItemAt`. */

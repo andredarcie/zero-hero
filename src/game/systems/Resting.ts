@@ -166,8 +166,11 @@ export class Resting {
   /** O que ele encara sentado; undefined de pé. */
   public get fireTile(): { x: number; y: number } | undefined { return this.restFireTile; }
 
-  /** Sentar: o corpo baixa, o tempo corre, e qualquer seta levanta. A fogueira, o banco e o telescópio usam. */
-  public sit(wx: number, wy: number, timeScale = REST_TIME_SCALE): void {
+  /**
+   * Sentar: o corpo baixa, o tempo corre, e qualquer seta levanta. A fogueira, o banco e o telescópio usam; a pedra de
+   * meditar também, com o relógio no ritmo de sempre e sem o sininho (`chime`), porque quem abre a sessão é o sino dela.
+   */
+  public sit(wx: number, wy: number, timeScale = REST_TIME_SCALE, chime = true): void {
     const host = this.host;
     this.resting = true;
     this.sleptAtFire = false;
@@ -176,7 +179,7 @@ export class Resting {
     host.scene.tweens.add({ targets: host.hero, scaleY: 0.84, scaleX: 1.05, duration: 380, ease: 'Sine.easeOut' });
     host.dolly(0.82, 1600);
     host.vignette(0.35, 1600);
-    getSoundManager().ui.playCozyChime();
+    if (chime) getSoundManager().ui.playCozyChime();
     host.setTimeScale(timeScale);
     this.restFireTile = { x: wx, y: wy };
     // Seta ou qualquer tecla levanta — as setas não passam por pressAttack/pressUse.

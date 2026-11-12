@@ -1,6 +1,7 @@
 // O ITEM NAS COSTAS: o que está na mão aparece às costas do herói, no lado certo para onde ele olha, e some durante
 // o balanço.
 
+import { HERO_FRAMES } from '@/game/constants';
 import type { HeldItemKind } from '@/game/entities/ItemPickup';
 import { WOOD_CRADLE_TEXTURE } from '@/game/render3d/woodTextures';
 import { dyeBundleTexture } from '@/game/render3d/paintTextures';
@@ -90,10 +91,15 @@ export class BackItem {
     // The billboard is centred (see updateBackItem), so its elevation is the height of the
     // sprite's MIDDLE, not of its feet: half a tile more than the offsets the 2D sprite used,
     // which measured from the hero's centre.
-    // Whatever he carries rides the walk bob with him, or it floats while he bounces underneath.
-    const bob = this.host.hero.bobLift;
+    // Whatever he carries rides the walk bob with him, or it floats while he bounces underneath. E
+    // sobe com ele também: em cima da pedra de meditar (`lift`) o corpo está 0,4 acima do chão, e o
+    // item ficava na altura da pedra. (Deitado no colchão, o outro dono do `lift`, o item some.)
+    const bob = this.host.hero.bobLift + this.host.hero.lift;
+    // SENTADO DE PERNAS CRUZADAS (a pose de meditar, HERO_FRAMES.meditate) o corpo é mais baixo: a
+    // mão da tocha desce, o colo vira os joelhos e as costas param nos ombros.
+    const seated = this.host.hero.frame === HERO_FRAMES.meditate || this.host.hero.frame === HERO_FRAMES.meditateIn;
     if (this.host.torch.isTorchLit) {
-      bb.setPosition(hb.x + 0.32, hb.y + 0.02).setElevation(0.68 + bob);
+      bb.setPosition(hb.x + 0.32, hb.y + 0.02).setElevation((seated ? 0.5 : 0.68) + bob);
       return;
     }
     // Facing comes from the movement controller (the sprite's own facing), so the item can never
@@ -101,10 +107,10 @@ export class BackItem {
     const facingUp = (this.host.movementController?.facing.dy ?? 1) < 0;
     // No colo: na altura da cintura e à frente do corpo, então de costas é o corpo que o esconde.
     if (this.host.heldItem === 'wood') {
-      bb.setPosition(hb.x + (this.host.movementController?.facing.dx ?? 0) * 0.08, hb.y + (facingUp ? -0.02 : 0.02)).setElevation(0.36 + bob);
+      bb.setPosition(hb.x + (this.host.movementController?.facing.dx ?? 0) * 0.08, hb.y + (facingUp ? -0.02 : 0.02)).setElevation((seated ? 0.14 : 0.36) + bob);
       return;
     }
-    bb.setPosition(hb.x - 0.10, hb.y + (facingUp ? 0.02 : -0.02)).setElevation(0.55 + bob);
+    bb.setPosition(hb.x - 0.10, hb.y + (facingUp ? 0.02 : -0.02)).setElevation((seated ? 0.42 : 0.55) + bob);
   }
 
   // Hide the back item for the duration of a swing (reset the timer if the hero swings again),

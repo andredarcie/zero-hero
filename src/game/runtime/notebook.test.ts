@@ -5,6 +5,7 @@ import en from '@/game/i18n/locales/en.json';
 import ptBr from '@/game/i18n/locales/pt-br.json';
 import { Inventory } from './Inventory';
 import { NOTEBOOK, notebookEntries } from './notebook';
+import { ANIMALS } from './sketches';
 
 // O CADERNO DE CAMPO DO ACAMPAMENTO: a coleção de tudo que o herói já pegou, com o vulto do que falta.
 
@@ -25,19 +26,31 @@ describe('o caderno de campo', () => {
   it('cada página tem nome e nota nas duas línguas', () => {
     for (const lang of [en, ptBr]) {
       for (const kind of kinds) {
-        expect(typeof lookup(lang, `items.name.${kind}`), `${kind}: nome`).toBe('string');
-        const note = MUSHROOM_KINDS.includes(kind as never) ? `fungi.species.${kind}.curiosity` : `notebook.entry.${kind}`;
+        const animal = (ANIMALS as readonly string[]).includes(kind);
+        const name = animal ? `sketch.animals.${kind}.name` : `items.name.${kind}`;
+        expect(typeof lookup(lang, name), `${kind}: nome`).toBe('string');
+        const note = animal ? `sketch.animals.${kind}.fact`
+          : MUSHROOM_KINDS.includes(kind as never) ? `fungi.species.${kind}.curiosity` : `notebook.entry.${kind}`;
         expect(typeof lookup(lang, note), `${kind}: nota`).toBe('string');
+        if (animal) expect(typeof lookup(lang, `sketch.animals.${kind}.latin`), `${kind}: nome científico`).toBe('string');
       }
       for (const { section } of NOTEBOOK) expect(typeof lookup(lang, `notebook.sections.${section}`)).toBe('string');
     }
   });
 
   it('achado = passou pelas mãos ou teve a cerimônia; o balde cheio conta como o balde', () => {
-    const entries = notebookEntries(new Set(['porcini']), new Set(['axe', 'bucketFull']));
+    const entries = notebookEntries(new Set(['porcini']), new Set(['axe', 'bucketFull']), new Map());
     const known = entries.filter((e) => e.known).map((e) => e.kind).sort();
     expect(known).toEqual(['axe', 'bucket', 'porcini']);
     expect(entries).toHaveLength(kinds.length);
+  });
+
+  it('o bicho entra no caderno com o desenho pronto; pela metade, ele guarda quanto já foi desenhado', () => {
+    const entries = notebookEntries(new Set(), new Set(), new Map([['hare', 1], ['koi', 0.4]]));
+    const page = (kind: string) => entries.find((e) => e.kind === kind);
+    expect(page('hare')).toMatchObject({ section: 'animals', known: true, sketch: 1 });
+    expect(page('koi')).toMatchObject({ known: false, sketch: 0.4 });
+    expect(page('cat')).toMatchObject({ known: false, sketch: 0 });
   });
 
   it('a mochila avisa o caderno de tudo que entra nela, e só do que entra', () => {

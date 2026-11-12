@@ -85,6 +85,11 @@ export class CatCare {
     return this.cat ? { ...this.cat.position } : null;
   }
 
+  /** Onde o gato dorme no barril, ou null (acordado ele não para quieto: só se desenha dormindo). */
+  public get asleep(): { x: number; y: number } | null {
+    return this.cat?.atHome ? { ...this.cat.position } : null;
+  }
+
   /** O barril ocupa este tile (é sólido, e o Z ali é carinho ou olhar). */
   public isBarrelAt(x: number, y: number): boolean {
     return this.barrel?.at(x, y) ?? false;

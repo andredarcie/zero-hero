@@ -93,7 +93,8 @@ type Mode = 'hidden' | 'down' | 'ground' | 'home' | 'up';
 
 /** A altura (tiles) da borda de baixo da copa do carvalho (BigTrees): dali para cima o esquilo some nas folhas. */
 const CROWN = 0.8;
-const SCARE = 2.8;
+/** Só corre para a árvore com o herói a 2 tiles ou menos (pedido do autor: os bichos menos ariscos). */
+const SCARE = 2.0;
 
 export class Squirrel implements NatureSystem {
   private bb: Billboard3D | null = null;

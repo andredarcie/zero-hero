@@ -15,6 +15,8 @@ export const soundProbe = () => {
       track: sm().music.requestedTrack,
       nextPieceScheduled: (sm().music.valley?.timer ?? null) !== null,
       musicBus: sm().musicBus?.gain.value ?? null,
+      /** O volume de cada leito agora (a meditação funda o afasta: AmbiencePlayer.setHush). */
+      bedGains: Object.fromEntries([...sm().ambienceBeds].map(([bed, { gain }]) => [bed, gain.gain.value])),
     }),
     /** Sorteia `n` peças do vale para a hora atual (o mesmo sorteio do jogo, sem tocar nenhuma). */
     pickPieces: (n: number): string[] => Array.from({ length: n }, () => sm().music.valleyMusic['pickValleyPiece']([])),

@@ -12,6 +12,12 @@ export class RecordingParam {
   public setTargetAtTime(v: number, t: number): this { this.value = v; this.events.push(['target', v, t]); return this; }
   public cancelScheduledValues(t: number): this { this.events.push(['cancel', t]); return this; }
   public cancelAndHoldAtTime(t: number): this { this.events.push(['hold', t]); return this; }
+  /** A curva inteira de uma vez (o sopro, Synth.swell): anota quando começa e quanto dura; o valor fica o do fim. */
+  public setValueCurveAtTime(values: ArrayLike<number>, t: number, duration: number): this {
+    if (values.length > 0) this.value = values[values.length - 1];
+    this.events.push(['curve', t, duration]);
+    return this;
+  }
 }
 
 const PARAMS = new Set(['gain', 'frequency', 'Q', 'detune', 'playbackRate', 'pan', 'threshold', 'knee', 'ratio', 'attack', 'release', 'delayTime', 'offset']);

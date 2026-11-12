@@ -116,6 +116,13 @@ export const HERO_FRAMES = {
    */
   attack: 5,
   attackUp: 6,
+  /**
+   * MEDITANDO na pedra da colina (spritefactory/sprites/hero-meditate.mjs): sentado de pernas cruzadas, o visor
+   * apagado; `meditateIn` é o mesmo inspirando (elmo e ombros um pixel acima). Quem troca é scenes/game/Meditation,
+   * pelo fôlego do jogador.
+   */
+  meditate: 7,
+  meditateIn: 8,
 } as const;
 
 export const TIMINGS = {

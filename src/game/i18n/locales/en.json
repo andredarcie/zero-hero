@@ -188,6 +188,10 @@
     "getUp": "Get up",
     "knock": "Knock",
     "read": "Read",
+    "sketch": "Sketch",
+    "meditate": "Meditate",
+    "skip": "Skip a stone",
+    "throw": "Throw",
     "look": "Look",
     "touch": "Touch",
     "light": "Light",
@@ -381,15 +385,18 @@
   },
   "notebook": {
     "title": "Field notebook",
+    "close": "Close",
     "count": "{n} of {total}",
     "sections": {
       "tools": "Tools",
       "materials": "Materials",
       "neighbours": "For the neighbours",
-      "mushrooms": "Mushrooms"
+      "mushrooms": "Mushrooms",
+      "animals": "Animals"
     },
     "unknownName": "???",
     "unknownText": "I haven't found this yet.",
+    "partial": "A half-finished drawing.",
     "keys": "Arrows turn the pages  ·  X close",
     "keysTouch": "Close the notebook",
     "entry": {
@@ -414,6 +421,96 @@
       "dyeBundle": "The four dye flowers, picked. The colours of Sisi's painting come from them.",
       "brush": "Sisi's brush. With it, the painting on the easel gets the colours of the flowers.",
       "telescope": "Thea's telescope, with the glass lens. From the top of the plateau it brings the stars closer."
+    }
+  },
+  "meditation": {
+    "title": "Meditation",
+    "close": "Get up",
+    "notice": "Notice",
+    "labels": {
+      "memory": "remembering",
+      "plan": "planning",
+      "worry": "worrying",
+      "want": "wanting"
+    },
+    "stats": {
+      "breathsOne": "1 breath",
+      "breathsMany": "{n} breaths",
+      "returnsOne": "1 return",
+      "returnsMany": "{n} returns",
+      "underMinute": "under a minute",
+      "minutes": "{n} min"
+    },
+    "facts": [
+      "The mind wanders almost half of our waking time: 47%, in a study of 2,250 people. Meditating is not stopping that; it is noticing when it happens.",
+      "The exercise is the return: the mind drifts off, you notice, and you bring attention back. Each return is a repetition, like a lifted weight.",
+      "Breathing slowly, about six times a minute, lets the heartbeat vary more with the breath: a sign of the vagus nerve, the heart's brake, at work.",
+      "Putting a name to an emotion (\"anger\", \"fear\") lowers the response of the amygdala, the brain's alarm. That is why, here, each thought gets a name.",
+      "Meditation is usually safe, but some people feel discomfort. If it feels bad, stop. And meditation does not replace treatment.",
+      "There are two classic ways to meditate: focusing on one thing, like the breath, or watching whatever comes without holding on. Here you practise the first.",
+      "Breathing in, the heart speeds up a little; breathing out, it slows down. It is called respiratory sinus arrhythmia, and it is a sign of health.",
+      "Thirteen minutes a day for eight weeks improved attention, memory and mood in people who had never meditated. At four weeks, not yet.",
+      "In 47 studies with 3,515 people, mindfulness programmes eased anxiety, depression and pain modestly, without beating other treatments.",
+      "In people who have meditated for years, the brain network that pulls the mind away, the default mode network, is quieter during practice.",
+      "In a Stanford study, five minutes a day of sighs with a long exhale improved mood more than five minutes of meditation.",
+      "In people who had depression more than once, eight weeks of mindfulness-based therapy lowered relapse over a little more than a year from 49% to 38%.",
+      "For the heart, meditation may help as a complement, but the data are still modest.",
+      "An eight-week course did not change the brain structure of 218 people on MRI scans. Not everything said about meditation has been confirmed."
+    ],
+    "sources": [
+      "Killingsworth and Gilbert, Science, 2010",
+      "Hasenkamp et al., NeuroImage, 2012",
+      "Lehrer and Gevirtz, Frontiers in Psychology, 2014",
+      "Lieberman et al., Psychological Science, 2007",
+      "Goldberg, Britton et al., Psychotherapy Research, 2021",
+      "Lutz et al., Trends in Cognitive Sciences, 2008",
+      "Yasuma and Hayano, Chest, 2004",
+      "Basso et al., Behavioural Brain Research, 2019",
+      "Goyal et al., JAMA Internal Medicine, 2014",
+      "Brewer et al., PNAS, 2011",
+      "Balban et al., Cell Reports Medicine, 2023",
+      "Kuyken et al., JAMA Psychiatry, 2016",
+      "Levine et al., American Heart Association, 2017",
+      "Kral et al., Science Advances, 2022"
+    ]
+  },
+  "sketch": {
+    "animals": {
+      "squirrel": {
+        "name": "Red squirrel",
+        "latin": "Sciurus vulgaris",
+        "fact": "It buries nuts and seeds for the winter and forgets many of them. The forgotten ones grow into trees."
+      },
+      "bird": {
+        "name": "European robin",
+        "latin": "Erithacus rubecula",
+        "fact": "It follows whoever turns the soil, waiting for the worms that come up."
+      },
+      "hare": {
+        "name": "European hare",
+        "latin": "Lepus europaeus",
+        "fact": "It is born with its eyes open and already furry, ready to run."
+      },
+      "frog": {
+        "name": "Iberian green frog",
+        "latin": "Pelophylax perezi",
+        "fact": "It also breathes through its skin, so it lives near water: the skin has to stay moist."
+      },
+      "dragonfly": {
+        "name": "Emperor dragonfly",
+        "latin": "Anax imperator",
+        "fact": "It hunts in mid-air: it folds its legs into a basket and scoops up mosquitoes on the wing."
+      },
+      "koi": {
+        "name": "Koi",
+        "latin": "Cyprinus rubrofuscus",
+        "fact": "It lives for decades, and learns who brings food: it comes to the edge when someone stops there."
+      },
+      "cat": {
+        "name": "Black cat",
+        "latin": "Felis catus",
+        "fact": "It sleeps twelve to sixteen hours a day. This one chose the barrel."
+      }
     }
   },
   "ending": {
@@ -479,6 +576,16 @@
   },
   "garden": {},
   "minigame": {
+    "meditation": {
+      "breath": {
+        "keys": "Hold {Z} while the dotted ring grows and let go when it shrinks  ·  {Esc} gets up",
+        "touch": "Hold your finger on the screen while the dotted ring grows and let go when it shrinks  ·  the × gets up"
+      },
+      "notice": {
+        "keys": "A thought arrived. That's fine: press {X} to notice it and come back to the breath",
+        "touch": "A thought arrived. That's fine: tap {B} to notice it and come back to the breath"
+      }
+    },
     "forage": {
       "cut": {
         "keys": "Press {Z} when the knife is between the marks, to cut.",

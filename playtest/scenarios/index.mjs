@@ -31,6 +31,7 @@ import frenteDoNpc from './frente-do-npc.mjs';
 import falasLidas from './falas-lidas.mjs';
 import legendas from './legendas.mjs';
 import acampamento from './acampamento.mjs';
+import lazer from './lazer.mjs';
 import barraca from './barraca.mjs';
 import abertura from './abertura.mjs';
 import semParede from './sem-parede.mjs';
@@ -88,6 +89,7 @@ export const scenarios = {
   'falas-lidas': falasLidas,
   legendas,
   acampamento,
+  lazer,
   barraca,
   marcas,
   descanso,

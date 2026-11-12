@@ -77,6 +77,19 @@ export class NatureSounds {
     this.host.synth.noise('lowpass', 1400, 0.6, 0.12, 0.05);
   }
 
+  /** A PEDRA QUICANDO (scenes/game/StoneSkipping): a gota do título, curta, subindo um tom a cada quique. */
+  public playStoneSkip(n: number): void {
+    const rate = Math.min(1.9, 0.95 + n * 0.1);
+    if (this.host.synth.playSample('dropWater', 0, 0.42, rate)) return;
+    this.host.synth.osc('sine', 600 * rate, 1300 * rate, 0.12, 0.05);
+  }
+
+  /** A pedra que afunda no fim: o "plop" da rã, mais grave. */
+  public playStonePlunk(): void {
+    if (this.host.synth.playSample('dropWater', 0, 0.6, 0.6)) return;
+    this.host.synth.osc('sine', 420, 200, 0.14, 0.07);
+  }
+
   /** O pé na poça (objects/nature/Puddles): o splash curto e agudo, quase um "chap". */
   public playPuddleSplash(): void {
     if (this.host.synth.playSample('splash', 1.5, 0.28, 1.55)) return;

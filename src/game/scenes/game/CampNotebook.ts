@@ -5,12 +5,14 @@ import type { HeldItemKind } from '@/game/entities/ItemPickup';
 import { FUNGUS_SPECS, isMushroomKind } from '@/game/fungi/fungi';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { t, tWords } from '@/game/i18n/i18n';
-import { notebookEntries } from '@/game/runtime/notebook';
+import { notebookEntries, type NotebookEntry } from '@/game/runtime/notebook';
 import { NotebookOverlay, type NotebookPage, type NotebookView } from '@/game/runtime/NotebookOverlay';
 import { isTouchDevice } from '@/game/runtime/PauseMenu';
+import type { AnimalKind } from '@/game/runtime/sketches';
 import { spriteDataUrl } from '@/game/runtime/spriteDataUrl';
 import type * as Engine from '@/game/engine';
 import type { GameScene } from '../GameScene';
+import type { AnimalSketching } from './AnimalSketching';
 import { ITEM_VISUAL_2D } from './sceneDefs';
 
 /** O que CampNotebook usa de GameScene (e a cena do motor, de onde saem as artes). */
@@ -20,7 +22,8 @@ export class CampNotebook {
   /** O caderno aberto. Enquanto ele existe, o mundo fica parado (FrameTick) e as mãos também (ActionInput). */
   public overlay?: NotebookOverlay;
 
-  public constructor(private readonly host: CampNotebookHost) {}
+  /** `sketching`: os bichos desenhados (o desenho a pena de cada um vem de lá). */
+  public constructor(private readonly host: CampNotebookHost, private readonly sketching: AnimalSketching) {}
 
   public open(): void {
     if (this.overlay) return;
@@ -47,11 +50,25 @@ export class CampNotebook {
     const known = entries.filter((e) => e.known).length;
     return {
       title: t('notebook.title'),
+      close: t('notebook.close'),
       count: t('notebook.count').replace('{n}', String(known)).replace('{total}', String(entries.length)),
-      pages: entries.map((e) => this.page(e.kind, t(`notebook.sections.${e.section}`), e.known)),
+      pages: entries.map((e) => (e.section === 'animals' ? this.animalPage(e) : this.page(e.kind as HeldItemKind, t(`notebook.sections.${e.section}`), e.known))),
       foot: t(touch ? 'notebook.keysTouch' : 'notebook.keys'),
       unknownName: t('notebook.unknownName'),
       unknownText: t('notebook.unknownText'),
+      partialText: t('notebook.partial'),
+    };
+  }
+
+  /** O BICHO: o desenho a pena dele (pela metade, se for o caso); sem desenho nenhum, o vulto do bicho. */
+  private animalPage(e: NotebookEntry): NotebookPage {
+    const kind = e.kind as AnimalKind;
+    const drawn = (e.sketch ?? 0) > 0;
+    const art = drawn ? this.sketching.inkUrl(kind, e.sketch ?? 0) : this.sketching.modelUrl(kind);
+    const name = `sketch.animals.${kind}`;
+    return {
+      kind, section: t('notebook.sections.animals'), known: e.known, partial: drawn && !e.known,
+      icon: art, art, name: t(`${name}.name`), latin: t(`${name}.latin`), text: [t(`${name}.fact`)],
     };
   }
 

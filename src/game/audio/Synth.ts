@@ -92,4 +92,47 @@ export class Synth {
     src.start(t);
     src.stop(t + duration + 0.02);
   }
+
+  /**
+   * UM SOPRO: o ruído filtrado que CRESCE devagar até `peakAt` (s) e se desfaz até `duration`, sem quina nenhuma (a
+   * curva começa e termina em zero), com o filtro deslizando de `freqStart` a `freqEnd`. O `noise` acima é um golpe
+   * (entra em 3 ms): serve para passo e farfalho, não para ar entrando e saindo.
+   */
+  public swell(
+    filterType: BiquadFilterType, freqStart: number, freqEnd: number, filterQ: number, vol: number, peakAt: number, duration: number,
+  ): void {
+    const ctx = this.host.audio;
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    const len = Math.ceil(ctx.sampleRate * (duration + 0.02));
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const ch = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) ch[i] = Math.random() * 2 - 1;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const f = ctx.createBiquadFilter();
+    f.type = filterType;
+    f.Q.value = filterQ;
+    f.frequency.setValueAtTime(freqStart, t);
+    f.frequency.exponentialRampToValueAtTime(Math.max(20, freqEnd), t + duration);
+    const g = ctx.createGain();
+    g.gain.setValueCurveAtTime(swellCurve(vol, peakAt / duration), t, duration);
+    src.connect(f);
+    f.connect(g);
+    g.connect(this.host.sfxUserBus);
+    src.start(t);
+    src.stop(t + duration + 0.02);
+  }
 }
+
+/** O envelope do sopro: seno ao quadrado subindo até `peak` (0..1 da duração) e descendo até zero. */
+export const swellCurve = (vol: number, peak: number, points = 96): Float32Array => {
+  const p = Math.min(0.95, Math.max(0.05, peak));
+  const curve = new Float32Array(points);
+  for (let i = 0; i < points; i += 1) {
+    const x = i / (points - 1);
+    const s = x < p ? Math.sin((x / p) * (Math.PI / 2)) : Math.cos(((x - p) / (1 - p)) * (Math.PI / 2));
+    curve[i] = vol * s * s;
+  }
+  return curve;
+};

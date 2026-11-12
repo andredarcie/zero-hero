@@ -117,6 +117,13 @@ export interface AdventureSnapshot {
   seenItems: Set<string>;
   /** O CADERNO DO ACAMPAMENTO: cada coisa que já passou pelas mãos do herói (runtime/notebook). */
   found: Set<string>;
+  /** Os bichos desenhados no caderno: quanto de cada desenho já está no papel (0..1; runtime/sketches). */
+  sketches: Map<string, number>;
+  /** O recorde de quiques de uma pedra na água (scenes/game/StoneSkipping). */
+  skipBest: number;
+  /** As sessões de meditação com fôlego de verdade, e qual nota do caderno vem na próxima (scenes/game/Meditation). */
+  meditations: number;
+  meditationFacts: number;
   /** As conversas que ja deram o presente do NPC (a ferramenta do pedido) — um presente, uma vez. */
   giftsGiven: Set<string>;
   /**
@@ -163,6 +170,10 @@ const defaultSnapshot = (): AdventureSnapshot => ({
   seenDialogKeys: new Set(),
   seenItems: new Set(),
   found: new Set(),
+  sketches: new Map(),
+  skipBest: 0,
+  meditations: 0,
+  meditationFacts: 0,
   giftsGiven: new Set(),
   dugSpots: new Set(),
   machines: new Map(),
@@ -194,6 +205,10 @@ type StoredSnapshot = {
   seenDialogKeys?: string[];
   seenItems?: string[];
   found?: string[];
+  sketches?: Record<string, number>;
+  skipBest?: number;
+  meditations?: number;
+  meditationFacts?: number;
   giftsGiven?: string[];
   dugSpots?: string[];
   machines?: Record<string, AdventureMachine[]>;
@@ -284,6 +299,10 @@ const load = (): AdventureSnapshot => {
       seenDialogKeys: new Set(p.seenDialogKeys ?? []),
       seenItems: new Set(p.seenItems ?? []),
       found: new Set(p.found ?? []),
+      sketches: new Map(Object.entries(p.sketches ?? {}).map(([k, v]) => [k, Math.min(1, Math.max(0, Number(v) || 0))])),
+      skipBest: num(p.skipBest, 0),
+      meditations: num(p.meditations, 0),
+      meditationFacts: num(p.meditationFacts, 0),
       giftsGiven: new Set(p.giftsGiven ?? []),
       dugSpots: new Set(p.dugSpots ?? []),
       machines: cleanMachines(p.machines),
@@ -341,6 +360,10 @@ export const saveAdventure = (): void => {
     seenDialogKeys: [...s.seenDialogKeys],
     seenItems: [...s.seenItems],
     found: [...s.found],
+    sketches: Object.fromEntries(s.sketches),
+    skipBest: s.skipBest,
+    meditations: s.meditations,
+    meditationFacts: s.meditationFacts,
     giftsGiven: [...s.giftsGiven],
     dugSpots: [...s.dugSpots],
     machines: Object.fromEntries(s.machines),

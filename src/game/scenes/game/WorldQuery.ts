@@ -187,6 +187,7 @@ export class WorldQuery {
     if (this.host.valley.npcHomes?.isSolidAt(wx, wy)) return true;
     if (this.host.valley.valleyFinds?.at(wx, wy)) return true;
     if (this.host.valley.heroCamp?.at(wx, wy)) return true;
+    if (this.host.camp.meditation.at(wx, wy)) return true;
     if (this.host.camp.catCare.isBarrelAt(wx, wy)) return true;
     if (this.host.valley.bigTrees?.at(wx, wy)) return true;
     if (this.host.valley.woodFence?.at(wx, wy)) return true;

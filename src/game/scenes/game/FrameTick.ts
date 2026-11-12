@@ -22,6 +22,8 @@ export class FrameTick {
     // mentira que o balao de dica era. `syncPlacementHints` a reacende logo abaixo se o jogo
     // estiver mesmo correndo.
     this.host.machines.placementHints?.clear();
+    // Uma conversa ou cena que chegou com o herói meditando encerra a sessão antes de congelar o mundo (Meditation).
+    this.host.camp.meditation.yieldScreen();
 
     // The camera pan (open or close) drives its own reprojection from the tween, so keep the
     // world frozen here until it finishes — otherwise gameplay would fight the pan.
@@ -44,6 +46,10 @@ export class FrameTick {
     // SENTADO NA FOGUEIRA: o mundo anda (o relogio acelerado, as fogueiras seguindo o ceu), o
     // heroi nao. Qualquer tecla o levanta (ver restAtFireAt).
     if (this.host.camp.rest.isResting) {
+      // Meditando na pedra da colina: o fôlego, os pensamentos e o desenho deles (Meditation).
+      this.host.camp.meditation.tick(delta);
+      // Sentado, a etiqueta "Desenhar" sai (a do caderno de desenho só vale de pé).
+      this.host.camp.sketching.update(delta);
       if (this.host.camp.rest.tick()) return;
       this.host.fire.syncCampfiresToClock();
       if (this.host.npcManager && this.host.camera) this.host.npcManager.render(this.host.tileSize, this.host.camera, this.host.uiTileSize);
@@ -51,8 +57,8 @@ export class FrameTick {
       this.host.view.renderProps();
       return;
     }
-    // O CATALOGO de fabricacao congela igual, a colheita de um cogumelo tambem, e o caderno do acampamento.
-    if (this.host.orders.orderOverlay || this.host.forage.foraging || this.host.camp.notebook.overlay) return;
+    // O CATALOGO de fabricacao congela igual, a colheita de um cogumelo tambem, e o caderno (o de campo e o de desenho).
+    if (this.host.orders.orderOverlay || this.host.forage.foraging || this.host.camp.notebook.overlay || this.host.camp.sketching.overlay) return;
 
     if (!this.host.movementController || !this.host.chunkManager || !this.host.camera) {
       return;
@@ -90,6 +96,10 @@ export class FrameTick {
     this.host.steps.updateFootprints();
     this.host.forage.tickShuiWave();
     this.host.forage.tickGlow();
+    this.host.camp.skipping.update(delta);
+    this.host.camp.sketching.update(delta);
+    // De pé em cima da pedra de meditar, depois de levantar: a altura cai conforme ele desce dela (Meditation).
+    this.host.camp.meditation.update();
     this.host.bumps.heroThought?.tick(delta);
     this.host.forge.updateFurnaceAsk(delta);
 

@@ -17,7 +17,10 @@ import { DIALOG_VOICES, NPC_DIALOGS } from '@/game/dialogs/NpcDialogs';
 import { isNightTime, isSleepTime, setTimeScale } from '@/game/runtime/timeOfDay';
 import { t } from '@/game/i18n/i18n';
 import { CatCare } from '@/game/systems/CatCare';
+import { AnimalSketching } from './AnimalSketching';
 import { CampNotebook } from './CampNotebook';
+import { Meditation } from './Meditation';
+import { StoneSkipping } from './StoneSkipping';
 import { Resting } from '@/game/systems/Resting';
 import { USE_COOLDOWN_MS } from './sceneDefs';
 
@@ -27,9 +30,9 @@ const FIND_STEP_MS = 300;
 /** O que CampLife usa de GameScene (e a cena do motor, que ele passa a quem monta objetos do mundo). */
 export type CampLifeHost = Engine.Scene & Pick<GameScene,
   'actions' | 'adventure' | 'arc' | 'camera' | 'cameraLook' | 'camp' | 'carry' | 'cinema' | 'cutsceneActive'
-  | 'debris' | 'dialog' | 'groundItems' | 'heldItem' | 'hero' | 'inventory' | 'itemManager' | 'movementController'
+  | 'debris' | 'dialog' | 'groundItems' | 'hand' | 'heldItem' | 'hero' | 'inventory' | 'itemManager' | 'movementController'
   | 'npcManager' | 'pause' | 'playerWorld' | 'query' | 'questSetup' | 'save' | 'seenDialogKeys' | 'seenItems'
-  | 'sparkle' | 'steps' | 'tileSize' | 'valley' | 'verbs' | 'world3d'
+  | 'sparkle' | 'steps' | 'tileSize' | 'uiTileSize' | 'valley' | 'verbs' | 'world3d'
 >;
 
 export class CampLife {
@@ -38,11 +41,18 @@ export class CampLife {
   public readonly rest: Resting;
   // A COMPANHIA: o gato que chega com o primeiro favor (e o barril dele), e o vizinho que vem sentar na fogueira.
   public readonly catCare: CatCare;
-  // O CADERNO DE CAMPO em cima do colchão: a coleção de tudo que o herói já pegou.
+  // O CADERNO DE CAMPO em cima do colchão: a coleção de tudo que o herói já pegou e dos bichos que ele desenhou.
   public readonly notebook: CampNotebook;
+  // O LAZER: desenhar os bichos do vale no caderno, quicar pedra na água, e meditar na pedra do alto da colina.
+  public readonly sketching: AnimalSketching;
+  public readonly skipping: StoneSkipping;
+  public readonly meditation: Meditation;
 
   public constructor(private readonly host: CampLifeHost) {
-    this.notebook = new CampNotebook(host);
+    this.sketching = new AnimalSketching(host);
+    this.skipping = new StoneSkipping(host);
+    this.meditation = new Meditation(host);
+    this.notebook = new CampNotebook(host, this.sketching);
     this.rest = new Resting({
       scene: this.host,
       hero: this.host.hero,

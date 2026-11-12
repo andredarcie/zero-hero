@@ -152,6 +152,9 @@ export class SceneTeardown {
     this.host.orders.orderOverlay?.destroy();
     this.host.orders.orderOverlay = undefined;
     this.host.camp.notebook.destroy();
+    this.host.camp.sketching.destroy();
+    this.host.camp.skipping.destroy();
+    this.host.camp.meditation.destroy();
     this.host.forage.foraging?.destroy();
     this.host.forage.foraging = undefined;
     this.host.itemManager?.destroy();
