@@ -98,7 +98,7 @@ export default {
     assert('Sem machado, diante da árvore seca, o herói pensa no machado com a pontinha no Marco', balloon.icon === 'axe-icon' && balloon.to?.x === 53 && balloon.to?.y === 5, JSON.stringify(balloon));
 
     // ── 3. OS COGUMELINHOS-FILHOS ─────────────────────────────────────────────────────────────
-    const kinds = ['porcini', 'morel', 'puffball', 'inkCap', 'chanterelle', 'flyAgaric'];
+    const kinds = ['porcini', 'morel', 'puffball', 'inkCap', 'chanterelle', 'flyAgaric', 'oyster', 'jackOLantern'];
     const kin = await page.evaluate((ks) => Object.fromEntries(ks.map((k) => [k, window.gameDebug.forage.kin(k)])), kinds);
     log(`  filhos: ${JSON.stringify(kin)}`);
     assert('Cada cogumelo tem cogumelinhos-filhos em volta (a trilha que leva a ele)', kinds.every((k) => kin[k] >= 2), JSON.stringify(kin));

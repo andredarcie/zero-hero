@@ -17,6 +17,7 @@ import { DIALOG_VOICES, NPC_DIALOGS } from '@/game/dialogs/NpcDialogs';
 import { isNightTime, isSleepTime, setTimeScale } from '@/game/runtime/timeOfDay';
 import { t } from '@/game/i18n/i18n';
 import { CatCare } from '@/game/systems/CatCare';
+import { CampNotebook } from './CampNotebook';
 import { Resting } from '@/game/systems/Resting';
 import { USE_COOLDOWN_MS } from './sceneDefs';
 
@@ -27,8 +28,8 @@ const FIND_STEP_MS = 300;
 export type CampLifeHost = Engine.Scene & Pick<GameScene,
   'actions' | 'adventure' | 'arc' | 'camera' | 'cameraLook' | 'camp' | 'carry' | 'cinema' | 'cutsceneActive'
   | 'debris' | 'dialog' | 'groundItems' | 'heldItem' | 'hero' | 'inventory' | 'itemManager' | 'movementController'
-  | 'npcManager' | 'pause' | 'playerWorld' | 'query' | 'questSetup' | 'save' | 'seenDialogKeys' | 'sparkle'
-  | 'steps' | 'tileSize' | 'valley' | 'verbs' | 'world3d'
+  | 'npcManager' | 'pause' | 'playerWorld' | 'query' | 'questSetup' | 'save' | 'seenDialogKeys' | 'seenItems'
+  | 'sparkle' | 'steps' | 'tileSize' | 'valley' | 'verbs' | 'world3d'
 >;
 
 export class CampLife {
@@ -37,8 +38,11 @@ export class CampLife {
   public readonly rest: Resting;
   // A COMPANHIA: o gato que chega com o primeiro favor (e o barril dele), e o vizinho que vem sentar na fogueira.
   public readonly catCare: CatCare;
+  // O CADERNO DE CAMPO em cima do colchão: a coleção de tudo que o herói já pegou.
+  public readonly notebook: CampNotebook;
 
   public constructor(private readonly host: CampLifeHost) {
+    this.notebook = new CampNotebook(host);
     this.rest = new Resting({
       scene: this.host,
       hero: this.host.hero,
@@ -179,6 +183,11 @@ export class CampLife {
   public useCampAt(wx: number, wy: number): boolean {
     const piece = this.host.valley.heroCamp?.at(wx, wy);
     if (!piece) return false;
+    // O CADERNO: abrir e ler (o som é o do papel, não o da madeira).
+    if (piece === 'notebook') {
+      this.notebook.open();
+      return true;
+    }
     getSoundManager().work.playFindTouch('bench');
     // O COLCHÃO: deitar e dormir.
     if (piece === 'bed') {

@@ -195,6 +195,34 @@ const WOODPILE = [
 ];
 export const paintWoodpile = (rect: Paint): void => grid(rect, WOODPILE, WOOD);
 
+// ── O CADERNO ─────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * O CADERNO DE CAMPO, aberto no chão em cima do colchão: as duas folhas pautadas, a costura no meio, a capa de couro
+ * aparecendo por baixo e a fita vermelha de marcar página saindo pela frente.
+ */
+const NOTEBOOK = [
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '................',
+  '..kkkkkkkkkkkk..',
+  '.kwwwwwwswwwwwk.',
+  '.kwllllwswlllwk.',
+  '.kwwwwwwswwwwwk.',
+  '.kwlllwwswllwwk.',
+  '.kwwwwwwswwwwwk.',
+  '.kccccccrccccck.',
+  '..kkkkkkrkkkkk..',
+  '........r.......',
+];
+export const paintNotebook = (rect: Paint): void => grid(rect, NOTEBOOK, {
+  w: '#efe6cf', l: '#a8987a', s: '#c9b897', c: '#6b3d24', r: '#b8323b',
+});
+
 // ── A CLAREIRA ────────────────────────────────────────────────────────────────────────────────────
 
 /** A clareira: 5 × 4 tiles, 16 px por tile (cabe entre o lago e o planalto). */

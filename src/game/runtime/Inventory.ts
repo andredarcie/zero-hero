@@ -31,6 +31,9 @@ export class Inventory {
   /** As ferramentas guardadas, fora das costas, na ordem em que chegaram. */
   private readonly kept = new Set<HeldItemKind>();
 
+  /** `onAdd`: quem quer saber de tudo que passa pelas mãos (o caderno do acampamento, runtime/notebook). */
+  public constructor(private readonly onAdd?: (kind: HeldItemKind) => void) {}
+
   public get selected(): HeldItemKind | 'none' {
     return this.held ?? 'none';
   }
@@ -82,6 +85,7 @@ export class Inventory {
   public add(kind: HeldItemKind, amount = 1): boolean {
     if (kind === 'sword') return true;
     if (!this.fits(kind)) return false;
+    this.onAdd?.(kind);
     if (this.held === kind) { this.units += amount; return true; }
     if (this.held !== null && !isToolKind(this.held)) { this.kept.add(kind); return true; }
     if (this.held !== null) this.kept.add(this.held);

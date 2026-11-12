@@ -20,7 +20,7 @@ const hash = (x, y, seed) => {
   const s = Math.sin(x * 127.1 + y * 311.7 + seed * 74.7) * 43758.5453;
   return s - Math.floor(s);
 };
-const MUSHROOMS = new Set(['porcini', 'morel', 'puffball', 'inkCap', 'chanterelle', 'flyAgaric']);
+const MUSHROOMS = new Set(['porcini', 'morel', 'puffball', 'inkCap', 'chanterelle', 'flyAgaric', 'oyster', 'jackOLantern']);
 // constants.SOLID_UPPER_FRAMES: tronco e copa de árvore, que não saem.
 const SOLID_UPPER = new Set([3, 4, 14, 15, 16, 17, 18, 21, 22, 25, 36, 37, 39, 40, 73, 74]);
 

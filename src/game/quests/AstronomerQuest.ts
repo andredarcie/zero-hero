@@ -18,8 +18,9 @@ import { AstronomerForge } from './AstronomerForge';
 
 /**
  * A QUEST DA THEA: o telescópio. O tubo sobrou; faltam o tripé e a lente. Ela dá a picareta (a ÚNICA do
- * vale) e manda o herói para oeste, ao lago de lava: na margem, a pedra de veio PRETO dá carvão e a de veio
- * vermelho dá minério. NINGUÉM DEPENDE DE OUTRO VIZINHO (pedido do autor): nada aqui pede o machado do Marco
+ * vale) e manda o herói para oeste, ao lago de lava: do OUTRO LADO dele (scripts/minas-alem-da-lava.mjs), a pedra de
+ * veio PRETO dá carvão e a de veio vermelho dá minério. Para atravessar, a picareta quebra pedra comum da margem e a
+ * pedra afunda na lava e vira chão. NINGUÉM DEPENDE DE OUTRO VIZINHO (pedido do autor): nada aqui pede o machado do Marco
  * nem coisa de outra quest, e o jogador faz os pedidos na ordem que quiser. O FORNO dela, fixo ao lado da
  * nave, é o guia: ele pede um item de cada vez, na ordem certa (`furnaceNeed`), e devolve o resultado — o
  * carvão (fica aceso lá dentro), o minério (sai a esponja, que o martelo vira ferro); depois areia (só na

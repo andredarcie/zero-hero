@@ -5,7 +5,8 @@
 //   puffball    (12,21)  mato alto em volta: a foice abre
 //   inkCap      (11,10)  arbustos secos em volta: o graveto aceso queima
 //   chanterelle (11,2)   lava em volta: a pedra da picareta afunda em (11,3) e vira chão
-//   flyAgaric   (1,1)    mato morto no caminho: o machado abre
+//   flyAgaric   (1,1)    mato morto no caminho: o machado abre — no corredor do norte do lago, que desde
+//                        scripts/minas-alem-da-lava.mjs só se alcança afundando pedra na lava
 //
 // Com uma mão só, a faca fica no chão enquanto a ferramenta trabalha: pegar a ferramenta troca as
 // duas, e depois é voltar para buscar a faca. Por isso cada ferramenta mora perto da sua trilha.
@@ -53,8 +54,9 @@ const PROPS = {
   dryBush: [[11, 8], [11, 9], [10, 9], [9, 9], [10, 10]],
   // (11,3) é por onde se atravessa; (12,4) fica de fora dela: a lava que ainda acende o graveto
   // depois que a pedra fechou a outra.
-  lava: [[11, 3], [10, 2], [10, 1], [12, 4]],
-  dryShrub: [[10, 4], [10, 3], [2, 1]],
+  // (10,3) e (10,4) eram os arbustos da entrada leste do corredor: viraram lava (scripts/minas-alem-da-lava.mjs).
+  lava: [[11, 3], [10, 2], [10, 1], [12, 4], [10, 3], [10, 4]],
+  dryShrub: [[2, 1]],
   rock: [[15, 6], [16, 6]],
 };
 // Ferramentas que MUDAM de lugar (cada uma existe uma vez no mundo) e o que é novo.
@@ -148,10 +150,11 @@ for (const [type, at] of [...Object.entries(MOVE_PICKUPS), ...NEW_PICKUPS.map((p
 }
 for (const tile of PROPS.rock) if (!touches(bare, tile)) problems.push(`a rocha ${tile} não se alcança a pé`);
 if (!touches(bare, SHROOMS.porcini)) problems.push('o porcini devia ser só chegar');
-const keys = { morel: 'bridgeSpot', puffball: 'tallGrass', inkCap: 'dryBush', chanterelle: 'lava', flyAgaric: 'dryShrub' };
-for (const [kind, type] of Object.entries(keys)) {
+// o mata-moscas pede os dois gestos: a pedra na lava (o corredor) e o machado (o arbusto)
+const keys = { morel: ['bridgeSpot'], puffball: ['tallGrass'], inkCap: ['dryBush'], chanterelle: ['lava'], flyAgaric: ['lava', 'dryShrub'] };
+for (const [kind, types] of Object.entries(keys)) {
   if (touches(bare, SHROOMS[kind])) problems.push(`${kind} ainda se alcança sem o gesto`);
-  if (!touches(reach(new Set([type])), SHROOMS[kind])) problems.push(`${kind} não abre com ${type}`);
+  if (!touches(reach(new Set(types)), SHROOMS[kind])) problems.push(`${kind} não abre com ${types.join(' + ')}`);
 }
 if (problems.length) {
   console.error(problems.join('\n'));

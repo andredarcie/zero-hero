@@ -16,9 +16,10 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { makeCanStep } from './relevo.mjs';
 
 // A MESMA tabela de objects/HeroCamp.ts — mudou lá, muda aqui.
-// O colchão (53,48), as pedras, o tronco e as quatro lembranças; o Z do colchão é dado de (54,48).
-const SOLID = [[53, 48], [53, 49], [52, 49], [52, 48], [55, 47], [55, 48], [52, 47]];
-const FRONT = [[54, 48]];
+// O colchão (53,48), as pedras, o tronco, as quatro lembranças e o caderno de campo (53,47); o Z do colchão é dado de
+// (54,48), e o do caderno de (54,47).
+const SOLID = [[53, 48], [53, 49], [52, 49], [52, 48], [55, 47], [55, 48], [52, 47], [53, 47]];
+const FRONT = [[54, 48], [54, 47]];
 /** O retângulo do acampamento, com a frente: tudo limpo de enfeite. */
 export const CAMP_TILES = (() => {
   const out = new Set();
@@ -65,7 +66,7 @@ const main = () => {
       seen.add(k); q.push([nx, ny]);
     }
   }
-  for (const [x, y] of FRONT) if (!seen.has(`${x},${y}`)) problems.push(`do começo não se chega ao colchão (${x},${y})`);
+  for (const [x, y] of FRONT) if (!seen.has(`${x},${y}`)) problems.push(`do começo não se chega à frente da peça (${x},${y})`);
   if (problems.length) { console.error(problems.join('\n')); process.exit(1); }
 
   const out = `${JSON.stringify(world, null, 2)}\n`;

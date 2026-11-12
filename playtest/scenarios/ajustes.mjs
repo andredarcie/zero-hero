@@ -59,7 +59,9 @@ export default {
     const pocketTrees = await page.evaluate(() => [[20, 49], [21, 49], [20, 50], [22, 50]].every(([x, y]) => window.gameDebug.world.solid(x, y)));
     assert('4. No lugar deles, árvores', pocketTrees, '');
     assert('1. Nada de mato alto na frente da cadeira do lago', !at(42, 51).includes('tallGrass'), at(42, 51).join());
-    assert('13. Os veios de carvão estão na margem do lago de lava', at(10, 6).includes('coalRock') && at(4, 9).includes('coalRock'), `${at(10, 6)} ${at(4, 9)}`);
+    // Os veios moram do OUTRO LADO do lago de lava (scripts/minas-alem-da-lava.mjs): na margem ficaram pedras comuns.
+    assert('13. Os veios de carvão estão do outro lado do lago de lava', at(2, 0).includes('coalRock') && at(4, 0).includes('coalRock'), `${at(2, 0)} ${at(4, 0)}`);
+    assert('13. Na margem, onde eram os veios, ficaram pedras comuns', at(10, 6).includes('rock') && at(4, 9).includes('rock'), `${at(10, 6)} ${at(4, 9)}`);
     const live = await state();
     assert('10. Nenhum graveto nem pedra solto no jogo', !live.groundItems.some((g) => g.kind === 'wood' || g.kind === 'stone'), JSON.stringify(live.groundItems));
 

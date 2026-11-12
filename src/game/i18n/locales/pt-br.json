@@ -43,6 +43,8 @@
       "chanterelle": "Um cantarelo-dourado.",
       "flyAgaric": "Uma amanita-mata-moscas.",
       "porcini": "Um porcini.",
+      "oyster": "Um cogumelo-ostra.",
+      "jackOLantern": "Um cogumelo-da-oliveira. Veneno.",
       "dyeSeeds": "Sementes sortidas. Quatro plantas de tinta.",
       "dyeBundle": "As quatro flores. Leve à mesa.",
       "brush": "Um pincel. O quadro espera.",
@@ -78,6 +80,8 @@
       "chanterelle": "Cantarelo-dourado",
       "flyAgaric": "Amanita-mata-moscas",
       "porcini": "Porcini",
+      "oyster": "Cogumelo-ostra",
+      "jackOLantern": "Cogumelo-da-oliveira",
       "altar": "Altar",
       "dyeSeeds": "Sementes sortidas",
       "dyeBundle": "Flores de tinta",
@@ -332,6 +336,28 @@
           "Poros embaixo, não lamelas.",
           "Vive ligado às raízes das árvores."
         ]
+      },
+      "oyster": {
+        "latin": "Pleurotus ostreatus",
+        "named": "Ah, um cogumelo-ostra!",
+        "curiosity": "Ele caça: solta uma gota que paralisa vermes minúsculos, e os digere.",
+        "cut": "Corte no pé curto, rente à casca.",
+        "clean": "Escove a folha que ficou entre as lamelas.",
+        "notes": [
+          "Cresce em prateleira na madeira morta, de lado.",
+          "Desfaz a madeira e a devolve à terra."
+        ]
+      },
+      "jackOLantern": {
+        "latin": "Omphalotus olearius",
+        "named": "Ah, um cogumelo-da-oliveira!",
+        "curiosity": "Brilha no escuro: as lamelas acendem num verde fraco.",
+        "cut": "Corte embaixo, onde os pés se juntam.",
+        "clean": "Escove com cuidado: este não se come.",
+        "notes": [
+          "Lamelas de verdade, finas: o cantarelo tem dobras.",
+          "Parece cantarelo, mas é veneno."
+        ]
       }
     },
     "dye": {
@@ -352,6 +378,43 @@
     "keysFurnace": "Setas  ·  Z funde  ·  X fecha",
     "keysTouchFurnace": "Toque para escolher · toque para fundir",
     "unknown": "?"
+  },
+  "notebook": {
+    "title": "Caderno de campo",
+    "count": "{n} de {total}",
+    "sections": {
+      "tools": "Ferramentas",
+      "materials": "Materiais",
+      "neighbours": "Para os vizinhos",
+      "mushrooms": "Cogumelos"
+    },
+    "unknownName": "???",
+    "unknownText": "Ainda não achei isto.",
+    "keys": "Setas folheiam  ·  X fecha",
+    "keysTouch": "Fechar o caderno",
+    "entry": {
+      "knife": "Presente da Shui, com uma escova no cabo. Cortar o cogumelo, em vez de arrancar, deixa inteiro o que ele tem debaixo da terra.",
+      "axe": "O machado do Marco. Derruba a árvore seca e racha o graveto no cepo.",
+      "shovel": "A pá da Sisi. Abre as covas na terra rachada, onde as sementes de tinta vão morar.",
+      "bucket": "Um balde de madeira. Enche na água; a água rega o que foi plantado e apaga fogo.",
+      "pickaxe": "A picareta da Thea. Quebra pedra, e da pedra sai pedra, carvão ou minério, conforme o veio.",
+      "scythe": "A foice que a Morte deixou no acampamento. Corta capim alto. Ela nunca voltou para buscar.",
+      "key": "A chave do jardim alto. Quem fecha o último pedido do vale é quem a entrega.",
+      "wood": "Um graveto de árvore seca. Vira ponte sobre a água, fica em pé no cepo do Marco e, aceso, vira tocha.",
+      "splitWood": "O graveto rachado em dois no cepo. Lenha rachada seca mais depressa e pega fogo mais fácil.",
+      "stone": "Uma pedra que a picareta soltou. Na água, vira vau; na lava, esfria e vira chão.",
+      "charcoal": "Carvão, tirado do veio preto perto da lava. No forno, ele rouba o oxigênio do minério e deixa o ferro.",
+      "ore": "Minério de ferro: pedra com ferro preso dentro, na forma de ferrugem. Sozinho, não serve para nada.",
+      "bloom": "A esponja de ferro que sai do forno: ferro poroso, cheio de escória. Só vira barra levando martelada.",
+      "iron": "Uma barra de ferro de verdade. Do minério até aqui foram o carvão, o forno e o martelo.",
+      "sand": "Areia da margem do lago. É quase toda sílica, a matéria de que o vidro é feito.",
+      "ash": "Cinza de fogueira. Tem potássio, que ajuda a areia a derreter num fogo menos quente.",
+      "glass": "Vidro de areia e cinza, fundido no forno da Thea. Polido, vira lente.",
+      "dyeSeeds": "Sementes sortidas da Sisi: quatro plantas que dão tinta. Cada uma vai numa cova.",
+      "dyeBundle": "As quatro flores de tinta, colhidas. Delas saem as cores do quadro da Sisi.",
+      "brush": "O pincel da Sisi. Com ele, o quadro no cavalete ganha as cores das flores.",
+      "telescope": "O telescópio da Thea, com a lente de vidro. Lá do alto do planalto, ele aproxima as estrelas."
+    }
   },
   "ending": {
     "theEnd": "Fim",

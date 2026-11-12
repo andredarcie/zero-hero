@@ -7,6 +7,9 @@ import * as Engine from '@/game/engine';
 const CAMERA_LOOK_MS = 1100;
 const CAMERA_LOOK_DRIFT_TILES = 1.2;
 const CAMERA_LOOK_DRIFT_RATE = 0.00022;
+/** O olhar da conversa para um ponto do mundo (o porcini da Shui, o cepo do Marco): ida e volta, e quanto segura nele. */
+const GLANCE_PAN_MS = 700;
+const GLANCE_HOLD_MS = 1500;
 
 /** O que DialogCamera usa de GameScene. */
 export type DialogCameraHost = Pick<GameScene,
@@ -23,6 +26,11 @@ export class DialogCamera {
   // during the pan; dialogNpcWorld lets a resize re-apply the offset.
   public camShifting = false;
   public camShiftTween?: Engine.Tweens.Tween;
+  /**
+   * UM ENQUADRAMENTO DE CENA que a conversa respeita (a noite na fogueira): enquanto ele existe, abrir e fechar a fala
+   * não mexe na câmera, e o centro da tela é o que ele diz (lido de novo a cada vez, então vale também num resize).
+   */
+  public stageFrame?: () => { x: number; y: number };
 
   public constructor(private readonly host: DialogCameraHost) {}
 
@@ -58,6 +66,7 @@ export class DialogCamera {
   // quem a diz. camX stays on the hero, so shifting only screenCenterX/Y keeps the hero's
   // sprite pinned correctly to the ground it stands on.
   public dialogScreenCenter(npcWorld?: { worldX: number; worldY: number }): { x: number; y: number } {
+    if (this.stageFrame) return this.stageFrame();
     const base = this.baseScreenCenter();
     const { boxHeight, margin } = dialogBoxMetrics(this.host.scale.width, this.host.scale.height);
     const stageCenterY = Math.floor((this.host.scale.height - boxHeight - margin) / 2);
@@ -77,8 +86,30 @@ export class DialogCamera {
 
   public endDialogCameraShift(): void {
     this.host.dialog.dialogNpcWorld = undefined;
-    const base = this.baseScreenCenter();
+    const base = this.stageFrame?.() ?? this.baseScreenCenter();
     this.animateScreenCenter(base.x, base.y);
+  }
+
+  /**
+   * O OLHAR DA CONVERSA: a câmera vai devagar até um ponto do mundo, `onArrive` faz ele brilhar, segura um pouco e volta
+   * para o NPC — só se a mesma conversa continua aberta.
+   */
+  public glanceAt(spot: { x: number; y: number }, npcWorld: { worldX: number; worldY: number }, onArrive: () => void): void {
+    if (!this.host.camera) return;
+    const base = this.baseScreenCenter();
+    const { boxHeight, margin } = dialogBoxMetrics(this.host.scale.width, this.host.scale.height);
+    const stageCenterY = Math.floor((this.host.scale.height - boxHeight - margin) / 2);
+    const dx = spot.x - this.host.playerWorld.worldX;
+    const dy = spot.y - this.host.playerWorld.worldY;
+    this.animateScreenCenter(Math.round(base.x - dx * this.host.tileSize), Math.round(stageCenterY - dy * this.host.tileSize), GLANCE_PAN_MS);
+    this.host.time.delayedCall(GLANCE_PAN_MS, () => {
+      if (this.host.dialog.dialogOpen) onArrive();
+    });
+    this.host.time.delayedCall(GLANCE_PAN_MS + GLANCE_HOLD_MS, () => {
+      if (!this.host.dialog.dialogOpen || this.host.dialog.dialogNpcWorld !== npcWorld) return;
+      const back = this.dialogScreenCenter(npcWorld);
+      this.animateScreenCenter(back.x, back.y, GLANCE_PAN_MS);
+    });
   }
 
   public animateScreenCenter(tx: number, ty: number, duration = 300): void {

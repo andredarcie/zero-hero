@@ -27,7 +27,7 @@ import { RELIEF_PEAK, reliefAt } from '@/game/world/relief';
 
 import { createHeroView, type HeroView } from '@/game/runtime/HeroView';
 import { Inventory } from '@/game/runtime/Inventory';
-
+import { noteFound } from '@/game/runtime/notebook';
 
 import { PlayerMovementController } from '@/game/runtime/PlayerMovementController';
 import { WorldCamera } from '@/game/runtime/WorldCamera';
@@ -102,7 +102,7 @@ export class GameScene extends Engine.Scene {
    * `heldItem` continua querendo dizer o que sempre quis: o que está na mão AGORA. Toda fechadura
    * do mundo pergunta isso, e a resposta é uma só.
    */
-  public readonly inventory = new Inventory();
+  public readonly inventory = new Inventory(noteFound);
   public get heldItem(): 'none' | HeldItemKind {
     return this.inventory.selected;
   }

@@ -1,7 +1,7 @@
 // A COLHEITA DE COGUMELOS: o mini-jogo da faca, o cesto, a faca emprestada e devolvida ao Shui (e o aceno dele), e
 // o olhar para o cogumelo-parente.
 
-import { CHUNK_COLUMNS, CHUNK_ROWS, dialogBoxMetrics } from '@/game/constants';
+import { CHUNK_COLUMNS, CHUNK_ROWS } from '@/game/constants';
 import type { DialogScript } from '@/game/dialogs/NpcDialogs';
 import type { HeldItemKind } from '@/game/entities/ItemPickup';
 import { tLines } from '@/game/i18n/i18n';
@@ -12,16 +12,14 @@ import { NpcWave } from '@/game/entities/NpcWave';
 import { isTouchDevice } from '@/game/runtime/PauseMenu';
 import { BagStash } from '@/game/runtime/BagStash';
 import { MushroomKin } from '@/game/objects/MushroomKin';
+import { MushroomGlow } from '@/game/objects/MushroomGlow';
+import { getTimeOfDay } from '@/game/runtime/timeOfDay';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { getChunkTerrain, getHeldItemPickups, getOccupiedTiles } from '@/game/world/WorldData';
 import { adventureState } from '@/game/runtime/adventureState';
 import type * as Engine from '@/game/engine';
 import type { GameScene } from '../GameScene';
 import { FORAGER_DIALOG, ITEM_VISUAL_2D } from './sceneDefs';
-
-/** O olhar da câmera para o porcini na fala da Shui: ida e volta, e quanto ela segura nele. */
-const GLANCE_PAN_MS = 700;
-const GLANCE_HOLD_MS = 1500;
 
 /** O que ForagingWork usa de GameScene (e a cena do motor, que ele passa a quem monta objetos do mundo). */
 export type ForagingWorkHost = Engine.Scene & Pick<GameScene,
@@ -37,6 +35,8 @@ export class ForagingWork {
   public bagStash?: BagStash;
   /** Os cogumelinhos-filhos em volta de cada cogumelo ainda não colhido (objects/MushroomKin). */
   public mushroomKin?: MushroomKin;
+  /** O brilho de noite do cogumelo que brilha, enquanto ele não é colhido (objects/MushroomGlow). */
+  public mushroomGlow?: MushroomGlow;
   /** O tchau da Shui lá de baixo (entities/NpcWave), e se ela já acenou nesta subida. */
   public shuiWave?: NpcWave;
   public shuiWaved = false;
@@ -94,6 +94,7 @@ export class ForagingWork {
     this.closeForaging();
     this.host.itemManager?.takeAt(wx, wy);
     this.mushroomKin?.wither(kind); // a trilha levava a ele: sem ele, ela some
+    this.mushroomGlow?.wither(kind);
     const first = !this.host.seenItems.has(kind);
     adventureState().basket.push(kind);
     this.host.seenItems.add(kind);
@@ -181,9 +182,7 @@ export class ForagingWork {
    */
   public makeMushroomKin(): MushroomKin | undefined {
     if (!this.host.adventure) return undefined;
-    const mothers = getHeldItemPickups()
-      .filter((p) => isMushroomKind(p.type) && !this.host.seenItems.has(p.type as HeldItemKind))
-      .map((p) => ({ kind: p.type as MushroomKind, worldX: p.worldX, worldY: p.worldY }));
+    const mothers = this.unpickedMushrooms();
     if (mothers.length === 0) return undefined;
     const taken = getOccupiedTiles();
     return new MushroomKin(this.host, mothers, (x, y, mother) => {
@@ -196,6 +195,27 @@ export class ForagingWork {
       // world.json já deixa liso o chão sorteado para eles (scripts/chao-dos-filhos.mjs, com a mesma conta).
       return !terrain.collisions[ly]?.[lx] && terrain.upper[ly]?.[lx] == null;
     });
+  }
+
+  /** Os cogumelos do mapa que ainda estão no chão (cada espécie existe uma vez e não renasce: "já teve na mão" é "já saiu"). */
+  private unpickedMushrooms(): Array<{ kind: MushroomKind; worldX: number; worldY: number }> {
+    return getHeldItemPickups()
+      .filter((p) => isMushroomKind(p.type) && !this.host.seenItems.has(p.type as HeldItemKind))
+      .map((p) => ({ kind: p.type as MushroomKind, worldX: p.worldX, worldY: p.worldY }));
+  }
+
+  /** O brilho de noite dos cogumelos que brilham e ainda estão no chão (objects/MushroomGlow). */
+  public makeMushroomGlow(): MushroomGlow | undefined {
+    if (!this.host.adventure) return undefined;
+    const glow = new MushroomGlow(this.host, this.unpickedMushrooms());
+    if (glow.count > 0) return glow;
+    glow.destroy();
+    return undefined;
+  }
+
+  /** A cada quadro de jogo: o brilho segue a noite. */
+  public tickGlow(): void {
+    this.mushroomGlow?.update(getTimeOfDay());
   }
 
   /**
@@ -219,24 +239,11 @@ export class ForagingWork {
     };
   }
 
-  /** A câmera da conversa olha para um ponto do mundo, segura e volta para o NPC (só se a conversa continua). */
+  /** A câmera da conversa olha para o cogumelo, ele brilha, e ela volta para a Shui (ver DialogCamera.glanceAt). */
   private glanceAt(spot: { x: number; y: number }, npcWorld: { worldX: number; worldY: number }): void {
-    if (!this.host.camera) return;
-    const base = this.host.dialogCam.baseScreenCenter();
-    const { boxHeight, margin } = dialogBoxMetrics(this.host.scale.width, this.host.scale.height);
-    const stageCenterY = Math.floor((this.host.scale.height - boxHeight - margin) / 2);
-    const dx = spot.x - this.host.playerWorld.worldX;
-    const dy = spot.y - this.host.playerWorld.worldY;
-    this.host.dialogCam.animateScreenCenter(Math.round(base.x - dx * this.host.tileSize), Math.round(stageCenterY - dy * this.host.tileSize), GLANCE_PAN_MS);
-    this.host.time.delayedCall(GLANCE_PAN_MS, () => {
-      if (!this.host.dialog.dialogOpen) return;
+    this.host.dialogCam.glanceAt(spot, npcWorld, () => {
       this.host.sparkle.spawnGlint(spot.x, spot.y, 0.32, 0.6);
       getSoundManager().story.playKeyJingle();
-    });
-    this.host.time.delayedCall(GLANCE_PAN_MS + GLANCE_HOLD_MS, () => {
-      if (!this.host.dialog.dialogOpen || this.host.dialog.dialogNpcWorld !== npcWorld) return;
-      const back = this.host.dialogCam.dialogScreenCenter(npcWorld);
-      this.host.dialogCam.animateScreenCenter(back.x, back.y, GLANCE_PAN_MS);
     });
   }
 }

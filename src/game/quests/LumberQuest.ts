@@ -10,6 +10,7 @@ import { CHOP_BLOCK_TEXTURE, FIRE_PIT_TEXTURE } from '@/game/render3d/woodTextur
 import { world3d } from '@/game/render3d/World3D';
 import { adventureState, type LumberQuestSave } from '@/game/runtime/adventureState';
 
+import { LumberGuide, type GuideMarks } from './LumberGuide';
 import { LumberWork, STICKS } from './LumberWork';
 
 /**
@@ -49,6 +50,12 @@ export interface LumberHost {
   markHeard: () => void;
   /** Uma fogueira de verdade na terra preparada, ainda fria. */
   addFire: (x: number, y: number) => CampfireObject;
+  /** A câmera da conversa olha para um tile; `onArrive` quando chega (ver DialogCamera.glanceAt). */
+  glance: (spot: { x: number; y: number }, npc: { worldX: number; worldY: number }, onArrive: () => void) => void;
+  /** Um brilho de estrela num ponto, com o tilintar de achado. */
+  glint: (x: number, y: number, elevation: number) => void;
+  /** Uma conversa, cena ou item-get já está na tela: não se abre outra por cima. */
+  busy: () => boolean;
   /** A cena da noite. `onDone` roda já de dia, com a fogueira apagada. */
   playNight: (night: {
     fire: CampfireObject;
@@ -62,6 +69,14 @@ export interface LumberHost {
 
 const SIZE_BLOCK = 0.9;
 const SIZE_PIT = 1.7;
+
+/**
+ * O CEPO fica à DIREITA do Marco, a dois tiles (pedido do autor, 2026-11-11): à esquerda, colado, ninguém o via, e é
+ * para lá que a câmera da conversa vai quando ele diz onde o galho vai (ver LumberGuide). Os outros são a reserva.
+ */
+export const chopBlockTile = (npc: { worldX: number; worldY: number }, free: (tile: { x: number; y: number }) => boolean): { x: number; y: number } | undefined => (
+  ([[2, 0], [2, 1], [1, 0], [-1, 0], [-1, 1]] as const).map(([dx, dy]) => ({ x: npc.worldX + dx, y: npc.worldY + dy })).find(free)
+);
 
 export class LumberQuest {
   public readonly save: LumberQuestSave;
@@ -78,6 +93,9 @@ export class LumberQuest {
   public dialogBase: () => DialogScript = () => ({ npcName: '', npcColorHex: '#ffffff', npcAssetKey: '', lines: [] });
   /** O galho, o cepo, a fogueira e a noite. (ver LumberWork) */
   private readonly work = new LumberWork(this);
+  /** A árvore seca que ele mostra, o cepo que brilha, e o chamado de quem volta com o galho. (ver LumberGuide) */
+  private readonly guide = new LumberGuide(this);
+  public readonly blockSize = SIZE_BLOCK;
 
   public constructor(public readonly host: LumberHost) {
     this.save = adventureState().lumberQuest;
@@ -105,7 +123,7 @@ export class LumberQuest {
     this.npc = npc;
     const at = (dx: number, dy: number): { x: number; y: number } => ({ x: npc.worldX + dx, y: npc.worldY + dy });
     const free = (tile: { x: number; y: number }): boolean => this.host.isFree(tile.x, tile.y);
-    this.blockTile = [at(-1, 0), at(-1, 1), at(-2, 0)].find(free);
+    this.blockTile = chopBlockTile(npc, free);
     // A terra fica a uns passos dele, para ele ter de andar até lá, com lugar para os dois sentarem.
     const spots: ReadonlyArray<readonly [number, number]> = [[3, 2], [3, 3], [2, 3], [4, 2], [-2, 3], [0, 3]];
     for (const [dx, dy] of spots) {
@@ -141,6 +159,7 @@ export class LumberQuest {
   }
 
   public destroy(): void {
+    this.guide.destroy();
     this.overlay?.destroy();
     this.overlay = undefined;
     this.block?.destroy();
@@ -165,10 +184,17 @@ export class LumberQuest {
 
   // ── as conversas ────────────────────────────────────────────────────────────────────────────────
 
+  /** O que roda a cada quadro de jogo livre: o chamado de quem volta com o galho (ver LumberGuide.update). */
+  public update(): void {
+    if (!this.isDone) this.guide.update();
+  }
+
   public talk(base: DialogScript, at: { worldX: number; worldY: number }): boolean {
     if (this.isDone) return false;
-    const say = (lines: I18nLine[], onClosed?: () => void): void => {
-      this.host.say({ ...base, lines }, at, () => {
+    // `marks`: em que falas a árvore seca flutua sobre ele, e em quais a câmera vai ao cepo (ver LumberGuide).
+    const say = (lines: I18nLine[], onClosed?: () => void, marks: GuideMarks = {}): void => {
+      this.host.say(this.guide.mark({ ...base, lines }, marks, at), at, () => {
+        this.guide.hidePicture();
         onClosed?.();
         this.host.markHeard();
       });
@@ -176,16 +202,23 @@ export class LumberQuest {
     const step = (key: string): I18nLine[] => tLines(`npc.businessManStep.${key}`);
     switch (this.save.stage) {
       case 'start':
+        // a 2ª fala diz como é a árvore seca (ela flutua sobre ele), a 3ª diz onde fica o cepo (a câmera vai até lá)
         say(base.lines, () => {
           this.save.stage = 'gather';
           this.giveAxe(at);
-        });
+        }, { picture: [1], block: [2] });
         return true;
       case 'gather':
+        // VOLTOU COM O GALHO (pedido do autor): a conversa é só o cepo. A câmera vai até ele, ele brilha, e o Marco diz
+        // que o galho vai em pé em cima, e que o machado racha.
+        if (this.host.held() === 'wood' && !this.save.standing) {
+          say(step('block'), undefined, { block: [0] });
+          return true;
+        }
         say(step('gather').map((line) => ({ ...line, text: line.text.replace('{n}', String(STICKS - this.save.laid)) })), () => {
           // Nada se perde: se o machado não está na mão nem no chão, ele tem outro.
           if (!this.host.owns('axe') && !this.host.onGround('axe')) this.giveAxe(at);
-        });
+        }, { picture: [0] });
         return true;
       case 'ready':
         say(step('ready'), () => {

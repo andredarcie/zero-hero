@@ -1,6 +1,7 @@
 // A NOITE NA FOGUEIRA: a cena inteira, do herói que senta ao dia que vira.
 
 import * as Engine from '@/game/engine';
+import { dialogBoxMetrics } from '@/game/constants';
 import type { DialogScript } from '@/game/dialogs/NpcDialogs';
 import { getDay, isNightTime, setDay, setTimeOfDay } from '@/game/runtime/timeOfDay';
 import { CampfireObject } from '@/game/objects/CampfireObject';
@@ -14,11 +15,24 @@ import { FX_BILLBOARD, INTRO_CLOCK } from './sceneDefs';
 
 /** A manhã depois da noite do Marco. */
 const MORNING_CLOCK = 0.34;
+/**
+ * O ENQUADRAMENTO DA NOITE (pedido do autor, 2026-11-11: "a câmera corta a cabeça ou quase o corpo todo do lenhador").
+ * A câmera chegava PERTO (0,72 da distância do jogo) e seguia o herói: o Marco, dois tiles atrás do fogo, saía pelo
+ * alto da tela em quase todo formato. Agora ela vai um pouco mais LONGE que o jogo, e mais longe ainda se a tela pedir,
+ * até o Marco inteiro, o fogo e o herói inteiro caberem no palco acima da caixa de fala, e centraliza os três ali.
+ */
+const NIGHT_DOLLY = 1.08;
+const NIGHT_DOLLY_MAX = 2.6;
+/** Quanto da altura do palco os três ocupam, no máximo (o resto é respiro em cima e embaixo). */
+const NIGHT_FILL = 0.78;
+/** Folga acima da cabeça do Marco e a altura da chama, em tiles. */
+const HEAD_ROOM = 0.2;
+const FLAME_TOP = 1.3;
 
 /** O que CampfireNight usa de GameScene (e a cena do motor, que ele passa a quem monta objetos do mundo). */
 export type CampfireNightHost = Engine.Scene & Pick<GameScene,
-  'actions' | 'camera' | 'camp' | 'cinema' | 'cutsceneActive' | 'dialog' | 'events' | 'fire' | 'hero' | 'life'
-  | 'npcManager' | 'pause' | 'playerWorld' | 'props' | 'query' | 'roastEnding' | 'save' | 'sparkle' | 'steps'
+  'actions' | 'camera' | 'camp' | 'cinema' | 'cutsceneActive' | 'dialog' | 'dialogCam' | 'events' | 'fire' | 'hero' | 'life'
+  | 'npcManager' | 'pause' | 'playerWorld' | 'props' | 'query' | 'roastEnding' | 'save' | 'scale' | 'sparkle' | 'steps'
   | 'tileSize' | 'time' | 'tweens' | 'world3d'
 >;
 
@@ -64,9 +78,11 @@ export class CampfireNight {
     for (let i = 0; i < 4; i += 1) this.host.time.delayedCall(i * 170, () => this.host.sparkle.spawnFireHitEffect(pit.x, pit.y));
     await this.host.cinema.wait(1500);
 
-    // O herói vai para a frente do fogo, e o Marco vem de casa.
+    // O herói vai para a frente do fogo, e o Marco vem de casa. Dois tiles à frente, se der, como o Marco senta dois atrás:
+    // colado no fogo, o herói sentado tapava a chama.
+    const front = this.host.query.isSolidForEntities(pit.x, pit.y + 2) ? { x: pit.x, y: pit.y + 1 } : { x: pit.x, y: pit.y + 2 };
     const walkHero = async (): Promise<void> => {
-      const goal = { x: pit.x, y: pit.y + 1 };
+      const goal = front;
       const visited = new Map<string, [number, number] | null>([[`${this.host.playerWorld.worldX},${this.host.playerWorld.worldY}`, null]]);
       const queue: Array<[number, number]> = [[this.host.playerWorld.worldX, this.host.playerWorld.worldY]];
       while (queue.length > 0) {
@@ -90,7 +106,7 @@ export class CampfireNight {
       }
     };
     this.host.npcManager?.setKindAway('businessMan', true);
-    const path = this.host.camp.visitPath([npc.worldX, npc.worldY], [[seat.x, seat.y]], [pit.x, pit.y + 1], [pit.x, pit.y]);
+    const path = this.host.camp.visitPath([npc.worldX, npc.worldY], [[seat.x, seat.y]], [front.x, front.y], [pit.x, pit.y]);
     const visitor = new FireVisitor(this.host, 'businessMan', path ?? [[npc.worldX, npc.worldY], [seat.x, seat.y]]);
     visitor.arrive();
     await walkHero();
@@ -105,7 +121,7 @@ export class CampfireNight {
     this.host.life.ambienceClockMs = 0;
     this.host.props.campfiresFollowNight = !isNightTime();
     this.host.fire.syncCampfiresToClock();
-    void this.host.cinema.dollyTo(0.72, 3200);
+    const framed = this.frameNight(pit, seat, front, visitor);
     const focus = document.createElement('div');
     focus.style.cssText = 'position:fixed;inset:0;z-index:39;pointer-events:none;opacity:0;transition:opacity 3000ms ease;';
     document.body.appendChild(focus);
@@ -146,7 +162,8 @@ export class CampfireNight {
         }));
       }
     }
-    await this.host.cinema.wait(3400);
+    await framed;
+    await this.host.cinema.wait(300);
 
     // A história.
     const say = (script: DialogScript): Promise<void> => new Promise<void>((resolve) => {
@@ -175,6 +192,13 @@ export class CampfireNight {
     for (const mote of motes) mote.destroy();
     this.host.events.off('postupdate', followFire);
     focus.remove();
+    // A câmera da conversa volta a ser a de sempre, com a tela já preta.
+    this.host.dialogCam.stageFrame = undefined;
+    if (this.host.camera) {
+      const base = this.host.dialogCam.baseScreenCenter();
+      this.host.camera.screenCenterX = base.x;
+      this.host.camera.screenCenterY = base.y;
+    }
     this.host.fire.keptLitFires.delete(fire);
     fire.extinguish();
     visitor.destroy();
@@ -195,5 +219,78 @@ export class CampfireNight {
     this.host.actions.actionButtons?.setVisible(true);
     this.host.pause.pauseTouchButton?.setVisible(true);
     this.host.save.persistAdventure();
+  }
+
+  /** O palco: a faixa da tela acima da caixa de fala, com um respiro em cima e embaixo (em pixels de tela). */
+  private nightStage(): { width: number; top: number; bottom: number } {
+    const { width, height } = this.host.scale;
+    const { boxHeight, margin } = dialogBoxMetrics(width, height);
+    return { width, top: Math.round(height * 0.05), bottom: height - boxHeight - margin - Math.round(height * 0.03) };
+  }
+
+  /** Onde estão na tela o alto da cabeça do Marco (ou da chama, o que for mais alto) e o pé do herói, e o meio deles. */
+  private trioBox(
+    pit: { x: number; y: number },
+    seat: { x: number; y: number },
+    front: { x: number; y: number },
+    visitor: FireVisitor,
+  ): { top: number; bottom: number; x: number } | null {
+    const proj = this.host.world3d?.projection;
+    if (!proj) return null;
+    const body = visitor.bodySprite;
+    const head = proj.projectTile(seat.x, seat.y, body.elevation + body.displayHeight + HEAD_ROOM);
+    const flame = proj.projectTile(pit.x, pit.y, FLAME_TOP);
+    const feet = proj.projectTile(front.x, front.y + 0.5, 0);
+    return { top: Math.min(head.y, flame.y), bottom: feet.y, x: (head.x + feet.x) / 2 };
+  }
+
+  /**
+   * A CÂMERA DA NOITE: afasta até os três caberem no palco (a altura na tela cai com a distância), e leva o meio deles
+   * ao meio do palco. O deslocamento da tela anda em tiles da câmera, então com ela afastada ele rende menos: a conta
+   * prevê, a câmera desliza, e uma segunda medida corrige o que sobrou. A conversa respeita o quadro (`stageFrame`).
+   */
+  private async frameNight(
+    pit: { x: number; y: number },
+    seat: { x: number; y: number },
+    front: { x: number; y: number },
+    visitor: FireVisitor,
+  ): Promise<void> {
+    const w3 = this.host.world3d;
+    if (!w3 || !this.host.camera) return;
+    const dolly = (): number => w3.params.camHeight / (this.host.cinema.dollyBase?.h ?? w3.params.camHeight);
+    const fit = (box: { top: number; bottom: number }): number => {
+      const stage = this.nightStage();
+      const need = (dolly() * (box.bottom - box.top)) / ((stage.bottom - stage.top) * NIGHT_FILL);
+      return Math.min(NIGHT_DOLLY_MAX, Math.max(NIGHT_DOLLY, need));
+    };
+    const measure = async (): Promise<{ top: number; bottom: number; x: number } | null> => {
+      await this.host.cinema.wait(60); // a câmera 3D se move no próximo quadro
+      return this.trioBox(pit, seat, front, visitor);
+    };
+    let box = this.trioBox(pit, seat, front, visitor);
+    if (!box) return;
+    await this.host.cinema.dollyTo(fit(box), 3200);
+    box = await measure();
+    if (!box) return;
+    const stage = this.nightStage();
+    if (box.bottom - box.top > (stage.bottom - stage.top) * NIGHT_FILL) {
+      await this.host.cinema.dollyTo(fit(box), 500);
+      box = await measure();
+      if (!box) return;
+    }
+    const camera = this.host.camera;
+    const target = { x: camera.screenCenterX, y: camera.screenCenterY };
+    const pan = (ms: number): Promise<void> => new Promise((resolve) => this.host.cinema.cutscenePan(target.x, target.y, ms, resolve));
+    for (const ms of [700, 300]) {
+      const shiftX = stage.width / 2 - box.x;
+      const shiftY = (stage.top + stage.bottom) / 2 - (box.top + box.bottom) / 2;
+      if (Math.abs(shiftX) < 2 && Math.abs(shiftY) < 2) break;
+      target.x = Math.round(target.x + shiftX * dolly());
+      target.y = Math.round(target.y + shiftY * dolly());
+      await pan(ms);
+      box = await measure();
+      if (!box) break;
+    }
+    this.host.dialogCam.stageFrame = () => ({ ...target });
   }
 }

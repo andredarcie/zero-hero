@@ -194,11 +194,11 @@
           14,
           null,
           19,
-          8,
+          null,
           2,
-          2,
+          null,
           7,
-          7,
+          null,
           4,
           null,
           19
@@ -1269,10 +1269,10 @@
           4,
           4,
           11,
-          8,
+          null,
           8,
           2,
-          20,
+          null,
           8,
           0,
           11,
@@ -1282,7 +1282,7 @@
         [
           4,
           4,
-          19,
+          null,
           null,
           2,
           null,
@@ -1576,7 +1576,13 @@
           false
         ]
       ],
-      "pickups": [],
+      "pickups": [
+        {
+          "type": "jackOLantern",
+          "worldX": 30,
+          "worldY": 2
+        }
+      ],
       "npcs": []
     },
     {
@@ -7701,11 +7707,11 @@
           null,
           19,
           19,
-          0,
+          null,
           8,
           20,
           10,
-          10
+          null
         ],
         [
           1,
@@ -7713,13 +7719,13 @@
           20,
           0,
           11,
-          19,
-          0,
+          null,
+          null,
+          null,
           null,
           0,
-          0,
           10,
-          1
+          null
         ],
         [
           1,
@@ -7743,10 +7749,10 @@
           19,
           null,
           1,
-          10,
-          1,
-          20,
-          0,
+          null,
+          null,
+          null,
+          null,
           10
         ],
         [
@@ -7754,7 +7760,7 @@
           null,
           11,
           11,
-          1,
+          null,
           null,
           10,
           10,
@@ -7962,7 +7968,13 @@
           false
         ]
       ],
-      "pickups": [],
+      "pickups": [
+        {
+          "type": "oyster",
+          "worldX": 44,
+          "worldY": 30
+        }
+      ],
       "npcs": []
     },
     {
@@ -8210,7 +8222,7 @@
           14
         ],
         [
-          0,
+          null,
           1,
           null,
           null,
@@ -15944,7 +15956,7 @@
       "worldY": 27
     },
     {
-      "type": "ironRock",
+      "type": "rock",
       "worldX": 10,
       "worldY": 28
     },
@@ -16369,7 +16381,7 @@
       "worldY": 27
     },
     {
-      "type": "ironRock",
+      "type": "rock",
       "worldX": 8,
       "worldY": 34
     },
@@ -16559,7 +16571,7 @@
       "worldY": 39
     },
     {
-      "type": "ironRock",
+      "type": "rock",
       "worldX": 28,
       "worldY": 43
     },
@@ -16950,16 +16962,6 @@
     },
     {
       "type": "dryShrub",
-      "worldX": 10,
-      "worldY": 4
-    },
-    {
-      "type": "dryShrub",
-      "worldX": 10,
-      "worldY": 3
-    },
-    {
-      "type": "dryShrub",
       "worldX": 2,
       "worldY": 1
     },
@@ -17194,7 +17196,7 @@
       "worldY": 8
     },
     {
-      "type": "coalRock",
+      "type": "rock",
       "worldX": 4,
       "worldY": 9
     },
@@ -17204,12 +17206,12 @@
       "worldY": 7
     },
     {
-      "type": "ironRock",
+      "type": "rock",
       "worldX": 11,
       "worldY": 7
     },
     {
-      "type": "ironRock",
+      "type": "rock",
       "worldX": 7,
       "worldY": 10
     },
@@ -17234,7 +17236,7 @@
       "worldY": 11
     },
     {
-      "type": "coalRock",
+      "type": "rock",
       "worldX": 10,
       "worldY": 6
     },
@@ -17683,6 +17685,36 @@
       "type": "dryTree",
       "worldX": 19,
       "worldY": 53
+    },
+    {
+      "type": "lava",
+      "worldX": 10,
+      "worldY": 3
+    },
+    {
+      "type": "lava",
+      "worldX": 10,
+      "worldY": 4
+    },
+    {
+      "type": "coalRock",
+      "worldX": 2,
+      "worldY": 0
+    },
+    {
+      "type": "coalRock",
+      "worldX": 4,
+      "worldY": 0
+    },
+    {
+      "type": "ironRock",
+      "worldX": 6,
+      "worldY": 0
+    },
+    {
+      "type": "ironRock",
+      "worldX": 8,
+      "worldY": 0
     }
   ],
   "dialogs": {

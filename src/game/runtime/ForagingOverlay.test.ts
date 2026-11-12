@@ -94,7 +94,7 @@ describe('a colheita', () => {
     expect(document.querySelector('.zh-forage')).toBeNull();
   });
 
-  it('cada uma das seis espécies abre o seu minijogo (com o toque também)', () => {
+  it('cada uma das oito espécies abre o seu minijogo (com o toque também)', () => {
     for (const kind of MUSHROOM_KINDS) {
       const cb = callbacks();
       const overlay = new ForagingOverlay(kind, cb, true);

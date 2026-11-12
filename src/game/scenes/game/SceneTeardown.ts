@@ -151,6 +151,7 @@ export class SceneTeardown {
     this.host.pause.zoomSetup = undefined;
     this.host.orders.orderOverlay?.destroy();
     this.host.orders.orderOverlay = undefined;
+    this.host.camp.notebook.destroy();
     this.host.forage.foraging?.destroy();
     this.host.forage.foraging = undefined;
     this.host.itemManager?.destroy();
@@ -168,6 +169,8 @@ export class SceneTeardown {
     this.host.valley.gardenMist = undefined;
     this.host.forage.mushroomKin?.destroy();
     this.host.forage.mushroomKin = undefined;
+    this.host.forage.mushroomGlow?.destroy();
+    this.host.forage.mushroomGlow = undefined;
     this.host.forge.forging?.hammer.destroy();
     this.host.forge.forging = undefined;
     this.host.forage.shuiWave?.destroy();

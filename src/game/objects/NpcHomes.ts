@@ -8,6 +8,7 @@ import {
 } from '@/game/render3d/homeTextures';
 import { WHITE_SAFE_TINT } from '@/game/render3d/pixelForms';
 import { world3d } from '@/game/render3d/World3D';
+import { biomeWashAt } from '@/game/world/biomes';
 import { terrainHeightAt } from '@/game/world/relief';
 import { getChunkTerrain } from '@/game/world/WorldData';
 
@@ -90,10 +91,18 @@ export class NpcHomes {
       const home = HOMES[kind];
       if (!home) continue;
       const { x, y } = home;
-      this.bodies.push(world3d()
+      const yard = world3d()
         .objects.addBillboard(homeYardTexture(kind), 0, { flat: true, flatY: YARD_Y })
         .setDisplaySize(YARD_WIDTH, YARD_DEPTH)
-        .setPosition(x, y + YARD_FORWARD));
+        .setPosition(x, y + YARD_FORWARD);
+      // O BRILHO DO CHÃO DO BIOMA (pedido do autor, 2026-11-11: "nem combina com o resto do jogo"): sem ele o terreiro
+      // era o único chão que não passava pelo lugar, e debaixo do sol quente a terra clara saía laranja, um tapete por
+      // cima do capim escuro do musgo e da mata. Só o BRILHO, e nunca acima de 1: o matiz do tom lavado (o da folha caída)
+      // dourava a terra no prado da Sisi (1,4 no vermelho) e a azulava na Thea.
+      const [r, g, b] = biomeWashAt(x, y + YARD_FORWARD);
+      const shade = Math.min(1, 0.2126 * r + 0.7152 * g + 0.0722 * b);
+      (yard.mesh.material as THREE.MeshLambertMaterial).color.setRGB(shade, shade, shade);
+      this.bodies.push(yard);
       // a casa desce até a parede encostar no chão (o desenho tem uma ou duas fileiras vazias embaixo: homeSink)
       const sink = homeSink(kind);
       this.bodies.push(world3d()

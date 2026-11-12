@@ -40,6 +40,8 @@ export const forageProbe = (s: GameScene) => ({
 
   /** Quantos cogumelinhos-filhos de `kind` nasceram em volta do pai. */
   kin: (kind: MushroomKind): number => s.forage.mushroomKin?.count(kind) ?? 0,
+  /** O brilho de noite de `kind` agora (0 dia ou colhido, 1 noite fechada; objects/MushroomGlow). */
+  glow: (kind: MushroomKind): number => s.forage.mushroomGlow?.level(kind) ?? 0,
   /** A cesta voando para as costas do herói (a cerimônia de guardar): existe, e se está andando. */
   bagStashOpen: (): boolean => s.forage.bagStash !== undefined,
   bagStashActive: (): boolean => s.forage.bagStash?.active === true,

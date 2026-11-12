@@ -41,6 +41,8 @@ export const PICKUP_DEFS: ReadonlyArray<{ type: PickupKind; label: string; key: 
   { type: 'chanterelle', label: 'Cantarelo (Cantharellus cibarius)', key: fungusTextureKey('chanterelle') },
   { type: 'flyAgaric', label: 'Mata-moscas (Amanita muscaria)', key: fungusTextureKey('flyAgaric') },
   { type: 'porcini', label: 'Porcini (Boletus edulis)', key: fungusTextureKey('porcini') },
+  { type: 'oyster', label: 'Cogumelo-ostra (Pleurotus ostreatus) — opcional', key: fungusTextureKey('oyster') },
+  { type: 'jackOLantern', label: 'Cogumelo-da-oliveira (Omphalotus olearius) — opcional, brilha de noite', key: fungusTextureKey('jackOLantern') },
 ];
 export const PROP_DEFS: ReadonlyArray<{ type: PropKind; label: string; key: string; frame?: number }> = [
   { type: 'campfire', label: 'Fogueira', key: ASSET_KEYS.campfireFrame1 },

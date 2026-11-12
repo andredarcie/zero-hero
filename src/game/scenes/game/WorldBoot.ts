@@ -220,6 +220,7 @@ export class WorldBoot {
         this.host.valley.gardenMist = new GardenMist(this.host, { x: garden.worldX, y: garden.worldY }, heroAt);
       }
       this.host.forage.mushroomKin = this.host.forage.makeMushroomKin();
+      this.host.forage.mushroomGlow = this.host.forage.makeMushroomGlow();
       this.host.groundItems.enforceNpcFrontRule();
       this.host.groundItems.freeTrappedItems();
       this.host.valley.weather = new ValleyWeather(this.host.world3d!, (x, y) => this.host.query.isOpenWaterAt(x, y));

@@ -5,22 +5,28 @@ import { registerTexture3D } from '@/game/render3d/textures3d';
 import { createCanvas } from '@/game/platform/platform';
 
 /**
- * OS SEIS FUNGOS DO VALE — e a faca que os colhe.
+ * OS OITO FUNGOS DO VALE — e a faca que os colhe.
  *
  * Cada espécie é REAL e foi escolhida para ensinar uma coisa diferente sobre fungos, não para
  * encher uma lista: a amanita (lamelas, véu, volva, veneno), o cantarelo (falsas lamelas),
  * o porcini (poros no lugar de lamelas), o coprino (o chapéu que se digere em tinta), o morel
  * (um ascomiceto: esporos em saquinhos, não em lamelas) e a bufa-de-lobo (os esporos amadurecem
- * DENTRO da bola). Forma, cor e nome seguem a espécie de verdade; o texto mora no locale
- * (`fungi.species.<kind>`), como todo texto do jogo.
+ * DENTRO da bola). Os dois últimos vieram depois, opcionais, para as duas grandes áreas do vale onde
+ * não havia nada para fazer (pedido do autor, 2026-11-11): o cogumelo-ostra (come madeira morta, em
+ * prateleiras sem pé no meio, e ainda caça vermes) e o cogumelo-da-oliveira (lamelas de verdade, o
+ * sósia venenoso do cantarelo, e brilha no escuro). Forma, cor e nome seguem a espécie de verdade; o
+ * texto mora no locale (`fungi.species.<kind>`), como todo texto do jogo.
  *
  * A ARTE É DESENHADA POR CÓDIGO, e por um motivo só: a mesma receita sai em 16px (o chão, a
  * bolsa, o pensamento do herói) e em 48px (o close dos mini-games). Duas artes à mão para cada
  * espécie seriam duas espécies diferentes na primeira vez que alguém retocasse uma delas.
  */
 
-/** A ordem é a do caminho a partir da Shui — e é a ordem das dicas dela (NpcQuests.hints). */
-export const MUSHROOM_KINDS = ['porcini', 'morel', 'puffball', 'inkCap', 'chanterelle', 'flyAgaric'] as const;
+/**
+ * A ordem é a do caminho a partir da Shui — e é a ordem das dicas dela (NpcQuests.hints). Os dois do fim são os
+ * opcionais que vieram depois: a dica deles só chega quando as seis primeiras já foram ditas.
+ */
+export const MUSHROOM_KINDS = ['porcini', 'morel', 'puffball', 'inkCap', 'chanterelle', 'flyAgaric', 'oyster', 'jackOLantern'] as const;
 export type MushroomKind = (typeof MUSHROOM_KINDS)[number];
 
 export const isMushroomKind = (kind: string | null | undefined): kind is MushroomKind =>
@@ -41,6 +47,8 @@ interface FungusSpec {
    */
   cut: { from: number; to: number };
   dirt: readonly DirtKind[];
+  /** Brilha no escuro (bioluminescência): de noite ele acende no chão (objects/MushroomGlow). */
+  glows?: boolean;
 }
 
 export const FUNGUS_SPECS: Readonly<Record<MushroomKind, FungusSpec>> = {
@@ -50,6 +58,9 @@ export const FUNGUS_SPECS: Readonly<Record<MushroomKind, FungusSpec>> = {
   chanterelle: { edibility: 'edible', cut: { from: 0.76, to: 0.9 }, dirt: ['moss', 'needle', 'soil'] },
   flyAgaric: { edibility: 'poison', cut: { from: 0.9, to: 1.04 }, dirt: ['needle', 'leaf', 'soil'] },
   porcini: { edibility: 'edible', cut: { from: 0.76, to: 0.9 }, dirt: ['needle', 'soil', 'moss'] },
+  // nasce na madeira: o corte é no pé curto, logo acima do pedaço de casca, e a sujeira é de mato e folha
+  oyster: { edibility: 'edible', cut: { from: 0.72, to: 0.85 }, dirt: ['leaf', 'moss', 'needle'] },
+  jackOLantern: { edibility: 'poison', cut: { from: 0.74, to: 0.87 }, dirt: ['leaf', 'needle', 'soil'], glows: true },
 };
 
 
@@ -205,7 +216,7 @@ class Raster {
   }
 }
 
-// ── as seis receitas ─────────────────────────────────────────────────────────────────────────
+// ── as oito receitas ─────────────────────────────────────────────────────────────────────────
 // Materiais: 1 talo, 2 base/volva, 3 lamelas/poros, 4 chapéu. As sombras miram neles com `over`.
 
 const STEM = 1;
@@ -348,6 +359,57 @@ const paintPuffball = (r: Raster): void => {
 };
 
 /**
+ * PLEUROTUS OSTREATUS. Prateleiras em leque, cinza-pardo, que nascem de lado na madeira morta: o pé é curto e sai
+ * da BEIRA do chapéu, não do meio. Por baixo, lamelas que correm do pé até a borda. Vem com um pedaço da casca em que
+ * nasceu (a base).
+ */
+const paintOyster = (r: Raster): void => {
+  // a casca do tronco de onde ele sai
+  r.poly([[0.24, 0.84], [0.76, 0.82], [0.8, 0.93], [0.2, 0.93]], 0x5c4029, { mat: BASE });
+  r.line(0.28, 0.88, 0.7, 0.87, 0.012, 0x3e2a1a, { over: BASE });
+  // o pé curto, de lado
+  r.poly([[0.3, 0.86], [0.44, 0.86], [0.5, 0.68], [0.36, 0.7]], 0xe9e2d1, { mat: STEM });
+  r.poly([[0.39, 0.86], [0.44, 0.86], [0.5, 0.68], [0.45, 0.69]], 0xc9c0ab, { over: STEM });
+  // a prateleira de baixo, pequena, à direita: o leque e as lamelas que nascem do pé
+  r.ellipse(0.66, 0.69, 0.2, 0.07, 0xece4d2, { mat: UNDER });
+  for (let k = 0; k < 5; k += 1) r.line(0.5, 0.7, 0.52 + k * 0.075, 0.74, 0.01, 0xc9bfa9, { over: UNDER });
+  r.ellipse(0.66, 0.64, 0.21, 0.08, 0x9a9184, { mat: CAP, maxY: 0.665 });
+  // a prateleira de cima, grande: o chapéu em leque, a borda que dobra, a luz em cima à esquerda
+  r.ellipse(0.52, 0.56, 0.36, 0.1, 0xece4d2, { mat: UNDER });
+  for (let k = 0; k < 7; k += 1) r.line(0.38, 0.6, 0.2 + k * 0.1, 0.62, 0.01, 0xc9bfa9, { over: UNDER });
+  r.ellipse(0.52, 0.47, 0.38, 0.17, 0x9a9184, { mat: CAP, maxY: 0.56 });
+  r.ellipse(0.6, 0.53, 0.3, 0.05, 0x716a5f, { over: CAP });
+  r.ellipse(0.4, 0.4, 0.17, 0.06, 0xc3bcaf, { over: CAP });
+  r.ellipse(0.7, 0.63, 0.14, 0.025, 0x716a5f, { over: CAP });
+};
+
+/**
+ * OMPHALOTUS OLEARIUS. Um tufo de chapéus laranja-ferrugem em funil, mais vermelho que o cantarelo e com LAMELAS de
+ * verdade (finas, juntas, descendo pelo pé), não dobras: é o sósia venenoso dele. Nasce em grupo na base das árvores,
+ * os pés se juntando embaixo. As lamelas brilham de leve no escuro (o verde da noite vem de objects/MushroomGlow).
+ */
+const paintJackOLantern = (r: Raster): void => {
+  r.ellipse(0.5, 0.88, 0.2, 0.05, 0x5c4029, { mat: BASE });
+  // os pés, saindo juntos da base
+  r.poly([[0.44, 0.88], [0.52, 0.88], [0.42, 0.5], [0.34, 0.52]], 0xd8742e, { mat: STEM });
+  r.poly([[0.5, 0.88], [0.58, 0.88], [0.72, 0.62], [0.64, 0.6]], 0xd8742e, { mat: STEM });
+  r.poly([[0.49, 0.88], [0.52, 0.88], [0.42, 0.5], [0.4, 0.51]], 0xae561c, { over: STEM });
+  r.poly([[0.55, 0.88], [0.58, 0.88], [0.72, 0.62], [0.69, 0.61]], 0xae561c, { over: STEM });
+  // as lamelas de verdade, finas e juntas, descendo pelo pé
+  r.ellipse(0.38, 0.47, 0.25, 0.07, 0xf0a44a, { mat: UNDER });
+  for (let k = 0; k <= 8; k += 1) r.line(0.15 + k * 0.058, 0.45, 0.37 + k * 0.006, 0.55, 0.008, 0xc0621f, { over: UNDER });
+  r.ellipse(0.69, 0.59, 0.17, 0.05, 0xf0a44a, { mat: UNDER });
+  for (let k = 0; k <= 5; k += 1) r.line(0.54 + k * 0.06, 0.57, 0.68 + k * 0.004, 0.63, 0.008, 0xc0621f, { over: UNDER });
+  // os chapéus em funil: a borda erguida, o meio fundo, a luz na borda de cima
+  r.ellipse(0.38, 0.39, 0.27, 0.11, 0xdb6526, { mat: CAP, maxY: 0.46 });
+  r.ellipse(0.38, 0.36, 0.14, 0.04, 0x9e3f16, { over: CAP });
+  r.ellipse(0.29, 0.31, 0.1, 0.03, 0xf2924a, { over: CAP });
+  r.ellipse(0.69, 0.53, 0.19, 0.08, 0xdb6526, { mat: CAP, maxY: 0.58 });
+  r.ellipse(0.69, 0.51, 0.09, 0.028, 0x9e3f16, { over: CAP });
+  r.ellipse(0.63, 0.47, 0.07, 0.022, 0xf2924a, { over: CAP });
+};
+
+/**
  * A FACA DE COGUMELO: lâmina curta e curva, cabo de madeira e, na ponta do cabo, uma ESCOVA de
  * cerdas — é assim que as facas de coleta de verdade são, e é a escova que limpa no segundo
  * mini-game.
@@ -370,6 +432,8 @@ const PAINTERS: Readonly<Record<MushroomKind, (r: Raster) => void>> = {
   inkCap: paintInkCap,
   morel: paintMorel,
   puffball: paintPuffball,
+  oyster: paintOyster,
+  jackOLantern: paintJackOLantern,
 };
 
 /**

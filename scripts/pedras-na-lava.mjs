@@ -36,11 +36,12 @@ const VEGA_AREA = { x0: 35, y0: 0, x1: 48, y1: 12 };
 /** O lago d'água do noroeste: todo tile de mar nesta caixa vira lava. */
 const LAKE_BOX = { x0: 0, y0: 0, x1: 10, y1: 9 };
 /**
- * As pedras na margem do lago de lava: dois veios de CARVÃO (veio preto: o fogo do forno da Vega, sem
- * depender do machado de ninguém), dois de minério e cinco pedras comuns.
+ * As pedras na margem do lago de lava. Eram dois veios de CARVÃO, dois de minério e cinco pedras comuns; desde
+ * scripts/minas-alem-da-lava.mjs (2026-11-11) os veios moram do outro lado do lago, e aqui na margem ficam nove
+ * pedras comuns (as que dão a pedra da travessia). A lista segue o mapa de hoje, para esta prova não desfazer aquela.
  */
 const PLACE = [
-  ['coalRock', 4, 9], ['rock', 9, 7], ['ironRock', 11, 7], ['ironRock', 7, 10], ['rock', 5, 11], ['rock', 8, 9], ['rock', 12, 5], ['rock', 3, 11], ['coalRock', 10, 6],
+  ['rock', 4, 9], ['rock', 9, 7], ['rock', 11, 7], ['rock', 7, 10], ['rock', 5, 11], ['rock', 8, 9], ['rock', 12, 5], ['rock', 3, 11], ['rock', 10, 6],
 ];
 const ROCKS = new Set(['rock', 'ironRock', 'coalRock']);
 

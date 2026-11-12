@@ -121,7 +121,7 @@ export class ActionInput {
     return !this.host.dialog.dialogOpen && !this.host.dialogCam.camShifting
       && !this.host.hand.itemGetOpen && !this.host.cutsceneActive
       && !this.host.pause.pauseMenu
-      && !this.host.orders.orderOverlay && !this.host.forage.foraging
+      && !this.host.orders.orderOverlay && !this.host.forage.foraging && !this.host.camp.notebook.overlay
       && this.host.movementController !== undefined;
   }
 

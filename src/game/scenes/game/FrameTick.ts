@@ -51,8 +51,8 @@ export class FrameTick {
       this.host.view.renderProps();
       return;
     }
-    // O CATALOGO de fabricacao congela igual, e a colheita de um cogumelo tambem.
-    if (this.host.orders.orderOverlay || this.host.forage.foraging) return;
+    // O CATALOGO de fabricacao congela igual, a colheita de um cogumelo tambem, e o caderno do acampamento.
+    if (this.host.orders.orderOverlay || this.host.forage.foraging || this.host.camp.notebook.overlay) return;
 
     if (!this.host.movementController || !this.host.chunkManager || !this.host.camera) {
       return;
@@ -89,6 +89,7 @@ export class FrameTick {
     profiler.end('update.chunks');
     this.host.steps.updateFootprints();
     this.host.forage.tickShuiWave();
+    this.host.forage.tickGlow();
     this.host.bumps.heroThought?.tick(delta);
     this.host.forge.updateFurnaceAsk(delta);
 
@@ -131,6 +132,7 @@ export class FrameTick {
     // Plots whose grown grass was consumed reopen their hole for replanting (the farming loop).
     this.host.garden.updatePlantSpots();
     this.host.questSetup.painterQuest?.update(delta);
+    this.host.questSetup.lumberQuest?.update(); // o Marco chama quem volta com o galho
     // A flor da lua le a luz das fogueiras e abre/fecha por conta dela.
     this.host.life.updateMoonflowers(delta);
     this.host.forge.updateFurnaces(delta);

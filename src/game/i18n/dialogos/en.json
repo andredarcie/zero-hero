@@ -76,7 +76,7 @@
         "name": "Shui",
         "lines": [
           "I watch the fungi of this vale:\nthey're slow, and they are right.\nWhat shows is only fruit; the rest\nis thread, and out of sight.",
-          "Six kinds grow here; I need just four,\nthe others, if you please.\nSo take my knife and basket too,\nand go among the trees.",
+          "Eight kinds grow here; I need just four,\nthe others, if you please.\nSo take my knife and basket too,\nand go among the trees.",
           "Don't force it: cut where it gives way;\nthe knife won't ever dull.\nBrush off the earth, and never wash;\ndon't tug, and never pull."
         ]
       },
@@ -88,7 +88,7 @@
         ]
       },
       "npc.radiationSuitAll": [
-        "All six! You moved the way the vale\nmoves, never against it.\nThe red one's useless; so it lives\nso long. Don't eat a bit."
+        "All eight! You moved the way the vale\nmoves, never against it.\nThe red one's useless; so it lives\nso long. Don't eat a bit."
       ],
       "npc.radiationSuitHint": {
         "porcini": [
@@ -107,7 +107,13 @@
           "Up north, in lava's ring: a gold\nand funnel-shaped one, low.\nA stone sinks down and turns to ground;\na stick held there will glow."
         ],
         "flyAgaric": [
-          "Northwest, past withered grass: a red\nwith spots of white on top.\nBring an axe. And never eat it:\nit's poison, every drop."
+          "Northwest, past lava, brush: a red\nwith spots of white on top.\nBring stones and axe. Don't eat it:\nit's poison, every drop."
+        ],
+        "oyster": [
+          "Out east, among the moonflowers,\nit grows in shelves of grey.\nLook for the tree that's dead and dry:\nit eats that wood away."
+        ],
+        "jackOLantern": [
+          "West of the fallen ship, there grows\na glow when day is done.\nGo out at night and follow it;\nit's poison: eat not one."
         ]
       },
       "finds.door.radiationSuit": [
@@ -229,7 +235,8 @@
         "name": "Marco",
         "lines": [
           "I lost my business, firewood, all;\nmy hands won't stop their shake.\nThe rest is not mine. But a fire:\nthat one is mine to make.",
-          "There, on that ground. Here is the axe:\ncut a dead branch, and bring\nit to the stump; stand it up straight,\nand split it with a swing.",
+          "Look for a dead tree, like this one:\nno leaf, and grey, and dry.\nThen chop a branch off with the axe;\nbring it to me, close by.",
+          "Here, to the right, you'll see the stump:\nstand the dead branch up tall;\nthen split it with the axe. Clean, rough:\nit doesn't count at all.",
           "The halves go to the ground; four times.\nBut look around with care:\ndead trees are rare round here; so walk,\nand search, and don't despair."
         ]
       },
@@ -243,6 +250,10 @@
       "npc.businessManStep": {
         "gather": [
           "Still {n} to go: dead branch, then stump,\nthen ground; and that's the way.\nDead trees are rare: so look around,\nand search, and you won't stray."
+        ],
+        "block": [
+          "You've got a branch? Then see the stump,\nright here, there on the right.\nStand the branch up on top of it:\nupright, and set it tight.",
+          "Once it stands up, your axe will split\nthe branch in halves, clean through.\nThe halves go to the fire's ground:\nthat's all you have to do."
         ],
         "ready": [
           "Four. That's a fire already; all\nit needs is just a spark.\nGo on and light it: all the wood\nis split. Go light the dark."
@@ -305,7 +316,8 @@
       },
       "npc.astronautHint": {
         "ore": [
-          "Go west, as far as lava goes:\nblack veins will give you coal;\nred veins give ore. They're stones: just break\nthem open: that's the goal.",
+          "Go west, as far as lava goes:\nthe veins lie past the heat.\nBreak stones with no vein, toss them in:\nthey cool beneath your feet.",
+          "Look there for stones with veins: black gives\nyou coal, red gives you ore.\nJust break the stone and pick it up:\nthat's what the pick is for.",
           "The furnace here will only take\none thing at a time: no mistake."
         ],
         "bloom": [

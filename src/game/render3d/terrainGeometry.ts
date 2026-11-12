@@ -425,7 +425,7 @@ const smoothMin = (a: number, b: number, k: number): number => {
   return Math.min(a, b) - h * h * k * 0.25;
 };
 
-type ShoreOptions = {
+export type ShoreOptions = {
   /** A largura do beiço, em tiles: o mínimo e quanto o ruído soma. */
   min?: number;
   variance?: number;
@@ -439,6 +439,12 @@ type ShoreOptions = {
   y?: number;
   /** Só o beiço: sem barranco, para o que não tem desnível. */
   flatOnly?: boolean;
+  /**
+   * O MIOLO que o beiço nunca cobre: o raio, em tiles a partir do centro de cada tile molhado (a beira dele é irregular,
+   * em pixel de arte). Na lava: num poço de um tile, ou num fio de lava na diagonal, a quina arredondada da terra
+   * fechava o tile inteiro, e sobrava um bloco de chão soltando faísca, sem lava nenhuma.
+   */
+  core?: number;
   /** Só a terra que tem arte conta como margem. */
   sourceOnly?: boolean;
   /** Só desenha o beiço onde isto responder sim. */
@@ -460,9 +466,14 @@ export const STONE_EDGE_MIN = -0.24;
 export const STONE_EDGE_VAR = 0.5;
 export const STONE_EDGE_WOBBLE = 2.6;
 
-/** A beira do poço é chão queimado, o mesmo tom do torrão em volta dele. */
-const LAVA_RIM = new THREE.Color(0x453826);
-export const LAVA_RIM_TINT: readonly [number, number, number] = [LAVA_RIM.r, LAVA_RIM.g, LAVA_RIM.b];
+/**
+ * A BEIRA DO POÇO DE LAVA é o chão em volta avançando sobre ela: a MESMA arte do chão de onde vem (como a margem da
+ * água), só queimada, um passo mais escura. Era uma cor lisa (#453826) num material sem arte, e em volta do lago
+ * inteiro lia como uma faixa cinza chapada (pedido do autor, 2026-11-11).
+ */
+export const LAVA_LIP_SHADE = 0.88;
+/** O miolo de lava que fica sempre à vista em cada tile (ver ShoreOptions.core). */
+export const LAVA_CORE = 0.26;
 
 /** O barranco da lava: carvão em cima, e a parede vai acendendo até o fundo, de onde vem a luz. */
 export const LAVA_BANK_BANDS: ReadonlyArray<readonly [number, number, number]> = [
@@ -470,6 +481,15 @@ export const LAVA_BANK_BANDS: ReadonlyArray<readonly [number, number, number]> =
   [0.4, 0.75, 0x4e1a08],
   [0.75, 1, 0xd4561a],
 ];
+
+/**
+ * A MARGEM DA LAVA (a da água, mais funda e mais larga: um poço de um tile precisa de curva dentro dele). A beira
+ * ondula mais e as quinas arredondam mais (2026-11-10: o lago lia como um retângulo de tiles), e o miolo nunca se
+ * cobre (`core`). A cor do beiço (o chão de onde vem, queimado) quem dá é o terreno, com `shadeAt`.
+ */
+export const LAVA_SHORE: ShoreOptions = {
+  min: 0.03, variance: 0.45, round: 0.22, corner: 0.8, wobble: 2.6, bands: LAVA_BANK_BANDS, mud: 0x2a1006, core: LAVA_CORE,
+};
 
 /**
  * A SUPERFÍCIE DA LAVA, uma malha só e em células: `aShore` vale 1 na margem e 0 a meio tile dela. O canto por
@@ -579,6 +599,7 @@ export const buildShoreGeometry = (
         if (sideX && sideZ && ex < r && ez < r) d = Math.min(d, r - Math.hypot(r - ex, r - ez));
       }
       if (src >= 0 && d < lipMin + lipVar * shoreNoise(px * wobble, pz * wobble) && (!opts.keep || opts.keep(px, pz))) out = src + 1;
+      if (out > 0 && opts.core && Math.hypot(px - tx, pz - tz) < opts.core * (0.8 + 0.4 * shoreNoise(px * 4 + 17, pz * 4 + 31))) out = 0;
     }
     memo.set(key, out);
     return out;

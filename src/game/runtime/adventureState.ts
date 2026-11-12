@@ -115,6 +115,8 @@ export interface AdventureSnapshot {
   basket: HeldItemKind[];
   seenDialogKeys: Set<string>;
   seenItems: Set<string>;
+  /** O CADERNO DO ACAMPAMENTO: cada coisa que já passou pelas mãos do herói (runtime/notebook). */
+  found: Set<string>;
   /** As conversas que ja deram o presente do NPC (a ferramenta do pedido) — um presente, uma vez. */
   giftsGiven: Set<string>;
   /**
@@ -160,6 +162,7 @@ const defaultSnapshot = (): AdventureSnapshot => ({
   basket: [],
   seenDialogKeys: new Set(),
   seenItems: new Set(),
+  found: new Set(),
   giftsGiven: new Set(),
   dugSpots: new Set(),
   machines: new Map(),
@@ -190,6 +193,7 @@ type StoredSnapshot = {
   basket?: HeldItemKind[];
   seenDialogKeys?: string[];
   seenItems?: string[];
+  found?: string[];
   giftsGiven?: string[];
   dugSpots?: string[];
   machines?: Record<string, AdventureMachine[]>;
@@ -279,6 +283,7 @@ const load = (): AdventureSnapshot => {
       basket: Array.isArray(p.basket) ? p.basket : [],
       seenDialogKeys: new Set(p.seenDialogKeys ?? []),
       seenItems: new Set(p.seenItems ?? []),
+      found: new Set(p.found ?? []),
       giftsGiven: new Set(p.giftsGiven ?? []),
       dugSpots: new Set(p.dugSpots ?? []),
       machines: cleanMachines(p.machines),
@@ -335,6 +340,7 @@ export const saveAdventure = (): void => {
     basket: s.basket,
     seenDialogKeys: [...s.seenDialogKeys],
     seenItems: [...s.seenItems],
+    found: [...s.found],
     giftsGiven: [...s.giftsGiven],
     dugSpots: [...s.dugSpots],
     machines: Object.fromEntries(s.machines),

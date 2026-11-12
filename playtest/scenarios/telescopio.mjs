@@ -16,10 +16,13 @@ const THEA = { x: 41, y: 5 };
 // O forno da Thea é FIXO, ao lado da bancada (scripts/forno-da-vega.mjs), e é ele que guia a quest.
 const FURNACE = { x: 44, y: 6 };
 const SPOT = { x: 32, y: 20 };
-// O carvão e o minério moram na margem do lago de lava, a oeste (scripts/pedras-na-lava.mjs): o veio PRETO
-// dá carvão, o vermelho dá minério. Nada da Thea depende de outro vizinho (nem do machado do Marco).
-const COAL = { x: 10, y: 6 };
-const VEIN = { x: 11, y: 7 };
+// O carvão e o minério moram do OUTRO LADO do lago de lava, no fundo do corredor do norte
+// (scripts/minas-alem-da-lava.mjs): o veio PRETO dá carvão, o vermelho dá minério. Para chegar lá, duas pedras
+// comuns afundadas na lava pela margem leste (de 11,4: 10,4 e depois 10,3). Nada da Thea depende de outro vizinho
+// (nem do machado do Marco): a picareta dela quebra a pedra comum que vira chão na lava.
+const COAL = { x: 4, y: 0 };
+const VEIN = { x: 6, y: 0 };
+const CROSSING = [{ x: 10, y: 4 }, { x: 10, y: 3 }];
 
 /**
  * A QUEST DA THEA INTEIRA, jogada: o `telescopio` a joga numa partida nova, e o `zerar` no meio da partida dele
@@ -279,11 +282,35 @@ export const playThea = async ({ driver, shot, assert, skipOpening = false }) =>
   const furnaceCatalog = await page.evaluate(() => window.gameDebug.getState().orderOpen);
   assert('O forno não abre catálogo', !furnaceCatalog, String(furnaceCatalog));
 
-  // ── 3. O CARVÃO, NO LAGO DE LAVA: o veio preto, a picareta ──────────────────────────────
+  // ── 3. A TRAVESSIA: os veios ficam do outro lado da lava ────────────────────────────────
   const coalKind = await page.evaluate(([x, y]) => window.gameDebug.props.rocks().find((r) => r.x === x && r.y === y)?.product ?? null, [COAL.x, COAL.y]);
   assert('A pedra de veio preto dá carvão', coalKind === 'charcoal', String(coalKind));
+  const here = (await state()).player;
+  const coalSides = DIRS.map(([dx, dy]) => ({ x: COAL.x + dx, y: COAL.y + dy }));
+  assert('Os veios não se alcançam sem atravessar a lava', !bfs(await solidGrid(), { x: here.worldX, y: here.worldY }, coalSides), '');
+  const isSolid = (tile) => page.evaluate(([x, y]) => window.gameDebug.world.solid(x, y), [tile.x, tile.y]);
+  for (const lava of CROSSING) {
+    if (!(await isSolid(lava))) continue;
+    if ((await state()).heldItem !== 'pickaxe') await take('pickaxe', 'a picareta (travessia)');
+    // a pedra comum inteira mais perto desta lava: a picareta a quebra, e a pedra que sai vai para a mão
+    const rock = await page.evaluate(([x, y]) => window.gameDebug.props.rocks()
+      .filter((r) => r.product === 'stone' && r.blocking)
+      .sort((a, b) => (Math.abs(a.x - x) + Math.abs(a.y - y)) - (Math.abs(b.x - x) + Math.abs(b.y - y)))[0], [lava.x, lava.y]);
+    await approachSolid(rock, 'uma pedra comum');
+    for (let i = 0; i < 12 && !(await groundTile('stone')); i += 1) await press('x', 60, 620);
+    await sleep(900);
+    await take('stone', 'a pedra');
+    await approachSolid(lava, 'a lava');
+    await press('x', 60, 400);
+    await pageWait(([x, y]) => !window.gameDebug.world.solid(x, y), [lava.x, lava.y], 'a pedra assentar na lava', 10000);
+  }
+  await shot('03-travessia', { note: 'Duas pedras afundadas na lava: o caminho para o corredor do norte' });
+  mark('travessia');
+  if ((await state()).heldItem !== 'pickaxe') await take('pickaxe', 'a picareta (depois da travessia)');
+
+  // ── 4. O CARVÃO, DO OUTRO LADO: o veio preto, a picareta ────────────────────────────────
   await approachSolid(COAL, 'o veio de carvão');
-  await shot('03-veio-de-carvao', { note: 'A pedra de carvão na margem do lago de lava' });
+  await shot('03-veio-de-carvao', { note: 'A pedra de carvão do outro lado do lago de lava' });
   for (let i = 0; i < 12 && !(await groundTile('charcoal')); i += 1) await press('x', 60, 620);
   await sleep(900);
   await take('charcoal', 'o carvão');
@@ -294,7 +321,7 @@ export const playThea = async ({ driver, shot, assert, skipOpening = false }) =>
   await shot('04-carvao', { note: 'O carvao aceso dentro do forno' });
   mark('carvao');
 
-  // ── 4. O MINÉRIO, NO MESMO LAGO ─────────────────────────────────────────────────────────
+  // ── 5. O MINÉRIO, NO MESMO CORREDOR ─────────────────────────────────────────────────────
   await take('pickaxe', 'a picareta');
   await approachSolid(VEIN, 'o veio');
   for (let i = 0; i < 12 && !(await groundTile('ore')); i += 1) await press('x', 60, 620);

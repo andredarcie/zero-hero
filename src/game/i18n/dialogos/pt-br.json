@@ -79,7 +79,7 @@
         "name": "Shui",
         "lines": [
           "Eu fico olhando os fungos:\nnão têm pressa, e têm razão.\nO cogumelo é só o fruto;\no resto vive no chão.",
-          "Seis tipos crescem no vale;\neu tenho quatro pra colher.\nLeve a faca e a cesta;\nos outros, colha por prazer.",
+          "Oito tipos crescem no vale;\neu tenho quatro pra colher.\nLeve a faca e a cesta;\nos outros, colha por prazer.",
           "Não force: corte na base,\ne a faca não perde o fio.\nEscove a terra, não lave;\nvá com calma, como o rio."
         ]
       },
@@ -91,7 +91,7 @@
         ]
       },
       "npc.radiationSuitAll": [
-        "Os seis! Você seguiu o vale,\nsem nadar contra a correnteza.\nO vermelho não serve pra nada,\npor isso dura: essa é a beleza."
+        "Os oito! Você seguiu o vale,\nsem nadar contra a correnteza.\nO vermelho não serve pra nada,\npor isso dura: essa é a beleza."
       ],
       "npc.radiationSuitHint": {
         "porcini": [
@@ -110,7 +110,13 @@
           "Ao norte, cercado de lava,\num fungo em funil, dourado.\nPedra na lava vira chão;\ngraveto pega fogo encostado."
         ],
         "flyAgaric": [
-          "A noroeste, atrás do mato\nseco, tem um vermelho pintado.\nLeve um machado. E não coma:\né veneno, tome cuidado."
+          "A noroeste, além da lava\ne do mato, um vermelho pintado.\nLeve pedra e machado. Não coma:\né veneno, tome cuidado."
+        ],
+        "oyster": [
+          "A leste, entre as flores da lua,\num fungo cresce em prateleira.\nProcure a árvore seca:\nele vive da madeira."
+        ],
+        "jackOLantern": [
+          "A oeste da nave caída,\num fungo acende no escuro.\nVá de noite e siga a luz;\né veneno: colha seguro."
         ]
       },
       "finds.door.radiationSuit": [
@@ -232,7 +238,8 @@
         "name": "Marco",
         "lines": [
           "Perdi o negócio e a lenha;\na mão treme sem parar.\nO que eu não controlo, deixo;\ndo que é meu, eu vou cuidar.",
-          "O machado está ali, na terra.\nCorte um galho que esteja morto,\nponha de pé no cepo\ne rache, direito ou torto.",
+          "Procure árvore seca, assim:\nsem folha, é fácil notar.\nCorte um galho com o machado\ne traga, que eu vou esperar.",
+          "Aqui à direita é o cepo:\nponha em pé o galho morto\ne rache com o machado:\nvale direito ou torto.",
           "Faça isso quatro vezes,\ne deixe as metades no chão.\nÁrvore seca é rara;\nprocure com atenção."
         ]
       },
@@ -246,6 +253,10 @@
       "npc.businessManStep": {
         "gather": [
           "Ainda {n} pra fazer:\ncorte, rache, deixe no chão.\nÁrvore seca é rara;\nolhe bem, com atenção."
+        ],
+        "block": [
+          "Trouxe o galho? Então olhe\no cepo, aqui à direita.\nPonha o galho em cima dele,\nem pé: deitado, ele não aceita.",
+          "Com ele em pé, o machado\nracha o galho bem no meio.\nAs metades vão pra terra\nda fogueira, sem receio."
         ],
         "ready": [
           "Quatro! Isso já dá fogueira;\nsó falta o fogo, mais nada.\nVá lá e acenda: a lenha\njá está pronta e rachada."
@@ -308,7 +319,8 @@
       },
       "npc.astronautHint": {
         "ore": [
-          "Vá a oeste, até a lava.\nVeio preto é carvão;\nveio vermelho é minério:\nquebre a pedra, e pegue com a mão.",
+          "Vá a oeste, até a lava:\ndo outro lado, há carvão.\nQuebre pedra sem veio, e jogue\nna lava: ela vira chão.",
+          "Lá, procure as pedras de veio:\nveio preto é carvão;\nveio vermelho é minério:\nquebre a pedra, e pegue com a mão.",
           "Leve ao forno aqui do lado,\num de cada vez, com cuidado."
         ],
         "bloom": [

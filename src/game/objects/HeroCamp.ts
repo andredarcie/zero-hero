@@ -4,7 +4,8 @@ import * as THREE from 'three';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import { BED_SIZE, BED_Y } from '@/game/entities/FireBed';
 import {
-  CLEARING_H, CLEARING_W, paintChart, paintClearing, paintEasel, paintLog, paintRack, paintRing, paintWoodpile,
+  CLEARING_H, CLEARING_W, paintChart, paintClearing, paintEasel, paintLog, paintNotebook, paintRack, paintRing,
+  paintWoodpile,
 } from '@/game/render3d/campArt';
 import { WHITE_SAFE_TINT } from '@/game/render3d/pixelForms';
 import { BED_TEXTURE } from '@/game/render3d/skyTextures';
@@ -22,10 +23,11 @@ import { createCanvas } from '@/game/platform/platform';
  * lei do CLAUDE.md), o TRONCO de sentar e a CLAREIRA de terra batida embaixo de tudo; e quatro lugares vazios que se
  * enchem sozinhos: cada pedido fechado deixa ali uma LEMBRANÇA de quem pediu — o varal de cogumelos da Shui, o
  * quadro da Sisi, a lenha do Marco e o mapa de estrelas da Thea. O mago manda o herói dormir aqui, e a primeira noite
- * no colchão é a da primeira visita da Morte (GameScene.sleepAtCamp).
+ * no colchão é a da primeira visita da Morte (GameScene.sleepAtCamp). Em cima do colchão, o CADERNO DE CAMPO, a
+ * coleção de tudo que o herói já pegou (scenes/game/CampNotebook), lá desde o começo.
  *
  *          x52              x53              x54        x55
- *   y47   mapa da Thea       .                .        quadro da Sisi
+ *   y47   mapa da Thea     caderno       (o Z daqui)   quadro da Sisi
  *   y48   varal da Shui   COLCHÃO         (o Z daqui) lenha do Marco
  *   y49   tronco            pedras            .        (a entrada vem do sudeste, pelo 55,50)
  *
@@ -33,7 +35,7 @@ import { createCanvas } from '@/game/platform/platform';
  * são sólidas aqui, como os achados do vale.
  */
 
-export type CampPieceKind = 'bed' | 'ring' | 'log' | 'rack' | 'easel' | 'woodpile' | 'chart';
+export type CampPieceKind = 'bed' | 'ring' | 'log' | 'notebook' | 'rack' | 'easel' | 'woodpile' | 'chart';
 
 /** Quem deixa cada lembrança: o id do pedido em dialogs/NpcQuests. */
 export const CAMP_MEMENTOS: ReadonlyArray<{ kind: CampPieceKind; quest: string; x: number; y: number }> = [
@@ -47,12 +49,15 @@ export const CAMP_BED = { x: 53, y: 48 } as const;
 export const CAMP_RING = { x: 53, y: 49 } as const;
 /** O tronco de sentar, ao lado do fogo: o herói senta nele e olha as pedras. */
 export const CAMP_LOG = { x: 52, y: 49 } as const;
+/** O caderno de campo, em cima do colchão (pedido do autor): lê-se de (54,47) ou de (53,46). */
+export const CAMP_NOTEBOOK = { x: 53, y: 47 } as const;
 /** A clareira de terra batida: o centro e o tamanho, em tiles. */
 const CLEARING = { x: 53.8, y: 48.5, w: CLEARING_W / 16, h: CLEARING_H / 16 };
 
 const PAINTERS: Readonly<Record<Exclude<CampPieceKind, 'bed'>, { paint: (rect: Paint) => void; w: number; h: number }>> = {
   ring: { paint: paintRing, w: 16, h: 16 },
   log: { paint: paintLog, w: 16, h: 16 },
+  notebook: { paint: paintNotebook, w: 16, h: 16 },
   rack: { paint: paintRack, w: 16, h: 16 },
   easel: { paint: paintEasel, w: 16, h: 16 },
   woodpile: { paint: paintWoodpile, w: 16, h: 16 },
@@ -117,6 +122,11 @@ export class HeroCamp {
       .setDisplaySize(1, 1)
       .setTint(CAMP_TINT)
       .setPosition(CAMP_LOG.x, CAMP_LOG.y - 0.05));
+    // O caderno aberto no chão, como o tronco: um nada atrás do tile.
+    this.bodies.push(w3.objects.addBillboard(texture('notebook'), 0, { groundShadow: { rx: 0.4, rz: 0.12, alpha: 0.24 } })
+      .setDisplaySize(1, 1)
+      .setTint(CAMP_TINT)
+      .setPosition(CAMP_NOTEBOOK.x, CAMP_NOTEBOOK.y - 0.05));
     this.refresh(false);
   }
 
@@ -141,6 +151,7 @@ export class HeroCamp {
     if (CAMP_BED.x === x && CAMP_BED.y === y) return 'bed';
     if (CAMP_RING.x === x && CAMP_RING.y === y) return 'ring';
     if (CAMP_LOG.x === x && CAMP_LOG.y === y) return 'log';
+    if (CAMP_NOTEBOOK.x === x && CAMP_NOTEBOOK.y === y) return 'notebook';
     const m = CAMP_MEMENTOS.find((p) => p.x === x && p.y === y);
     return m && this.mementos.has(m.quest) ? m.kind : null;
   }

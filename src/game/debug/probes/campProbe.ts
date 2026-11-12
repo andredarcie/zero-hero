@@ -48,5 +48,19 @@ export const campProbe = (s: GameScene) => {
     },
     /** As fogueiras que um vizinho mantém acesas. */
     keptLitFires: () => [...s.fire.keptLitFires].map((f) => ({ x: f.worldX, y: f.worldY, lit: f.isLit })),
+
+    /** O caderno de campo: aberto, a página aberta, e as páginas (achadas ou vulto). */
+    notebook: () => ({
+      open: s.camp.notebook.overlay !== undefined,
+      at: s.camp.notebook.overlay?.at ?? null,
+      pages: s.camp.notebook.view().pages.map((p) => ({ kind: p.kind, known: p.known })),
+    }),
+    /** Abre o caderno como o Z faz; `page` folheia até a página dessa coisa. */
+    openNotebook: (page?: string): void => {
+      s.camp.notebook.open();
+      const index = s.camp.notebook.view().pages.findIndex((p) => p.kind === page);
+      if (index >= 0) s.camp.notebook.overlay?.go(index);
+    },
+    closeNotebook: (): void => { s.camp.notebook.overlay?.close(); },
   };
 };

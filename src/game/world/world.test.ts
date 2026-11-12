@@ -17,8 +17,8 @@ const W = worldChunksX * chunkColumns;
 const H = worldChunksY * chunkRows;
 const inside = (x: number, y: number): boolean => Number.isInteger(x) && Number.isInteger(y) && x >= 0 && y >= 0 && x < W && y < H;
 
-/** As seis espécies colhidas com a faca da Shui (fungi/fungi.ts, MUSHROOM_KINDS). */
-const MUSHROOMS = ['porcini', 'morel', 'puffball', 'inkCap', 'chanterelle', 'flyAgaric'];
+/** As oito espécies colhidas com a faca da Shui (fungi/fungi.ts, MUSHROOM_KINDS). */
+const MUSHROOMS = ['porcini', 'morel', 'puffball', 'inkCap', 'chanterelle', 'flyAgaric', 'oyster', 'jackOLantern'];
 
 const count = <T>(items: T[], key: (item: T) => string): Record<string, number> =>
   items.reduce<Record<string, number>>((acc, item) => { acc[key(item)] = (acc[key(item)] ?? 0) + 1; return acc; }, {});

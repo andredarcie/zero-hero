@@ -43,6 +43,8 @@
       "chanterelle": "A golden chanterelle.",
       "flyAgaric": "A fly agaric.",
       "porcini": "A porcini.",
+      "oyster": "An oyster mushroom.",
+      "jackOLantern": "A jack-o'-lantern mushroom. Poison.",
       "dyeSeeds": "Mixed seeds. Four dye plants.",
       "dyeBundle": "The four flowers. Take them to the table.",
       "brush": "A brush. The canvas awaits.",
@@ -78,6 +80,8 @@
       "chanterelle": "Golden Chanterelle",
       "flyAgaric": "Fly Agaric",
       "porcini": "Porcini",
+      "oyster": "Oyster Mushroom",
+      "jackOLantern": "Jack-o'-Lantern",
       "altar": "Altar",
       "dyeSeeds": "Mixed seeds",
       "dyeBundle": "Dye flowers",
@@ -332,6 +336,28 @@
           "Pores underneath, not gills.",
           "Lives joined to tree roots."
         ]
+      },
+      "oyster": {
+        "latin": "Pleurotus ostreatus",
+        "named": "Ah, an oyster mushroom!",
+        "curiosity": "It hunts: a drop of it stuns tiny worms, and it digests them.",
+        "cut": "Cut the short stem, close to the bark.",
+        "clean": "Brush out the leaf caught in the gills.",
+        "notes": [
+          "Grows in shelves on dead wood, sideways.",
+          "Breaks the wood down and gives it back to the soil."
+        ]
+      },
+      "jackOLantern": {
+        "latin": "Omphalotus olearius",
+        "named": "Ah, a jack-o'-lantern!",
+        "curiosity": "It glows in the dark: the gills light up a faint green.",
+        "cut": "Cut low, where the stems join.",
+        "clean": "Brush it, but never eat it.",
+        "notes": [
+          "True gills, thin ones: the chanterelle has folds.",
+          "Looks like a chanterelle, but it's poison."
+        ]
       }
     },
     "dye": {
@@ -352,6 +378,43 @@
     "keysFurnace": "Arrows  ·  Z smelt  ·  X close",
     "keysTouchFurnace": "Tap to pick · tap to smelt",
     "unknown": "?"
+  },
+  "notebook": {
+    "title": "Field notebook",
+    "count": "{n} of {total}",
+    "sections": {
+      "tools": "Tools",
+      "materials": "Materials",
+      "neighbours": "For the neighbours",
+      "mushrooms": "Mushrooms"
+    },
+    "unknownName": "???",
+    "unknownText": "I haven't found this yet.",
+    "keys": "Arrows turn the pages  ·  X close",
+    "keysTouch": "Close the notebook",
+    "entry": {
+      "knife": "A gift from Shui, with a brush on the handle. Cutting a mushroom instead of pulling it leaves whole what it has under the ground.",
+      "axe": "Marco's axe. It fells the dry tree and splits the stick on the chopping block.",
+      "shovel": "Sisi's shovel. It opens the holes in the cracked earth, where the dye seeds will live.",
+      "bucket": "A wooden bucket. Fill it with water; the water feeds what was planted and puts out fire.",
+      "pickaxe": "Thea's pickaxe. It breaks rock, and the rock gives stone, coal or ore, depending on the vein.",
+      "scythe": "The scythe Death left at the camp. It cuts tall grass. Death never came back for it.",
+      "key": "The key to the high garden. Whoever closes the valley's last request hands it over.",
+      "wood": "A stick from a dry tree. It becomes a bridge over water, stands up on Marco's block and, lit, becomes a torch.",
+      "splitWood": "The stick split in two on the block. Split wood dries faster and catches fire more easily.",
+      "stone": "A stone the pickaxe broke loose. In water it becomes a ford; on lava it cools into ground.",
+      "charcoal": "Coal, taken from the black vein by the lava. In the furnace it steals the oxygen from the ore and leaves the iron.",
+      "ore": "Iron ore: stone with iron trapped inside, as rust. On its own it is good for nothing.",
+      "bloom": "The iron bloom that comes out of the furnace: spongy iron, full of slag. It only becomes a bar by being hammered.",
+      "iron": "A real iron bar. From the ore to here: the coal, the furnace and the hammer.",
+      "sand": "Sand from the lake shore. It is almost all silica, the stuff glass is made of.",
+      "ash": "Ash from a fire. It has potash, which helps the sand melt in a cooler fire.",
+      "glass": "Glass of sand and ash, melted in Thea's furnace. Polished, it becomes a lens.",
+      "dyeSeeds": "Sisi's mixed seeds: four plants that give dye. Each one goes in a hole.",
+      "dyeBundle": "The four dye flowers, picked. The colours of Sisi's painting come from them.",
+      "brush": "Sisi's brush. With it, the painting on the easel gets the colours of the flowers.",
+      "telescope": "Thea's telescope, with the glass lens. From the top of the plateau it brings the stars closer."
+    }
   },
   "ending": {
     "theEnd": "The End",

@@ -139,7 +139,7 @@ export class ActionVerbs {
     if (isMushroomKind(there)) return this.host.heldItem === 'knife' ? 'harvest' : null;
     if (this.host.camp.catCare.isBarrelAt(x, y)) return this.host.camp.catCare.barrelVerb();
     const camp = this.host.valley.heroCamp?.at(x, y);
-    if (camp) return camp === 'log' ? 'sit' : camp === 'bed' ? 'sleep' : 'look';
+    if (camp) return camp === 'log' ? 'sit' : camp === 'bed' ? 'sleep' : camp === 'notebook' ? 'read' : 'look';
     const find = this.host.valley.valleyFinds?.at(x, y);
     if (find) {
       if (find.view) return 'sit';

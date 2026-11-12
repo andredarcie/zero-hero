@@ -406,7 +406,7 @@ export default {
         await shot('42-inkcap-fogo', { note: 'O fogo abriu o caminho' });
         await harvest('inkCap');
         // CHANTERELLE: a pedra da picareta afunda na lava e vira passagem.
-        await clearTo(await spot('chanterelle'), 'cover', async () => {
+        const stoneInHand = async () => {
           if ((await held()) === 'stone') return;
           await hold('pickaxe');
           const plain = await page.evaluate(() => window.gameDebug.props.rocks().filter((r) => r.blocking && !r.ore).map((r) => ({ x: r.x, y: r.y })));
@@ -415,9 +415,12 @@ export default {
           await P.drain('a pedra');
           await P.pageWait(([x, y]) => !window.gameDebug.world.solid(x, y), [t.x, t.y], 'a rocha abrir', 6000).catch(() => {});
           await hold('stone');
-        }, 'a lava do chanterelle');
+        };
+        await clearTo(await spot('chanterelle'), 'cover', stoneInHand, 'a lava do chanterelle');
         await harvest('chanterelle');
-        // FLY AGARIC: o machado abre o mato morto.
+        // FLY AGARIC: no corredor do norte, atrás da lava (scripts/minas-alem-da-lava.mjs): a pedra afunda até o arbusto
+        // da frente dele (2,1), e o machado abre o mato morto.
+        await clearTo({ x: 2, y: 1 }, 'cover', stoneInHand, 'a lava do corredor do norte');
         await clearTo(await spot('flyAgaric'), 'chop', () => hold('axe'), 'o mato morto do flyAgaric');
         await harvest('flyAgaric');
 

@@ -25,7 +25,7 @@ const TELESCOPE_SEATS = [[1, 0], [0, -1], [0, 1], [-1, 0], [-1, 1], [1, 1]] as c
 /** O que QuestSetup usa de GameScene (e a cena do motor, que ele passa a quem monta objetos do mundo). */
 export type QuestSetupHost = Engine.Scene & Pick<GameScene,
   'actions' | 'adventure' | 'cameraLook' | 'camp' | 'campfireNight' | 'carry' | 'cinema' | 'cutsceneActive'
-  | 'debris' | 'delivery' | 'dialog' | 'groundItems' | 'hand' | 'heldItem' | 'hero' | 'inventory'
+  | 'debris' | 'delivery' | 'dialog' | 'dialogCam' | 'groundItems' | 'hand' | 'heldItem' | 'hero' | 'inventory'
   | 'itemManager' | 'marks' | 'npcManager' | 'orders' | 'playerWorld' | 'props' | 'query' | 'save'
   | 'seenDialogKeys' | 'seenItems' | 'sparkle' | 'steps' | 'swing' | 'torch' | 'world3d'
 >;
@@ -114,6 +114,12 @@ export class QuestSetup {
         this.host.debris.spawnDirtBurst(x, y, 6);
       },
       shake: () => this.host.world3d?.cam.shake(70, 0.006),
+      glance: (spot, at, onArrive) => this.host.dialogCam.glanceAt(spot, at, onArrive),
+      glint: (x, y, elevation) => {
+        this.host.sparkle.spawnGlint(x, y, elevation, 0.7);
+        getSoundManager().story.playKeyJingle();
+      },
+      busy: () => this.host.dialog.dialogOpen || this.host.cutsceneActive || this.host.hand.itemGetOpen,
       addFire: (x, y) => {
         // In place: o propRegistry referencia este array.
         const fire = new CampfireObject(this.host, x, y, false);

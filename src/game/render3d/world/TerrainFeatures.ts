@@ -10,7 +10,7 @@ import { SolidCastField } from '../CastShadow3D';
 import { FOREST_FLOOR_REACH, forestUnderstory, treeLookAt, type TreeLook } from '../forest';
 import { buildShadowBlobGeometry } from '../groundShadow';
 import { getBaseTexture3D } from '../textures3d';
-import { bucketKey, buildBankGeometry, buildFlatTileGeometry, buildLavaSurface, buildScorchGeometry, buildShoreGeometry, buildUprightTileGeometry, CLIFF_WALL_SET, DUNGEON_WALL_SET, LAVA_BANK_BANDS, LAVA_DEPTH_TILES, LAVA_RIM_TINT, tileKey } from '../terrainGeometry';
+import { bucketKey, buildBankGeometry, buildFlatTileGeometry, buildLavaSurface, buildScorchGeometry, buildShoreGeometry, buildUprightTileGeometry, CLIFF_WALL_SET, DUNGEON_WALL_SET, groundShadeAt, LAVA_DEPTH_TILES, LAVA_LIP_SHADE, LAVA_SHORE, tileKey } from '../terrainGeometry';
 import { buildMistCurtainGeometry, type MistUniforms } from '../glowMaterials';
 import type { TerrainMaterials } from '../terrainMaterials';
 import type { TerrainTile, TerrainSort } from './TerrainSorter';
@@ -59,7 +59,7 @@ export class TerrainFeatures {
   public constructor(private readonly host: TerrainFeaturesHost) {}
 
   public bakeLavaAndPit(t: TerrainSort, mats: TerrainMaterials, groundFrame: ReadonlyMap<number, number>): void {
-    const { lavaBedTiles, pitTiles, pitSet, solidSet } = t;
+    const { lavaBedTiles, pitTiles, pitSet, solidSet, treeSet } = t;
     // The lava basin: the same recipe, shallower — a dropped bed to close the well's bottom and
     // dark CHARRED banks (near-black basalt) walling it where the melt meets the land.
     if (lavaBedTiles.length > 0) {
@@ -67,16 +67,20 @@ export class TerrainFeatures {
         buildFlatTileGeometry(lavaBedTiles, -LAVA_DEPTH_TILES, solidSet), mats.ground,
       ));
       const lavaKeys = new Set(lavaBedTiles.map((t) => tileKey(t.x, t.z)));
-      // A MESMA MARGEM DA ÁGUA, mais funda e mais larga: um poço de um tile precisa de curva dentro dele.
+      // A margem da lava (terrainGeometry.LAVA_SHORE): o beiço veste a arte do chão de onde vem, queimada, no material
+      // do chão; e todo tile mostra lava no miolo.
+      const shade = groundShadeAt(solidSet, treeSet);
       const lavaShore = buildShoreGeometry(
         lavaKeys, lavaBedTiles, (x, z) => groundFrame.get(tileKey(x, z)) ?? null, LAVA_DEPTH_TILES,
         {
-          // a beira ondula mais e as quinas arredondam mais (2026-11-10): o lago lia como um retângulo de tiles
-          min: 0.03, variance: 0.45, round: 0.22, corner: 0.8, wobble: 2.6, bands: LAVA_BANK_BANDS, mud: 0x2a1006,
-          lipTint: LAVA_RIM_TINT,
+          ...LAVA_SHORE,
+          shadeAt: (x, z) => {
+            const [r, g, b] = shade(x, z);
+            return [r * LAVA_LIP_SHADE, g * LAVA_LIP_SHADE, b * LAVA_LIP_SHADE] as const;
+          },
         },
       );
-      this.host.terrain.addTerrainMesh(new THREE.Mesh(lavaShore.lip, mats.bank));
+      this.host.terrain.addTerrainMesh(new THREE.Mesh(lavaShore.lip, mats.ground));
       this.host.terrain.addTerrainMesh(new THREE.Mesh(lavaShore.walls, mats.lavaBank));
       this.host.terrain.addTerrainMesh(new THREE.Mesh(buildLavaSurface(lavaKeys, lavaBedTiles), mats.lava));
       this.host.terrain.addTerrainMesh(new THREE.Mesh(buildScorchGeometry(lavaKeys, lavaBedTiles), mats.bank));

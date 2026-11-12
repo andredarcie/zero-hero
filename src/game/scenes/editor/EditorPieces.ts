@@ -42,6 +42,8 @@ const PICKUP_VISUAL: Record<PickupKind, { key: string; frame?: number }> = {
   chanterelle: { key: fungusTextureKey('chanterelle') },
   flyAgaric: { key: fungusTextureKey('flyAgaric') },
   porcini: { key: fungusTextureKey('porcini') },
+  oyster: { key: fungusTextureKey('oyster') },
+  jackOLantern: { key: fungusTextureKey('jackOLantern') },
 };
 const PROP_VISUAL: Record<PropKind, { key: string; frame?: number }> = {
   campfire: { key: ASSET_KEYS.campfireFrame1 },
