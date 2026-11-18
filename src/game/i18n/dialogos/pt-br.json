@@ -69,7 +69,7 @@
     "nome": "Shui",
     "filosofia": {
       "escola": "Taoísmo",
-      "livros": "Lao-Tsé: Tao Te Ching (33 e 46 quem sabe o que basta é rico; 78 a água vence a pedra). Zhuangzi (cap. 1 e 4 a árvore inútil, que vive muito porque ninguém a corta; cap. 3 o cozinheiro Ding, que corta pelas juntas e a faca nunca cega)",
+      "livros": "Lao-Tsé: Tao Te Ching (33 e 46 quem sabe o que basta é rico; 78 a água vence a pedra). Zhuangzi (cap. 1 e 4 a árvore inútil, que vive muito porque ninguém a corta; cap. 3 o cozinheiro Ding, que corta pelas juntas e a faca nunca cega; cap. 2 tudo é um só, \"o céu, a terra e eu nascemos juntos, e as dez mil coisas e eu somos um\"; cap. 17 \"As águas de outono\": o rio, na cheia, se achava o maior de todos, até chegar ao mar e ver que não tinha fim — e a rã do poço, que não entende o mar). O chá de cogumelo e o que ela diz na volta saem daí",
       "ideia": "Seguir o caminho da natureza sem forçar (wu wei), e saber quando já basta.",
       "voz": "Calma, observa o que não se vê. Não força nada: corte, não arranque; quatro já bastam.",
       "nome": "Shui é \"água\" em chinês (水): \"o bem supremo é como a água\", que serve a tudo sem disputar (Tao Te Ching 8), e \"nada é mais macio que a água, e nada vence melhor a pedra\" (78)."
@@ -92,6 +92,20 @@
       },
       "npc.radiationSuitAll": [
         "Os oito! Você seguiu o vale,\nsem nadar contra a correnteza.\nO vermelho não serve pra nada,\npor isso dura: essa é a beleza."
+      ],
+      "npc.radiationSuitTea": [
+        "Espere: no fundo da cesta\nveio um pequeno, escondido,\nde chapéu fino e pontudo,\ngrudado no musgo colhido.",
+        "É um cogumelo alucinógeno:\ntraz uma iluminação.\nMostra que tudo é um só:\nvocê, o rio, a pedra, o chão.",
+        "Vou fazer um chá com ele;\né só esperar ferver.\nA água faz o trabalho:\nninguém precisa correr."
+      ],
+      "npc.radiationSuitTeaDrink": [
+        "Beba devagar, sem medo;\no que vier, deixe passar.\nNão brigue com o que você vê:\nseja água, deixe levar.",
+        "Dura umas horas, e passa;\neu fico aqui, do seu lado.\nNão é coisa de brincadeira:\nsó se toma com cuidado."
+      ],
+      "npc.radiationSuitTeaAfter": [
+        "Voltou? Você foi longe.\nViu o que vive no chão?\nSão os fios do fungo, ligando\na árvore, a pedra, a sua mão.",
+        "O rio, na cheia, achava\nque era o maior do lugar,\naté chegar no fim dele\ne dar de cara com o mar.",
+        "Você, guerreiro de estrada,\nachava que sabia tudo.\nHoje viu um lado do mundo\nque nunca se vê de escudo."
       ],
       "npc.radiationSuitHint": {
         "porcini": [
@@ -240,7 +254,7 @@
           "Perdi o negócio e a lenha;\na mão treme sem parar.\nO que eu não controlo, deixo;\ndo que é meu, eu vou cuidar.",
           "Procure árvore seca, assim:\nsem folha, é fácil notar.\nCorte um galho com o machado\ne traga, que eu vou esperar.",
           "Aqui à direita é o cepo:\nponha em pé o galho morto\ne rache com o machado:\nvale direito ou torto.",
-          "Faça isso quatro vezes,\ne deixe as metades no chão.\nÁrvore seca é rara;\nprocure com atenção."
+          "Faça isso duas vezes,\ne deixe as metades no chão.\nÁrvore seca é rara;\nprocure com atenção."
         ]
       },
       "npc.businessManDone": {
@@ -259,7 +273,7 @@
           "Com ele em pé, o machado\nracha o galho bem no meio.\nAs metades vão pra terra\nda fogueira, sem receio."
         ],
         "ready": [
-          "Quatro! Isso já dá fogueira;\nsó falta o fogo, mais nada.\nVá lá e acenda: a lenha\njá está pronta e rachada."
+          "Duas! Isso já dá fogueira;\nsó falta o fogo, mais nada.\nVá lá e acenda: a lenha\njá está pronta e rachada."
         ],
         "light": [
           "Vá lá e acenda a fogueira;\na lenha está pronta, inteira."
@@ -276,9 +290,6 @@
         },
         "story": [
           "Senta. Olha o fogo comigo,\ncomo quem olha um amigo.",
-          "O fogo não é uma coisa:\né uma coisa acontecendo.\nO calor tira um gás do galho,\ne é o gás que está ardendo.",
-          "O gás queima com o ar,\ne o calor solta mais gás.\nPor isso o fogo não para:\nsozinho, ele é capaz.",
-          "E essa luz? É fuligem:\npó quente, que brilha à volta.\nA árvore guardou sol\na vida inteira; o fogo solta.",
           "No fogo forte, o que cai\nvira chama, venha o que venha.\nNa vida é igual: o problema\nque aparece vira lenha."
         ],
         "farewell": [
@@ -353,8 +364,7 @@
           "Vi o fogo lá de cima.\nSobrou marshmallow? Que clima!"
         ],
         "goodbye": [
-          "A nave me achou, pelo céu.\nPor tudo, muito obrigada.\nUm amigo é um outro eu:\nlevo você na jornada.",
-          "Agora, volto pro meu planeta:\nminha casa é lá em cima.\nQuando olhar para o céu,\nacene: o céu nos aproxima."
+          "A nave me achou, pelo céu.\nPor tudo, muito obrigada.\nUm amigo é um outro eu:\nlevo você na jornada."
         ],
         "farewell": [
           "Achou os quatro! Esse espanto\nde olhar o céu e perguntar:\nfoi assim que a gente, um dia,\ncomeçou a pensar.",
@@ -376,16 +386,14 @@
       "escola": "Niilismo, e a superação dele (Nietzsche, à risca)",
       "livros": "Friedrich Nietzsche: A Gaia Ciência (§125 a morte de Deus; §341 o eterno retorno), Assim Falou Zaratustra (as três metamorfoses; a estrela dançante), Ecce Homo (amor fati; \"torna-te quem tu és\")",
       "ideia": "Os valores mais altos se desvalorizaram: nada tem sentido dado. O niilista passivo para aí; o ativo derruba os ídolos (o leão) e cria valores novos brincando (a criança), e ama o destino a ponto de querê-lo de novo, sem fim.",
-      "voz": "Calma, sem ameaça. Três noites: diagnostica, testa, abençoa. Nunca consola; pergunta. Deixa a foice na primeira."
+      "voz": "Calma, sem ameaça. Três noites: avisa, testa, abençoa. Nunca consola; pergunta. Na primeira só avisa que volta e que no fim deixa um presente para o acampamento; deixa a foice no fim da terceira."
     },
     "falas": {
       "death": {
         "name": "Morte",
         "visit": [
-          "Não se levante. Não vim\nte buscar. Eu te conheço:\nandei atrás de você\nna guerra, desde o começo.",
-          "Por onde você passava,\nnunca me faltou trabalho.\nHoje dorme sob estrelas,\na espada dorme no orvalho.",
-          "Eram seus deuses: a glória,\na honra, a vitória. Morreram.\nJá nada vale mais nada,\ne outros deuses não nasceram.",
-          "Ninguém te diz o que vale.\nO vazio é todo seu.\nAgora durma, sem pressa:\nquem sabe esperar sou eu."
+          "Não se levante. Não vim\nte buscar. Só vim te ver.\nVolto em mais duas noites:\ntenho mais o que dizer.",
+          "Na última, vou deixar\num presente no seu chão:\npro seu acampamento crescer,\nele vai te dar uma mão."
         ],
         "visit2": [
           "De novo aqui. Esperei.\nVocê só obedeceu:\nfoi camelo, levou carga;\nescolher, nunca escolheu.",
@@ -397,6 +405,7 @@
           "Esta é a última noite;\neu não volto mais. Promessa.\nO leão vira criança:\nbrinca, esquece e recomeça.",
           "Diz sim. Cria os seus valores\nbrincando, sem permissão.\nNinguém te deu um sentido:\nvocê faz um, com a mão.",
           "Não queira nada mudado,\nnem lá atrás, nem à frente.\nAme tudo como é,\ninteiro, eternamente.",
+          "O presente: minha foice.\nNão é pra colher ninguém:\ncorta o mato do acampamento\ne abre espaço pro que vem.",
           "Só quem tem caos por dentro\ndá à luz a estrela que dança.\nTorne-se quem você é.\nDurma bem. Adeus, criança."
         ]
       }
@@ -465,6 +474,9 @@
         ],
         "chart": [
           "[narrador] O mapa de estrelas, feito\npela Thea, do seu jeito."
+        ],
+        "tubEmpty": [
+          "[narrador] Sem tinta, a tina não vai tingir;\nas flores da Sisi vão servir."
         ]
       },
       "cat.barrel": [

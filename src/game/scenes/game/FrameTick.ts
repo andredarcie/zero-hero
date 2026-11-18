@@ -7,7 +7,7 @@ import type { GameScene } from '../GameScene';
 /** O que FrameTick usa de GameScene. */
 export type FrameTickHost = Pick<GameScene,
   'actions' | 'bumps' | 'camera' | 'camp' | 'chunkManager' | 'cutsceneActive' | 'dialog' | 'dialogCam' | 'fire'
-  | 'forage' | 'forge' | 'garden' | 'hand' | 'hero' | 'itemManager' | 'life' | 'machines' | 'movementController'
+  | 'forage' | 'forge' | 'garden' | 'hand' | 'hero' | 'itemManager' | 'life' | 'machines' | 'marks' | 'movementController'
   | 'npcManager' | 'orders' | 'playerWorld' | 'props' | 'query' | 'questSetup' | 'save' | 'steps' | 'streamChunks'
   | 'tileSize' | 'time' | 'torch' | 'uiTileSize' | 'verbs' | 'view'
 >;
@@ -57,7 +57,14 @@ export class FrameTick {
       this.host.view.renderProps();
       return;
     }
-    // O CATALOGO de fabricacao congela igual, a colheita de um cogumelo tambem, e o caderno (o de campo e o de desenho).
+    // O CATALOGO de fabricacao congela igual, a colheita de um cogumelo tambem, o caderno (o de campo e o de desenho), e a
+    // tina e a placa do lar (CampHome).
+    if (this.host.camp.home.isOpen) {
+      // O papel da tina e da placa fica no terço de baixo, com o herói à vista: o balão de ação some (ele ficava
+      // congelado em cima do herói, prometendo o gesto que abriu o papel).
+      if (this.host.camera) this.host.verbs.actionPrompt?.render(null, this.host.tileSize, this.host.camera, this.host.time.now, { x: this.host.playerWorld.worldX, y: this.host.playerWorld.worldY });
+      return;
+    }
     if (this.host.orders.orderOverlay || this.host.forage.foraging || this.host.camp.notebook.overlay || this.host.camp.sketching.overlay) return;
 
     if (!this.host.movementController || !this.host.chunkManager || !this.host.camera) {
@@ -94,12 +101,16 @@ export class FrameTick {
     this.host.streamChunks();
     profiler.end('update.chunks');
     this.host.steps.updateFootprints();
+    // A marca de um pedido que fechou com o herói em cima do tile dela nasce quando ele sai (QuestMarks).
+    this.host.marks.tickPending();
     this.host.forage.tickShuiWave();
     this.host.forage.tickGlow();
     this.host.camp.skipping.update(delta);
     this.host.camp.sketching.update(delta);
     // De pé em cima da pedra de meditar, depois de levantar: a altura cai conforme ele desce dela (Meditation).
     this.host.camp.meditation.update();
+    // O LAR: o nome do lugar escrito na chegada, e o sino de vento tocando nas rajadas (CampHome).
+    this.host.camp.home.update(delta);
     this.host.bumps.heroThought?.tick(delta);
     this.host.forge.updateFurnaceAsk(delta);
 

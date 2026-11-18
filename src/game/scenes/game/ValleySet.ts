@@ -17,6 +17,7 @@ import { KoiPond } from '@/game/objects/KoiPond';
 import { NatureLife } from '@/game/objects/nature/NatureLife';
 import { Waterfall } from '@/game/objects/Waterfall';
 import { HeroCamp } from '@/game/objects/HeroCamp';
+import { CampPieces } from '@/game/objects/CampPieces';
 import { NpcHomes } from '@/game/objects/NpcHomes';
 import { ValleyFinds } from '@/game/objects/ValleyFinds';
 
@@ -30,8 +31,10 @@ export class ValleySet {
   /** A casa de cada vizinho, ao lado de onde ele fica. */
   public npcHomes?: NpcHomes;
   public valleyFinds?: ValleyFinds;
-  /** O acampamento do herói, com as lembranças dos pedidos fechados (objects/HeroCamp). */
+  /** O acampamento do herói: o colchão, o fogo e o caderno, que vêm de início (objects/HeroCamp). */
   public heroCamp?: HeroCamp;
+  /** O que o jogador pôs no acampamento pelo modo de construção (objects/CampPieces). */
+  public campPieces?: CampPieces;
   /** A cachoeira do acampamento (objects/Waterfall): a nascente do lago do herói. */
   public waterfall?: Waterfall;
   /** O laguinho das carpas no pé da cachoeira (objects/KoiPond). */

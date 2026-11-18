@@ -1,4 +1,5 @@
-// O FIM: a fogueira do jardim que só o herói acende, o espeto, o marshmallow, e a cena que leva aos créditos.
+// O FIM: a fogueira do jardim que só o herói acende, o espeto, o marshmallow, e a cena que leva aos créditos (e deles
+// à manhã seguinte no acampamento: MorningAfter).
 
 import { HERO_FRAMES } from '@/game/constants';
 import type { DialogScript } from '@/game/dialogs/NpcDialogs';
@@ -20,8 +21,8 @@ const REUNION_DOLLY = 1.2;
 
 /** O que RoastEnding usa de GameScene. */
 export type RoastEndingHost = Pick<GameScene,
-  'actions' | 'bumps' | 'camp' | 'carry' | 'cinema' | 'cutsceneActive' | 'dialog' | 'fire' | 'arc'
-  | 'heldItem' | 'hero' | 'heroBillboard' | 'inventory' | 'life' | 'movementController' | 'npcManager'
+  'actions' | 'adventure' | 'bumps' | 'camp' | 'carry' | 'cinema' | 'cutsceneActive' | 'dialog' | 'fire' | 'arc'
+  | 'heldItem' | 'hero' | 'heroBillboard' | 'inventory' | 'life' | 'morning' | 'movementController' | 'npcManager'
   | 'playerWorld' | 'props' | 'query' | 'questSetup' | 'save' | 'sparkle' | 'steps' | 'torch'
   | 'tweens' | 'world3d'
 >;
@@ -198,6 +199,9 @@ export class RoastEnding {
     await this.host.cinema.wait(2600);
     void this.host.cinema.dollyTo(1, 1200);
     this.host.save.persistAdventure();
-    this.host.cinema.rollCredits();
+    // Debaixo da tela dos créditos o mundo também escurece: quando ela some, a fogueira não reaparece por um instante
+    // antes de a cena recomeçar na manhã seguinte.
+    void this.host.cinema.fadeWorld(0, 1, 2400);
+    this.host.cinema.rollCredits(this.host.adventure ? () => this.host.morning.restartAtCamp() : undefined);
   }
 }

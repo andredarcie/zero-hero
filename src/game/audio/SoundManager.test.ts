@@ -52,6 +52,10 @@ describe('os efeitos', () => {
       // O lazer: o fôlego e o perceber da meditação, a pena e o susto do desenho, a pedra que quica e a que afunda.
       ['playBreathCue', [true]], ['playBreathCue', [false]], ['playNotice', []], ['playPenScratch', []], ['playStartle', []],
       ['playStoneSkip', [1]], ['playStoneSkip', [6]], ['playStonePlunk', []],
+      // A primeira noite (a estrela cadente), e o chá da Shui: a chaleira e cada etapa da viagem.
+      ['playShootingStar', []], ['playTeaBubble', []], ['playTeaPour', []],
+      ['playTrip', ['inside']], ['playTrip', ['tingle']], ['playTrip', ['colors']], ['playTrip', ['open']],
+      ['playTrip', ['tunnel']], ['playTrip', ['bloom']], ['playTrip', ['return']],
     ];
     // Cada efeito mora numa das peças do som (WorkSounds, UiSounds, NatureSounds, StorySounds).
     const m = sm();

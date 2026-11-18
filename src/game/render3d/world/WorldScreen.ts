@@ -10,6 +10,7 @@ import { FusedBloomPass } from '../FusedBloomPass';
 import { getDofIntensity } from '@/game/runtime/graphicsSettings';
 import { platform } from '@/game/platform/platform';
 import { makeFinishShader } from '../finishShader';
+import { TripPass } from '../TripPass';
 import type { World3D } from '../World3D';
 
 // O PISO DA LARGURA da vista (ver effectiveFov): a tangente do meio-ângulo horizontal. 0,34 são
@@ -67,6 +68,16 @@ export class WorldScreen {
    * o deslocamento fracionário da câmera de pixel suave nunca descobrir a borda da tela.
    */
   public snapMarginCss = 0;
+  /** Graus somados ao FOV pelas cenas de câmera própria (o céu da primeira noite, a vista de dentro do elmo). */
+  public fovExtra = 0;
+  /**
+   * A CÂMERA DE CENA no acabamento (0..1): o desfoque, a névoa de distância, a sombra das nuvens e a vista do herói
+   * são contas de quem olha o chão de cima, com o herói no meio da tela. Olhando o céu, ou de dentro do elmo, elas
+   * borravam as estrelas e acinzentavam o alto da tela: com 1 elas saem.
+   */
+  public calm = 0;
+  /** O passo do chá da Shui, depois do acabamento (ver TripPass); desligado fora dele. */
+  public trip!: TripPass;
 
   public constructor(private readonly host: WorldScreenHost) {}
 
@@ -125,7 +136,7 @@ export class WorldScreen {
    */
   public effectiveFov(aspect: number): number {
     const need = THREE.MathUtils.radToDeg(2 * Math.atan(PORTRAIT_MIN_HALF_TAN_X / Math.max(0.1, aspect)));
-    return Math.min(Math.max(this.host.params.fov, PORTRAIT_FOV_CAP), Math.max(this.host.params.fov, need));
+    return Math.min(Math.max(this.host.params.fov, PORTRAIT_FOV_CAP), Math.max(this.host.params.fov, need)) + this.fovExtra;
   }
 
   /**
@@ -179,6 +190,9 @@ export class WorldScreen {
     this.host.air.setSize(w, h);
     this.finishPass.uniforms.tAir.value = this.host.air.texture;
     this.composer.addPass(this.finishPass);
+    // Desligado, ele nem roda: o acabamento volta a ser o último e desenha direto na tela.
+    this.trip = new TripPass(w, h, this.finishPass.uniforms);
+    this.composer.addPass(this.trip);
     this.syncFinishUniforms();
 
     this.host.mirror.createTarget(this.composer.renderTarget1, w, h);
@@ -208,6 +222,7 @@ export class WorldScreen {
     u.uSaturation.value = this.host.params.saturation;
     u.uShadeSat.value = Math.min(1, Math.max(0, this.host.params.shadeSat));
     u.uContrast.value = this.host.params.contrast;
+    u.uCalm.value = Math.min(1, Math.max(0, this.calm));
   }
 
   /** Resize the backing store to the current window × renderScale (ver renderSize). */
@@ -240,6 +255,7 @@ export class WorldScreen {
       this.bloomPass.setSize(w, h);
       this.host.air.setSize(w, h);
       (this.finishPass.uniforms.uResolution.value as THREE.Vector2).set(w, h);
+      this.trip.setSize(w, h);
     }
   }
 }

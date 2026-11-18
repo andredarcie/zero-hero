@@ -11,6 +11,12 @@ import type { DialogOverlay } from './DialogOverlay';
 import { MIN_VERSE_SCALE, isIndentedVerse, versePauseAfter } from './poemLayout';
 
 const CHAR_DELAY_MS = 28;
+/**
+ * O ANDAMENTO da datilografia (pedido do autor, 2026-11-16: "acelera um pouco mais"): toda espera, a da letra, a da
+ * pontuação e a do fim do verso, sai multiplicada por ele. Um fator só, para cada personagem continuar com o seu ritmo
+ * (a Morte mais lenta que a Thea), só que todos mais ligeiros.
+ */
+const TYPE_TEMPO = 0.7;
 /** Palavra em maiúsculas é o nome da coisa que importa (BALDE, TOCHA): ela entra com mais peso. */
 const EMPHASIS = /^\p{Lu}{3,}$/u;
 export type DialogOption = {
@@ -69,7 +75,7 @@ export class DialogLineWriter {
     if (speaks && this.host.persona.radio) getSoundManager().ui.playRadioClick(false);
     // Fala já lida (runtime/readLines) aparece inteira: quem volta para relembrar não espera a datilografia.
     if (isInstantText() || wasLineRead(line.text)) { this.skipTypewriter(); return; }
-    this.typeNextChar(CHAR_DELAY_MS);
+    this.typeNextChar(CHAR_DELAY_MS * TYPE_TEMPO);
   }
 
   /** Uma letra de cada vez: a espera muda com quem fala e com a pontuação da letra anterior. */
@@ -93,7 +99,7 @@ export class DialogLineWriter {
         next += versePauseAfter(this.verseCount, this.verseRow);
         this.verseRow++;
       }
-      this.typeNextChar(next);
+      this.typeNextChar(next * TYPE_TEMPO);
     });
   }
 

@@ -145,7 +145,14 @@ export const makePlayer = ({ page, log = console.log }) => {
     if (Math.abs(dx) + Math.abs(dy) !== 1) throw new Error(`face: ${JSON.stringify(target)} nao e vizinho de ${st.player.worldX},${st.player.worldY}`);
     if (st.facing && st.facing.dx === dx && st.facing.dy === dy) return;
     await press(ARROW[`${dx},${dy}`], 40, 170);
-    const now = await state();
+    // Um jogador aperta o botão depois de ver o herói virado: o toque pode cair no fim do passo anterior, e a
+    // virada só sai quando ele assenta. Sem esperar, o Z ia para o lado de antes (a mesa da Sisi, 2026-11-16).
+    let now = await state();
+    for (let i = 0; i < 8 && !(now.facing?.dx === dx && now.facing?.dy === dy); i += 1) {
+      if (i === 4) await press(ARROW[`${dx},${dy}`], 40, 120);
+      await sleep(80);
+      now = await state();
+    }
     if (now.player.worldX !== st.player.worldX || now.player.worldY !== st.player.worldY) throw new Error(`face: o heroi andou em vez de virar (alvo ${target.x},${target.y})`);
   };
 

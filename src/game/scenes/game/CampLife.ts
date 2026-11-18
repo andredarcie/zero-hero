@@ -1,13 +1,15 @@
 // O DESCANSO E A COMPANHIA: sentar na fogueira, dormir no acampamento, o banco com vista, bater numa porta, o vizinho
-// que traz chá e o que vem sentar junto, e a foice da Morte.
+// que traz chá e o que vem sentar junto, o chá de cogumelo da Shui, e a foice da Morte.
 
 import { tLines, type I18nLine } from '@/game/i18n/i18n';
 import { canStep } from '@/game/world/relief';
 import { findVisitPath, fireSeats, VISIT_RADIUS, type VisitTile } from '@/game/world/visitPath';
 import { CAMP_BED, CAMP_RING } from '@/game/objects/HeroCamp';
+import { CAMP_SEAT_LIFT } from '@/game/objects/CampPieces';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { getDialog, getDialogVoice } from '@/game/world/WorldData';
 import { adventureState } from '@/game/runtime/adventureState';
+import { pathStaysOpen } from '@/game/runtime/homeGrid';
 import { FireVisitor } from '@/game/entities/FireVisitor';
 import type { HomeKind } from '@/game/render3d/homeTextures';
 import type { ValleyFind } from '@/game/objects/ValleyFinds';
@@ -18,8 +20,11 @@ import { isNightTime, isSleepTime, setTimeScale } from '@/game/runtime/timeOfDay
 import { t } from '@/game/i18n/i18n';
 import { CatCare } from '@/game/systems/CatCare';
 import { AnimalSketching } from './AnimalSketching';
+import { BuildMode } from './BuildMode';
+import { CampHome } from './CampHome';
 import { CampNotebook } from './CampNotebook';
 import { Meditation } from './Meditation';
+import { ShuiTea } from './ShuiTea';
 import { StoneSkipping } from './StoneSkipping';
 import { Resting } from '@/game/systems/Resting';
 import { USE_COOLDOWN_MS } from './sceneDefs';
@@ -29,10 +34,11 @@ const FIND_STEP_MS = 300;
 
 /** O que CampLife usa de GameScene (e a cena do motor, que ele passa a quem monta objetos do mundo). */
 export type CampLifeHost = Engine.Scene & Pick<GameScene,
-  'actions' | 'adventure' | 'arc' | 'camera' | 'cameraLook' | 'camp' | 'carry' | 'cinema' | 'cutsceneActive'
-  | 'debris' | 'dialog' | 'groundItems' | 'hand' | 'heldItem' | 'hero' | 'inventory' | 'itemManager' | 'movementController'
-  | 'npcManager' | 'pause' | 'playerWorld' | 'query' | 'questSetup' | 'save' | 'seenDialogKeys' | 'seenItems'
-  | 'sparkle' | 'steps' | 'tileSize' | 'uiTileSize' | 'valley' | 'verbs' | 'world3d'
+  'actions' | 'adventure' | 'arc' | 'bumps' | 'camera' | 'cameraLook' | 'cameraLookBlend' | 'camp' | 'carry' | 'cinema'
+  | 'cutsceneActive' | 'debris' | 'dialog' | 'dialogCam' | 'groundItems' | 'hand' | 'heldItem' | 'hero' | 'inventory'
+  | 'itemManager' | 'movementController' | 'npcManager' | 'orders' | 'pause' | 'playerWorld' | 'props' | 'query'
+  | 'questSetup' | 'save' | 'scene' | 'seenDialogKeys' | 'seenItems' | 'sparkle' | 'steps' | 'tileSize' | 'torch'
+  | 'uiTileSize' | 'valley' | 'verbs' | 'view' | 'world3d'
 >;
 
 export class CampLife {
@@ -47,8 +53,19 @@ export class CampLife {
   public readonly sketching: AnimalSketching;
   public readonly skipping: StoneSkipping;
   public readonly meditation: Meditation;
+  // O CHÁ DA SHUI, quando o pedido dos cogumelos fecha: o cogumelo que veio na cesta, a viagem, a volta.
+  public readonly tea: ShuiTea;
+  // O LAR: a bancada que guarda o material, as peças postas, o mato cortado, o nome na chegada (CampHome), e o modo de
+  // construção da bancada, com o jogo parado e a grade no chão (BuildMode).
+  public readonly home: CampHome;
+  public readonly build: BuildMode;
 
   public constructor(private readonly host: CampLifeHost) {
+    this.tea = new ShuiTea(host);
+    this.home = new CampHome(host);
+    this.build = new BuildMode(host);
+    // o mato que volta só fecha um tile se a grade disser que ninguém fica preso (o caminho até as peças e a saída)
+    this.home.grassCanClose = (x, y) => pathStaysOpen(this.build.world(), { x, y });
     this.sketching = new AnimalSketching(host);
     this.skipping = new StoneSkipping(host);
     this.meditation = new Meditation(host);
@@ -86,7 +103,11 @@ export class CampLife {
       },
       onStoodUp: (was) => {
         if (was.sleeping) this.host.carry.updateBackItem();
-        if (was.atFind) this.host.cameraLook = undefined;
+        if (was.atFind) {
+          this.host.cameraLook = undefined;
+          // do assento baixo (o tronco) o corpo desce para o chão
+          if (this.host.hero.lift > 0) this.host.tweens.add({ targets: this.host.hero, lift: 0, duration: 220, ease: 'Quad.easeIn' });
+        }
         this.host.questSetup.clearMug();
         this.host.actions.useBufferMs = 0;
         this.host.actions.useCooldownMs = USE_COOLDOWN_MS;
@@ -189,10 +210,18 @@ export class CampLife {
     this.host.save.persistAdventure();
   }
 
-  /** O Z numa peça do acampamento: uma linha curta, do que ela é (e de quem é a lembrança). */
+  /**
+   * O Z numa peça do acampamento. As de início: o caderno abre, o colchão deita, o fogo frio se lê. As que o jogador pôs
+   * (CampHome.usePieceAt): a tina tinge, a placa se escreve, o tronco e o banquinho são de sentar, a lembrança se lê.
+   */
   public useCampAt(wx: number, wy: number): boolean {
     const piece = this.host.valley.heroCamp?.at(wx, wy);
-    if (!piece) return false;
+    if (!piece) {
+      return this.home.usePieceAt(wx, wy, (key) => this.narrate(tLines(key)), (view) => {
+        const seat = this.host.valley.campPieces?.at(wx, wy);
+        void this.sitAtFind({ kind: 'bench', x: wx, y: wy }, view, seat ? CAMP_SEAT_LIFT[seat] ?? 0 : 0);
+      });
+    }
     // O CADERNO: abrir e ler (o som é o do papel, não o da madeira).
     if (piece === 'notebook') {
       this.notebook.open();
@@ -202,11 +231,6 @@ export class CampLife {
     // O COLCHÃO: deitar e dormir.
     if (piece === 'bed') {
       void this.sleepAtCamp();
-      return true;
-    }
-    // O TRONCO é lugar de sentar: o herói senta nele e fica olhando as pedras do fogo.
-    if (piece === 'log') {
-      void this.sitAtFind({ kind: 'bench', x: wx, y: wy }, { x: CAMP_RING.x, y: CAMP_RING.y });
       return true;
     }
     this.narrate(tLines(`camp.${piece}`));
@@ -243,10 +267,12 @@ export class CampLife {
 
   /**
    * SENTAR NUM ACHADO: o herói dá um passo para cima dele e vira de frente. O tile continua sólido para
-   * quem vem de fora, mas nada impede de sair dele, e por isso levantar é só andar.
+   * quem vem de fora, mas nada impede de sair dele, e por isso levantar é só andar. `seatLift` é a altura do assento
+   * baixo (o tronco do acampamento, objects/CampPieces): o corpo sobe junto com o passo e desce ao levantar.
    */
-  private async sitAtFind(find: ValleyFind, view: { x: number; y: number }): Promise<void> {
+  private async sitAtFind(find: ValleyFind, view: { x: number; y: number }, seatLift = 0): Promise<void> {
     this.host.cutsceneActive = true;
+    if (seatLift > 0) this.host.tweens.add({ targets: this.host.hero, lift: seatLift, duration: FIND_STEP_MS, ease: 'Quad.easeOut' });
     await this.host.cinema.scriptStep(find.x - this.host.playerWorld.worldX, find.y - this.host.playerWorld.worldY, FIND_STEP_MS);
     this.host.movementController?.interruptMovement(find.x, find.y);
     this.host.cutsceneActive = false;

@@ -27,11 +27,13 @@ const QUEST_MARKS: readonly QuestMarkDef[] = [
 /** O que QuestMarks usa de GameScene. */
 export type QuestMarksHost = Pick<GameScene,
   'actions' | 'adventure' | 'cinema' | 'cutsceneActive' | 'dialog' | 'hero' | 'itemManager' | 'npcManager'
-  | 'pause' | 'playerWorld' | 'query' | 'questSetup' | 'save' | 'sparkle' | 'steps' | 'tweens' | 'world3d'
+  | 'pause' | 'playerWorld' | 'query' | 'questSetup' | 'save' | 'sparkle' | 'steps' | 'tweens' | 'verbs' | 'world3d'
 >;
 
 export class QuestMarks {
   public readonly questMarks: QuestMarkState[] = [];
+  /** Uma marca fechou com o herói em cima do tile dela, e espera ele sair (ver `refreshQuestMarks`). */
+  private waitingForHero = false;
 
   public constructor(private readonly host: QuestMarksHost) {}
 
@@ -85,7 +87,10 @@ export class QuestMarks {
       taken.add(`${tile.x},${tile.y}`);
       const quest = questFor(def.dialog);
       const done = this.host.adventure && quest !== undefined && isQuestDone(quest);
-      const mark: QuestMarkState = { def, tile, done, npcAt: at };
+      // Fechada, mas com o herói voltando em cima do tile dela (o save foi feito ali): ela espera ele sair.
+      const pending = done && this.heroOn(tile);
+      if (pending) this.waitingForHero = true;
+      const mark: QuestMarkState = { def, tile, done: done && !pending, npcAt: at };
       this.questMarks.push(mark);
       this.drawQuestMark(mark, false);
     }
@@ -160,15 +165,36 @@ export class QuestMarks {
     this.host.sparkle.spawnGlint(mark.tile.x, mark.tile.y, 0.7, 0.5);
   }
 
-  /** Um pedido fechou: as marcas que ainda nao sabiam disso mudam agora, com festa. */
+  /**
+   * Um pedido fechou: as marcas que ainda nao sabiam disso mudam agora, com festa. A marca que ia nascer DEBAIXO do
+   * herói (ele falou com o vizinho justo do tile dela) espera ele sair: nascendo nele, os dois desenhos brigavam pelo
+   * mesmo lugar e o herói piscava (o chá da Shui o deixava ali quase um minuto), e ele ficava preso num tile sólido.
+   */
   public refreshQuestMarks(): void {
+    this.waitingForHero = false;
     for (const mark of this.questMarks) {
       if (mark.done) continue;
       const quest = questFor(mark.def.dialog);
       if (!quest || !isQuestDone(quest)) continue;
+      if (this.heroOn(mark.tile)) {
+        this.waitingForHero = true;
+        continue;
+      }
       mark.done = true;
       this.drawQuestMark(mark, true);
     }
+  }
+
+  /** A marca que esperava o herói sair do tile dela nasce assim que ele sai (FrameTick, com o jogo andando). */
+  public tickPending(): void {
+    if (this.waitingForHero) this.refreshQuestMarks();
+  }
+
+  /** O corpo DESENHADO do herói ainda está sobre o tile (a lógica já salta para o destino no começo do passo). */
+  private heroOn(tile: { x: number; y: number }): boolean {
+    const v = this.host.verbs.heroVisualTile();
+    const p = this.host.playerWorld;
+    return (p.worldX === tile.x && p.worldY === tile.y) || Math.abs(v.x - tile.x) + Math.abs(v.y - tile.y) < 0.95;
   }
 
   public isQuestMarkAt(wx: number, wy: number): boolean {

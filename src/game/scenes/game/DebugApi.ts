@@ -11,12 +11,16 @@ import { questSnapshot } from '@/game/runtime/QuestLog';
 import type { GameScene } from '../GameScene';
 import { type GameDebugApi } from '@/game/debug/debugHooks';
 import { buildProbes } from '@/game/debug/probes';
+import { DevPanel } from '@/game/debug/DevPanel';
+import { DevTools, devToolsAllowed } from './DevTools';
 import { GAME_SCENE_KEY } from './sceneDefs';
 
 
 export class DebugApi {
   public debugApi?: GameDebugApi;
   public clearDebugHooks?: () => void;
+  /** O painel de testes do localhost (debug/DevPanel), quando existe. */
+  public devPanel?: DevPanel;
 
   public constructor(private readonly host: GameScene) {}
 
@@ -140,9 +144,26 @@ export class DebugApi {
     if (import.meta.env.DEV) Object.assign(this.debugApi, buildProbes(this.host));
     registerGameDebugApi(this.debugApi, this.host);
     this.clearDebugHooks?.();
-    this.clearDebugHooks = registerSceneDebugHooks(this.host, () => JSON.stringify({
+    const clearHooks = registerSceneDebugHooks(this.host, () => JSON.stringify({
       coordinateSystem: 'tile grid; origin=(0,0) at world top-left; +x east/right, +y south/down',
       ...this.debugApi?.getState(),
     }));
+    // O PAINEL DE TESTES (tecla ' à esquerda do 1; ver debug/DevPanel): só na aventura, e só rodando local.
+    const panel = this.host.adventure && devToolsAllowed()
+      ? new DevPanel(new DevTools(this.host), {
+        pause: () => {
+          if (this.host.scene.isPaused()) return false;
+          this.host.scene.pause();
+          return true;
+        },
+        resume: () => { this.host.scene.resume(); },
+      })
+      : undefined;
+    this.devPanel = panel;
+    this.clearDebugHooks = () => {
+      clearHooks();
+      panel?.destroy();
+      if (this.devPanel === panel) this.devPanel = undefined;
+    };
   }
 }

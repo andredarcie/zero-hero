@@ -88,11 +88,11 @@ export class ItemUseGround {
     const grass = this.host.query.getTallGrassAt(wx, wy);
     if (grass?.blocking && grass.isTall) {
       if (this.host.heldItem === 'scythe') {
-        this.host.swing.swingHeld(wx, wy);
-        getSoundManager().work.playGrassCut();
+        // A roçada (ToolSwing.mowGrass): o corte cai no meio da varrida, com as pontas voando e o som do corte.
         // Corta rente ao talo e só (pedido do autor): o mato não dá semente, ele só abre a passagem.
-        this.host.time.delayedCall(110, () => { grass.cut(); });
-      } else if (this.host.torch.isFlammableHeld && this.host.torch.heldOnFire) {
+        this.host.swing.mowGrass(wx, wy, grass);
+      } else if (this.host.torch.isFlammableHeld && this.host.torch.heldOnFire && !grass.green) {
+        // (O mato verde do acampamento não pega fogo: só a foice — ele cai no tremor abaixo.)
         this.host.swing.swingHeld(wx, wy);
         this.host.time.delayedCall(150, () => {
           if (!grass.ignite()) return;

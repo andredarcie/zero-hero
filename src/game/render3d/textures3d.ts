@@ -165,6 +165,25 @@ export const registerTexture3D = (key: string, texture: THREE.Texture): void => 
   snapshotCanvasPixels(key, texture);
 };
 
+/** A imagem de uma folha (a carregada, ou a que `replaceTextureImage` pôs no lugar), ou null se a chave não existe. */
+export const textureImage = (key: string): (CanvasImageSource & { width: number; height: number }) | null =>
+  (baseTextures.get(key)?.image as (CanvasImageSource & { width: number; height: number }) | undefined) ?? null;
+
+/**
+ * TROCA A IMAGEM DE UMA FOLHA INTEIRA no lugar, sem mudar a chave (a capa tingida do herói: render3d/heroDye). Os
+ * quadros já recortados dividem a mesma fonte com a base, então todos sobem de novo na GPU; os pixels guardados para a
+ * sombra e a grama são esquecidos e relidos da imagem nova. O contorno (o alfa) tem de ser o mesmo da imagem velha:
+ * as margens medidas (`frameFootPad`) continuam valendo.
+ */
+export const replaceTextureImage = (key: string, image: HTMLCanvasElement): void => {
+  const base = baseTextures.get(key);
+  if (!base) return;
+  base.image = image;
+  base.needsUpdate = true;
+  for (const frame of frameTextures.get(key) ?? []) if (frame) frame.needsUpdate = true;
+  framePixels.delete(key);
+};
+
 /**
  * Um canvas desenhado em código que já traz os PRÓPRIOS pixels (o `paint` da natureza os tem na mão: ele pinta num
  * ImageData e o põe no canvas). Ver `snapshotCanvasPixels`.

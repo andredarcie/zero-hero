@@ -8,19 +8,20 @@ import { world3d } from '@/game/render3d/World3D';
 
 /**
  * A PEDRA DE MEDITAR (pedido do autor, 2026-11-12: o minijogo de meditação, num lugar do mapa que não tinha quase
- * nada). O lugar é o alto da colina de capim ao norte do centro do vale, o ponto MAIS LONGE de tudo no mapa medido
- * (scratchpad mapa2: até 24 passos de qualquer vizinho, item ou achado): um platô de um nível (x 28..33, y 19..21),
- * com a escada ao sul (31,22), o laguinho de taboa a noroeste e a vista do vale para baixo.
+ * nada). O lugar é a clareira de capim na borda da mata de outono, a leste do centro do vale (2026-11-16, pedido do
+ * autor: antes ela ficava no planalto da Thea, e a pilha de pedras caía no MESMO tile do marco do telescópio, com a
+ * nave do fim pousando em cima da pedra). Medido no world.json e no código: nenhuma peça, vizinho, item ou tile de
+ * quest a menos de 5 tiles, e os 20 tiles em volta das peças livres; 35 passos do começo, sem ferramenta.
  *
- *          x30                x31          x32
- *   y20   PEDRA (senta aqui)   .          pilha de pedras
- *   y21   (o Z daqui, ou de (31,20), (29,20), (30,19))
+ *          x44                x45          x46
+ *   y39   PEDRA (senta aqui)   .          pilha de pedras
+ *   y40   (o Z daqui, ou de (45,39), (43,39), (44,38))
  *
  * As duas peças são sólidas, como as do acampamento; o chão delas fica limpo no world.json (scripts/meditacao.mjs,
  * com a MESMA tabela, e a prova de que do começo se chega lá).
  */
-export const MEDITATION_SEAT = { x: 30, y: 20 } as const;
-export const MEDITATION_CAIRN = { x: 32, y: 20 } as const;
+export const MEDITATION_SEAT = { x: 44, y: 39 } as const;
+export const MEDITATION_CAIRN = { x: 46, y: 39 } as const;
 
 export type MeditationPiece = 'seat' | 'cairn';
 

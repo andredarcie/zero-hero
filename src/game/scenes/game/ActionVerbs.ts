@@ -10,6 +10,7 @@ import type { ActionPromptView, PromptRow } from '@/game/runtime/ActionPrompt';
 import type { GameScene } from '../GameScene';
 import type { ActionPrompt } from '@/game/runtime/ActionPrompt';
 import { ITEM_VISUAL_2D } from './sceneDefs';
+import { pieceHandVerb } from './CampHome';
 
 /** O que ActionVerbs usa de GameScene. */
 export type ActionVerbsHost = Pick<GameScene,
@@ -144,7 +145,10 @@ export class ActionVerbs {
     if (isMushroomKind(there)) return this.host.heldItem === 'knife' ? 'harvest' : null;
     if (this.host.camp.catCare.isBarrelAt(x, y)) return this.host.camp.catCare.barrelVerb();
     const camp = this.host.valley.heroCamp?.at(x, y);
-    if (camp) return camp === 'log' ? 'sit' : camp === 'bed' ? 'sleep' : camp === 'notebook' ? 'read' : 'look';
+    if (camp) return camp === 'bed' ? 'sleep' : camp === 'notebook' ? 'read' : 'look';
+    // As peças que o jogador pôs (CampHome.pieceHandVerb): o enfeite que só enfeita não pede nada à mão.
+    const piece = this.host.valley.campPieces?.at(x, y);
+    if (piece) return pieceHandVerb(piece);
     // A pedra do alto da colina: meditar (a pilha de pedras ao lado é só para ver).
     const stone = this.host.camp.meditation.at(x, y);
     if (stone) return stone === 'seat' ? 'meditate' : null;
@@ -161,7 +165,7 @@ export class ActionVerbs {
       return this.host.heldItem === 'wood' ? 'roast' : null;
     }
     if (this.host.query.getRestFireAt(x, y)?.isLit) return 'sit';
-    if (this.host.query.getToolboxAt(x, y)) return 'craft';
+    if (this.host.query.getToolboxAt(x, y)) return 'build';
     if (this.host.query.getFurnaceAt(x, y)) {
       const need = this.host.questSetup.astronomerQuest?.furnaceNeed();
       return need && this.host.heldItem === need ? 'feed' : null;
@@ -171,6 +175,8 @@ export class ActionVerbs {
       if (altar.carrying === null) return this.host.heldItem !== 'none' ? 'put' : null;
       return hammerResult(altar.carrying) !== undefined ? 'hammer' : 'takeBack';
     }
+    // O ENFEITE na mão e chão livre à frente: pousar é o gesto (o lar, CampHome).
+    if (this.host.hand.canPlaceAt(x, y)) return 'put';
     // Água aberta à frente: um seixo da beira para quicar (StoneSkipping).
     return this.host.camp.skipping.canSkipAt(x, y) ? 'skip' : null;
   }
@@ -181,6 +187,10 @@ export class ActionVerbs {
     // Na fogueira de vizinho não se dorme: só no acampamento.
     if (fire && !this.host.torch.heldActsOnFire(fire)) return null;
     const held = this.host.heldItem;
+    // O LAR (CampHome): o material ao lado da bancada; o relógio de sol e o sino respondem a qualquer mão.
+    if (this.host.camp.home.canStockAt(x, y)) return 'stock';
+    const decor = this.host.camp.home.decorVerbAt(x, y);
+    if (decor) return decor;
     if (held === 'none') {
       const altar = this.host.query.getAltarAt(x, y);
       if (altar) return altar.carrying ? (hammerResult(altar.carrying) !== undefined ? 'hammer' : 'takeBack') : null;
@@ -224,7 +234,8 @@ export class ActionVerbs {
     const grass = this.host.query.getTallGrassAt(x, y);
     if (grass?.blocking && grass.isTall) {
       if (held === 'scythe') return 'mow';
-      return lit ? 'burn' : null;
+      // O mato verde do acampamento não pega fogo: só a foice.
+      return lit && !grass.green ? 'burn' : null;
     }
     if (this.host.query.getLockedDoorAt(x, y)?.blocking) return held === 'key' ? 'unlock' : null;
     return held === 'shovel' && this.host.garden.canDigAt(x, y) ? 'dig' : null;

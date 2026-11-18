@@ -17,7 +17,7 @@ import { FORAGER_DIALOG, LUMBER_DIALOG, PAINTER_DIALOG, SKY_DIALOG } from './sce
 
 /** O que NpcDialog usa de GameScene (e a cena do motor, que ele passa a quem monta objetos do mundo). */
 export type NpcDialogHost = Engine.Scene & Pick<GameScene,
-  'actions' | 'adventure' | 'arc' | 'cutsceneActive' | 'delivery' | 'dialogCam' | 'forage' | 'heldItem'
+  'actions' | 'adventure' | 'arc' | 'camp' | 'cutsceneActive' | 'delivery' | 'dialogCam' | 'forage' | 'heldItem'
   | 'intro' | 'npcManager' | 'orders' | 'playerWorld' | 'questSetup' | 'save' | 'seenDialogKeys' | 'seenItems'
   | 'sparkle' | 'steps' | 'time'
 >;
@@ -143,6 +143,8 @@ export class NpcDialog {
         }
         this.host.delivery.celebrateQuestDone(npcWorld);
       }
+      // O CHÁ DA SHUI: fechado o pedido dos cogumelos (ou na primeira conversa depois, num save de antes dele).
+      if (askId === FORAGER_DIALOG && npcWorld && this.host.camp.tea.due()) this.host.camp.tea.queue(npcWorld);
     });
     if (basket && npcWorld) {
       // A cesta vira de uma vez: um cogumelo atrás do outro, e só então a conversa.

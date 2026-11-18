@@ -54,8 +54,11 @@
       "glass": "Vidro. Leve à Thea.",
       "telescope": "O telescópio!",
       "stool": "Um banquinho. Não serve para nada. Fica bonito.",
-      "lantern": "Uma lanterna. Ponha onde quiser.",
-      "flowerPot": "Um vaso com uma flor. Ponha onde quiser."
+      "lantern": "Uma lanterna. Acende quando escurece.",
+      "flowerPot": "Um vaso de pedra. A flor segue a estação.",
+      "sundial": "Um relógio de sol. A sombra diz a hora.",
+      "cairn": "Pedras empilhadas, quietas, em equilíbrio.",
+      "windChime": "Um sino de vento. Toca quando venta."
     },
     "name": {
       "sword": "Espada",
@@ -93,7 +96,10 @@
       "telescope": "Telescópio",
       "stool": "Banquinho",
       "lantern": "Lanterna",
-      "flowerPot": "Vaso"
+      "flowerPot": "Vaso",
+      "sundial": "Relógio de sol",
+      "cairn": "Pilha de pedras",
+      "windChime": "Sino de vento"
     }
   },
   "dialog": {
@@ -226,7 +232,13 @@
     "takeBack": "Tirar",
     "pickUp": "Recolher",
     "feed": "Colocar",
-    "pet": "Fazer carinho"
+    "pet": "Fazer carinho",
+    "dye": "Tingir",
+    "write": "Escrever",
+    "stock": "Guardar",
+    "readHour": "Ver a hora",
+    "ring": "Tocar",
+    "build": "Construir"
   },
   "controls": {
     "hint": "Z fala e pega · X usa",
@@ -392,7 +404,8 @@
       "materials": "Materiais",
       "neighbours": "Para os vizinhos",
       "mushrooms": "Cogumelos",
-      "animals": "Bichos"
+      "animals": "Bichos",
+      "home": "Casa"
     },
     "unknownName": "???",
     "unknownText": "Ainda não achei isto.",
@@ -420,7 +433,13 @@
       "dyeSeeds": "Sementes sortidas da Sisi: quatro plantas que dão tinta. Cada uma vai numa cova.",
       "dyeBundle": "As quatro flores de tinta, colhidas. Delas saem as cores do quadro da Sisi.",
       "brush": "O pincel da Sisi. Com ele, o quadro no cavalete ganha as cores das flores.",
-      "telescope": "O telescópio da Thea, com a lente de vidro. Lá do alto do planalto, ele aproxima as estrelas."
+      "telescope": "O telescópio da Thea, com a lente de vidro. Lá do alto do planalto, ele aproxima as estrelas.",
+      "stool": "Um banquinho de graveto, feito na bancada do acampamento. Serve para enfeitar.",
+      "lantern": "Graveto e carvão. Acende sozinha quando escurece; de dia, descansa.",
+      "flowerPot": "Um vaso de pedra com carvão no fundo: o carvão segura água e adubo na terra. A flor muda com a estação.",
+      "sundial": "A sombra do graveto anda com o sol e aponta a hora. De noite, sem sol, ele não marca nada.",
+      "cairn": "Pedras empilhadas, a maior embaixo. Pilhas assim marcam trilhas nas montanhas há milhares de anos.",
+      "windChime": "Lascas de minério penduradas num gancho. Batem umas nas outras quando a rajada passa."
     }
   },
   "meditation": {
@@ -514,6 +533,8 @@
     }
   },
   "ending": {
+    "epigraph": "Talvez a vida não seja sobre grandes coisas ou um sentido por trás de tudo, mas sim sobre *pequenas coisas*.",
+    "afterword": "A aventura principal acabou, mas você pode continuar explorando e fazendo as atividades extras.",
     "theEnd": "Fim",
     "credits": [
       {
@@ -534,11 +555,47 @@
       },
       {
         "speaker": "npc",
-        "text": "Shui · Sisi · Marco · Thea"
+        "text": "Shui, a micóloga"
+      },
+      {
+        "speaker": "npc",
+        "text": "Sisi, a pintora"
+      },
+      {
+        "speaker": "npc",
+        "text": "Marco, o lenhador"
+      },
+      {
+        "speaker": "npc",
+        "text": "Thea, a astronauta"
       },
       {
         "speaker": "npc",
         "text": "e Sati, o mago"
+      },
+      {
+        "speaker": "narrator",
+        "text": "testado e validado por"
+      },
+      {
+        "speaker": "npc",
+        "text": "Adriel Carvalho"
+      },
+      {
+        "speaker": "npc",
+        "text": "Eric Góes"
+      },
+      {
+        "speaker": "npc",
+        "text": "Geovani Darcie"
+      },
+      {
+        "speaker": "npc",
+        "text": "Diego Penha"
+      },
+      {
+        "speaker": "npc",
+        "text": "Rodrigo Alister"
       },
       {
         "speaker": "narrator",
@@ -592,8 +649,18 @@
         "touch": "Toque quando a faca estiver entre as marcas, para cortar."
       },
       "clean": {
-        "keys": "Segure o botão do mouse e esfregue a bucha no cogumelo para limpar.",
+        "keys": "Passe a bucha no cogumelo com o mouse para limpar a terra.",
         "touch": "Arraste a bucha no cogumelo para limpar."
+      }
+    },
+    "sketch": {
+      "draw": {
+        "keys": "Segure {Z} (ou o botão do mouse) para desenhar. Quando o bicho levantar a cabeça, solte, senão ele foge  ·  {X} fecha",
+        "touch": "Segure o dedo na tela para desenhar. Quando o bicho levantar a cabeça, solte, senão ele foge  ·  o × fecha"
+      },
+      "done": {
+        "keys": "Desenho pronto: foi para o caderno de campo. Aperte {Z} para fechar.",
+        "touch": "Desenho pronto: foi para o caderno de campo. Toque para fechar."
       }
     },
     "card": {
@@ -631,6 +698,70 @@
     "paint": {
       "keys": "Escolha a tinta ({1} a {4} ou clique no pote) e pinte arrastando o mouse. {Enter} termina.",
       "touch": "Toque num pote e pinte arrastando o dedo."
+    }
+  },
+  "home": {
+    "tub": {
+      "title": "A tina",
+      "cape": "Capa",
+      "blanket": "Manta",
+      "keys": "Setas escolhem  ·  Z tinge  ·  X fecha",
+      "keysTouch": "Toque na cor para tingir"
+    },
+    "dye": {
+      "natural": "Natural",
+      "urucum": "Urucum",
+      "anil": "Anil",
+      "curcuma": "Cúrcuma",
+      "garanca": "Garança",
+      "violeta": "Violeta: anil e garança"
+    },
+    "sign": {
+      "title": "Como se chama este lugar?",
+      "placeholder": "Acampamento do Zero",
+      "write": "Escrever",
+      "cancel": "Deixar",
+      "keys": "Enter escreve  ·  Esc deixa",
+      "keysTouch": "Escreva e toque em Escrever"
+    },
+    "sundial": {
+      "clock": "24",
+      "hour": "A sombra marca {h}.",
+      "night": "Sem sol, sem sombra, sem hora."
+    },
+    "arrive": {
+      "day": "em casa",
+      "night": "em casa, à noite"
+    },
+    "piece": {
+      "log": "Tronco",
+      "stool": "Banquinho",
+      "sign": "Placa",
+      "tub": "Tina de tingir",
+      "sundial": "Relógio de sol",
+      "cairn": "Pilha de pedras",
+      "lantern": "Lanterna",
+      "flowerPot": "Vaso",
+      "windChime": "Sino de vento",
+      "rack": "Varal da Shui",
+      "easel": "Quadro da Sisi",
+      "woodpile": "Lenha do Marco",
+      "chart": "Mapa da Thea"
+    },
+    "build": {
+      "title": "Construir no acampamento",
+      "choose": "Escolha o que pôr  ·  ← → e Z  ·  ↑ muda ou desmonta uma peça  ·  X sai",
+      "chooseTouch": "Toque no que quer pôr, ou numa peça para mudá-la de lugar ou desmontá-la",
+      "place": "Escolha um lugar verde  ·  setas e Z  ·  X volta",
+      "placeTouch": "Toque num lugar verde",
+      "move": "Mudando de lugar  ·  setas e Z  ·  Delete desmonta  ·  X devolve",
+      "moveTouch": "Toque no novo lugar, ou em Desmontar",
+      "empty": "Tudo já está no acampamento  ·  ↑ muda ou desmonta uma peça  ·  X sai",
+      "emptyTouch": "Tudo já está no acampamento: toque numa peça para mudá-la de lugar ou desmontá-la",
+      "gift": "presente",
+      "scrap": "Desmontar",
+      "back": "Voltar",
+      "done": "Pronto"
     }
   }
 }

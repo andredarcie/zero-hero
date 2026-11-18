@@ -52,9 +52,8 @@ export const TOOLBOX_RECIPES: readonly ToolboxRecipe[] = [
   //
   // A BIGORNA NÃO SE CONSTRÓI MAIS (pedido do autor): a única é a da Thea, fixa ao lado do forno
   // (scripts/bigorna-da-vega.mjs). A receita pedra+minério saiu daqui; o texto acima fica como história.
-  // ── O QUE SÓ ENFEITA. Fora da escada de propósito (ver LADDER): sempre à vista, e ninguém precisa dele. ──
-  { inputs: ['wood', 'wood'], output: 'stool', family: 'material' },
-  { inputs: ['wood', 'charcoal'], output: 'lantern', family: 'material' },
+  // ── O QUE SÓ ENFEITA não mora mais aqui (2026-11-17): a bancada é a do lar e CONSTRÓI no acampamento, com o jogo
+  // parado e a grade no chão. O preço de cada peça está em objects/homeBuilds. ──
   // ── O FORNO, e ele e a UNICA receita de outra estacao ──────────────────────────────────────
   //
   // Minerio + CARVAO = esponja de ferro. O carvao aqui nao e combustivel: e o REAGENTE que rouba o
@@ -181,8 +180,15 @@ export const catalogSteps = (
   return [...out, ...byKind.values()];
 };
 
-/** O degrau que a mesa está oferecendo agora (a carta nova), ou null se a escada acabou. */
+/**
+ * O degrau que a mesa está oferecendo agora (a carta nova), ou null se a escada acabou. Degrau sem receita nesta
+ * estação (o altar, que a bancada deixou de fazer) não conta: senão a escada ficava parada nele para sempre, e a carta
+ * nova nunca ganhava a marca de nova.
+ */
 export const nextStep = (
   station: CraftStation,
   seen: ReadonlySet<HeldItemKind>,
-): HeldItemKind | null => (LADDER[station] ?? []).find((kind) => !seen.has(kind)) ?? null;
+): HeldItemKind | null => {
+  const made = new Set(catalogOrder(station).map((recipe) => recipe.output));
+  return (LADDER[station] ?? []).find((kind) => made.has(kind) && !seen.has(kind)) ?? null;
+};

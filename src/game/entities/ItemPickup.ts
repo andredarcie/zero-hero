@@ -5,6 +5,7 @@ import {
   KNIFE_TEXTURE_KEY, MUSHROOM_KINDS, fungusTextureKey, isMushroomKind, type MushroomKind,
 } from '@/game/fungi/fungi';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
+import { DecorLife, LIVING_DECOR } from '@/game/objects/DecorLife';
 import { GLINT_TEXTURE } from '@/game/render3d/cozyTextures';
 import { BRUSH_TEXTURE, DYE_BUNDLE_TEXTURE, DYE_SEEDS_TEXTURE } from '@/game/render3d/paintTextures';
 import {
@@ -26,9 +27,15 @@ export type HeldItemKind =
   | 'ore'
   | 'bloom'
   // O QUE ENFEITA: não serve para nada, e esse é o ponto. Pousado, fica onde o jogador quis (é sólido, e só o Z o pega de volta).
+  // Todos saem da bancada do acampamento (objects/toolboxRecipes), de materiais que o vale nunca deixa acabar.
   | 'stool'
   | 'lantern'
   | 'flowerPot'
+  // O RELÓGIO DE SOL (o X lê a hora pela sombra), a PILHA DE PEDRAS e o SINO DE VENTO (as pedras de minério batem
+  // umas nas outras quando venta).
+  | 'sundial'
+  | 'cairn'
+  | 'windChime'
   | 'sword'
   | 'key'
   | 'axe'
@@ -98,6 +105,9 @@ const GROUND_VISUAL: Record<HeldItemKind, { texture: string; frame: number }> = 
   stool: { texture: 'valley-find-stool', frame: 0 },
   lantern: { texture: 'valley-find-lantern', frame: 0 },
   flowerPot: { texture: 'valley-find-flowerPot', frame: 0 },
+  sundial: { texture: 'valley-find-sundial', frame: 0 },
+  cairn: { texture: 'valley-find-cairn', frame: 0 },
+  windChime: { texture: 'valley-find-windChime', frame: 0 },
   sword: { texture: 'sword-item', frame: ITEM_FRAMES.swordIdle },
   key: { texture: 'key-item', frame: KEY_FRAMES.pickup },
   axe: { texture: 'axe-icon', frame: 0 },
@@ -161,7 +171,9 @@ export const MATERIAL_ITEM_KINDS: ReadonlySet<HeldItemKind> = new Set<HeldItemKi
  * O que pode ser SELECIONADO na bolsa. A espada saiu da mochila (ela e do heroi, e mora no
  * botao Z), entao ela nunca e resposta desta pergunta — nem sequer chega a existir como item.
  */
-export const DECOR_KINDS: ReadonlySet<HeldItemKind> = new Set<HeldItemKind>(['stool', 'lantern', 'flowerPot']);
+// (O banquinho saiu dos enfeites, 2026-11-17: o tronco já senta. O item velho continua existindo para um save antigo
+// que o tenha no chão, mas não é mais enfeite de pousar nem entra no caderno.)
+export const DECOR_KINDS: ReadonlySet<HeldItemKind> = new Set<HeldItemKind>(['lantern', 'flowerPot', 'sundial', 'cairn', 'windChime']);
 export const isDecorKind = (kind: HeldItemKind | null | undefined): boolean => kind != null && DECOR_KINDS.has(kind);
 
 export const isBagItem = (kind: HeldItemKind): boolean =>
@@ -177,6 +189,8 @@ export const itemGroundVisual = (kind: HeldItemKind): { texture: string; frame: 
 // mais fino que o do chão, e essa é a única exceção à densidade de 16 por tile.
 const GROUND_SIZE = 0.75;
 const BOB_TILES = 0.09;
+/** O tom dos enfeites pousados: o mesmo das peças do acampamento e dos achados do vale. */
+const DECOR_TINT = 0xa8a4a0;
 
 // A chama cavalgando um graveto ACESO fora da mao: os mesmos frames tiny-fire dos arbustos,
 // animados em render(). As opcoes do billboard sao IDENTICAS as da chama da tocha
@@ -223,6 +237,8 @@ export class ItemPickup {
   /** O calor da esponja vazando no chao (so `bloom` tem). */
   private heatGlow?: Billboard3D;
   private glint?: Billboard3D;
+  /** O enfeite que vive no chão (a lanterna que acende, o sino que balança, o vaso da estação): objects/DecorLife. */
+  private life?: DecorLife;
   private fireState?: ItemFire;
   /**
    * Quantas UNIDADES este item no chão vale ao ser apanhado (o pacote de sementes: 5 recém-
@@ -270,6 +286,11 @@ export class ItemPickup {
         .setDisplaySize(GLINT_SIZE, GLINT_SIZE)
         .setAlpha(0);
     }
+
+    // O ENFEITE TEM O TOM DO ACAMPAMENTO (HeroCamp.CAMP_TINT, ValleyFinds.FIND_TINT): a luz do mundo estoura os claros, e
+    // sem o tom o relógio de sol e a pilha de pedras saíam brancos ao lado das peças de lá. A lanterna acende: fica fora.
+    if (isDecorKind(kind) && kind !== 'lantern') this.sprite.setTint(DECOR_TINT);
+    if (LIVING_DECOR.has(kind)) this.life = new DecorLife(kind, this.sprite, tileX, tileY);
 
     // Fade in via alpha only — render owns the bob each frame, so a scale tween would just be
     // clobbered.
@@ -346,6 +367,7 @@ export class ItemPickup {
     this.flame?.setVisible(false);
     this.heatGlow?.setVisible(false);
     this.glint?.setVisible(false);
+    this.life?.hide();
     for (const copy of this.outline) copy.setVisible(false);
   }
 
@@ -356,6 +378,7 @@ export class ItemPickup {
       ?(Math.sin(this.scene.time.now * 0.0045) + 1) * 0.5 * BOB_TILES
       : 0;
     this.sprite.setElevation(bob);
+    this.life?.render(this.scene.time.now, this.sprite.alpha);
     // The rim rides the bob and the fade-in with the item. Downward copies clamp at the
     // ground so the bottom edge never sinks under the terrain plane and gets clipped.
     const alpha = this.sprite.alpha;
@@ -394,6 +417,7 @@ export class ItemPickup {
     this.flame?.destroy();
     this.heatGlow?.destroy();
     this.glint?.destroy();
+    this.life?.destroy();
     for (const copy of this.outline) copy.destroy();
   }
 }

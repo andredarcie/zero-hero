@@ -65,6 +65,7 @@ import { Cinema } from './game/Cinema';
 import { CampfireNight } from './game/CampfireNight';
 import { SwordPlanting } from './game/SwordPlanting';
 import { RoastEnding } from './game/RoastEnding';
+import { MorningAfter } from './game/MorningAfter';
 import { GardenUnlock } from './game/GardenUnlock';
 import { Intro } from './game/Intro';
 import { NpcDialog } from './game/NpcDialog';
@@ -185,8 +186,11 @@ export class GameScene extends Engine.Scene {
   // included) and keeps running even when update() early-returns (dialog pan,
   // cut-scenes). Freezes with the scene on pause — a still backdrop for the menu.
 
-  /** O tile que a câmera olha sem o herói sair do lugar: é o que se vê pela lente da Thea. */
-  public cameraLook?: { x: number; y: number };
+  /**
+   * O tile que a câmera olha sem o herói sair do lugar: é o que se vê pela lente da Thea. `drift` é quanto ela passeia
+   * de um lado para o outro (tiles; sem ele, o passeio largo de sempre, ver DialogCamera).
+   */
+  public cameraLook?: { x: number; y: number; drift?: number };
   /** De 0 (no herói) a 1 (no `cameraLook`): a câmera vai e volta deslizando. */
   public cameraLookBlend = 0;
   /** O graveto aceso na mão: acender, reabastecer, apagar, a chama. (ver HeldTorch) */
@@ -241,6 +245,8 @@ export class GameScene extends Engine.Scene {
   public readonly swordPlanting: SwordPlanting = new SwordPlanting(this);
   /** O fim: a fogueira do jardim e o marshmallow. (ver RoastEnding) */
   public readonly roastEnding: RoastEnding = new RoastEnding(this);
+  /** Depois dos créditos: a manhã no acampamento e o bilhete. (ver MorningAfter) */
+  public readonly morning: MorningAfter = new MorningAfter(this);
   /** A chave do jardim, o portão e a névoa que sai. (ver GardenUnlock) */
   public readonly gardenUnlock: GardenUnlock = new GardenUnlock(this);
   /** A abertura: o mago na estrada. (ver Intro) */

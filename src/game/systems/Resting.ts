@@ -5,6 +5,7 @@ import { HERO_FRAMES } from '@/game/constants';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import { DeathVisit, type DeathVisitHost } from '@/game/entities/DeathVisit';
 import { FireBed, type FireBedHost } from '@/game/entities/FireBed';
+import { StarGaze, type StarGazeHost } from '@/game/entities/StarGaze';
 import { ensureSleepTexture } from '@/game/entities/NpcManager';
 import { tLines, type I18nLine } from '@/game/i18n/i18n';
 import type { HeroView } from '@/game/runtime/HeroView';
@@ -12,8 +13,8 @@ import type { HeroView } from '@/game/runtime/HeroView';
 /**
  * O DESCANSO: o herói sentado (numa fogueira acesa, num banco com vista, ao lado do telescópio) ou deitado no colchão
  * do acampamento. O corpo baixa e o relógio corre. Sentado, qualquer seta levanta. Dormindo, ninguém o levanta: a
- * noite passa, nas noites no acampamento a Morte vem sentar ao lado (uma vez por noite, até as três conversas), e
- * ele acorda e levanta sozinho quando clareia.
+ * noite passa, nas noites no acampamento a Morte vem sentar ao lado (uma vez por noite, até as três conversas; na
+ * primeira, antes dela, a câmera sobe para o céu estrelado), e ele acorda e levanta sozinho quando clareia.
  *
  * O sistema é dono do ESTADO do descanso (quem senta, onde, se dorme, se a Morte já veio esta noite) e das decisões
  * (quando acordar, quando ela vem, quando a noite chega). O resto é da cena, pelo host: a câmera, os pés, a caneca,
@@ -84,9 +85,10 @@ export interface RestBed {
   destroy(): void;
 }
 
-/** De onde saem o colchão e a Morte: no jogo, os de verdade (no mundo 3D); no teste, dublês. */
+/** De onde saem o colchão, o céu da primeira noite e a Morte: no jogo, os de verdade (no mundo 3D); no teste, dublês. */
 export interface RestParts {
   bed: (host: FireBedHost) => RestBed;
+  gaze: (host: StarGazeHost) => { run(): Promise<void> };
   death: (host: DeathVisitHost) => { run(): Promise<void> };
 }
 
@@ -95,6 +97,7 @@ const REAL_PARTS: RestParts = {
     ensureSleepTexture(host.scene);
     return new FireBed(host);
   },
+  gaze: (host) => new StarGaze(host),
   death: (host) => new DeathVisit(host),
 };
 
@@ -108,17 +111,22 @@ export const SLEEP_TIME_SCALE = 48;
 /** A visita da Morte acontece uma vez só: a marca mora com as outras falas já ouvidas, no save. */
 export const DEATH_VISIT_KEY = 'death/visit';
 /**
- * AS TRÊS NOITES DA MORTE (pedido do autor), uma por noite dormida no acampamento, no caminho de Nietzsche: o
- * diagnóstico (os deuses do guerreiro morreram), a travessia (camelo e leão, e a pergunta do eterno retorno) e a
- * afirmação (a criança, o amor fati, "torna-te quem tu és"). Cada uma é uma chave no save e um texto no locale.
+ * AS TRÊS NOITES DA MORTE (pedido do autor), uma por noite dormida no acampamento: o AVISO (ela volta mais duas
+ * noites e, na última, deixa um presente para o acampamento — 2026-11-17: "e ela só fala isso"), a travessia de
+ * Nietzsche (camelo e leão, e a pergunta do eterno retorno) e a afirmação (a criança, o amor fati, "torna-te quem tu
+ * és"), que termina com o presente: a foice. Cada uma é uma chave no save e um texto no locale.
  */
 export const DEATH_VISITS: ReadonlyArray<{ key: string; lines: string }> = [
   { key: DEATH_VISIT_KEY, lines: 'death.visit' },
   { key: 'death/visit2', lines: 'death.visit2' },
   { key: 'death/visit3', lines: 'death.visit3' },
 ];
+/** A última visita: é no fim dela que a foice fica (pedido do autor, 2026-11-17: "só depois da terceira noite"). */
+export const DEATH_LAST_VISIT_KEY = DEATH_VISITS[DEATH_VISITS.length - 1].key;
 /** A foice que a Morte deixou: o único jeito de ter uma. */
 export const DEATH_SCYTHE_KEY = 'death/scythe';
+/** Deitado há tanto tempo (ms do relógio da cena) antes de a câmera subir para o céu: o corpo assenta primeiro. */
+export const GAZE_SETTLE_MS = 2500;
 /** As teclas que levantam (o ESC não: quem o escuta é a pausa, que levanta e para). */
 const GET_UP_KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD'];
 /** No acampamento a Morte senta ao lado das pedras, no chão livre da clareira (do outro lado delas é mato alto). */
@@ -144,6 +152,8 @@ export class Resting {
   private restFireTile?: { x: number; y: number };
   /** Quem espera a noite sentado (o telescópio da Thea): roda quando ela chega. */
   private onNightfall?: () => void;
+  /** Quando ele deitou (relógio da cena): o céu da primeira noite espera o corpo assentar. */
+  private lyingAt = 0;
   private bed?: RestBed;
   private stopKeys?: () => void;
 
@@ -215,6 +225,7 @@ export class Resting {
     this.sleeping = true;
     this.deathCameTonight = false;
     this.sleptAtFire = false;
+    this.lyingAt = this.host.scene.time.now;
     // O sentar baixa o corpo como quem senta; aqui quem manda no corpo é o colchão.
     const hero = this.host.hero;
     this.host.scene.tweens.killTweensOf(hero);
@@ -274,6 +285,16 @@ export class Resting {
     if (this.sleeping) {
       if (host.isSleepTime()) {
         this.sleptAtFire = true;
+        // A PRIMEIRA NOITE NO ACAMPAMENTO (pedido do autor): o escuro chegou de vez, a câmera sobe até o céu estrelado,
+        // passa uma estrela cadente, e na volta ao chão a Morte aparece — já agora, e não de madrugada. A noite para
+        // enquanto o corpo assenta: dormindo, ela inteira passa em quatro segundos.
+        if (this.firstNightPending()) {
+          host.setTimeScale(0);
+          if (host.scene.time.now - this.lyingAt >= GAZE_SETTLE_MS) {
+            void this.playFirstNight();
+            return true;
+          }
+        }
       } else if (this.sleptAtFire) {
         // A noite passou: as tintas da Sisi amanheceram prontas (a dica está na fala dela).
         host.growOvernight();
@@ -326,12 +347,13 @@ export class Resting {
   }
 
   /**
-   * A FOICE É O PRESENTE DA MORTE (pedido do autor): ela não existe solta no vale nem na bancada. Ao levantar
-   * depois da visita, ela está no lugar onde a Morte esteve, como se tivesse deixado para ajudar. Uma vez só.
+   * A FOICE É O PRESENTE DA MORTE (pedido do autor): ela não existe solta no vale nem na bancada. Ela avisa na primeira
+   * noite e a entrega no fim da TERCEIRA (2026-11-17): ao levantar dessa, a foice está onde ela esteve. É ela que
+   * corta o mato verde em volta do acampamento, e só ela (scenes/game/CampHome). Uma vez só.
    */
   private leaveScythe(): void {
     const host = this.host;
-    if (!host.canVisit() || !host.heard(DEATH_VISIT_KEY) || host.heard(DEATH_SCYTHE_KEY)) return;
+    if (!host.canVisit() || !host.heard(DEATH_LAST_VISIT_KEY) || host.heard(DEATH_SCYTHE_KEY)) return;
     host.hear(DEATH_SCYTHE_KEY);
     const at = this.deathTile ?? host.heroTile();
     this.deathTile = undefined;
@@ -358,6 +380,24 @@ export class Resting {
     const guest = host.guestTile();
     return spots.find((spot) => !host.isSolid(spot.x, spot.y)
       && !(guest && Math.hypot(guest.x - spot.x, guest.y - spot.y) < 0.8)) ?? spots[0];
+  }
+
+  /** A primeira visita da Morte ainda não veio, e ele dorme no acampamento. */
+  private firstNightPending(): boolean {
+    const host = this.host;
+    return host.canVisit() && this.sleepingAtCamp && !this.deathCameTonight && !host.heard(DEATH_VISIT_KEY);
+  }
+
+  /** O céu da primeira noite (entities/StarGaze), e a Morte logo depois, sem o jogo voltar no meio. */
+  private async playFirstNight(): Promise<void> {
+    const host = this.host;
+    this.deathVisiting = true;
+    this.deathCameTonight = true;
+    host.cutscene(true);
+    this.bed?.quiet();
+    host.setTimeScale(0);
+    await this.parts.gaze({ scene: host.scene, at: host.heroTile() }).run();
+    await this.playDeathVisit(DEATH_VISITS[0]);
   }
 
   private async playDeathVisit(visit: { key: string; lines: string }): Promise<void> {

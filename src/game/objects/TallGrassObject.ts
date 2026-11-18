@@ -1,108 +1,84 @@
 import * as Engine from '@/game/engine';
 
-import { Billboard3D } from '@/game/render3d/Billboard3D';
+import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import { world3d, type FireLight3D } from '@/game/render3d/World3D';
+import { TallGrassField, type Tuft } from '@/game/render3d/world/TallGrassField';
 import type { WorldProp } from './WorldProp';
 
-// Tall grass ("mato alto") blocks its tile and sways in the wind. The scythe cuts it — the tuft
-// topples and settles into low stubble (which keeps a gentler wind sway) — and fire burns it to
-// the same stubble, charred. Collision is owned here (see `blocking`), like the other props.
+// O MATO ALTO (refeito do zero a pedido do autor, 2026-11-17): bloqueia o tile dele enquanto está em pé; a foice o
+// corta rente (os tocos ficam, e o tile abre), e o fogo o queima até o mesmo toco, carbonizado. A colisão mora aqui
+// (`blocking`), como nos outros props.
 //
-// The grass STANDS now. The old art (grass_wind0) was a TOP-DOWN tile with an opaque background,
-// so the object had to lie flat on the ground — upright it read as a sheet of dark paper. The
-// sprite factory's tall_grass_up sheet is the same olive grass REDRAWN side-on (a fan of blades
-// on a transparent background, like the bush and the trees), so the tuft is finally a standing
-// billboard: taller than every low prop, lit by the world's fires, swaying against the night.
-// The stubble is frame 4 of the SAME sheet — the tuft mown to pale-faced stubs, not some
-// unrelated ground-cover art: what the scythe leaves is recognisably this plant, shorter.
+// O DESENHO não mora mais aqui. O mato era um billboard com quatro quadros de vento, o mesmo desenho em todo tile; agora
+// cada tufo são uns doze FIOS sorteados de uma biblioteca de pixel art na paleta do tileset (render3d/tallGrassArt e
+// tallGrassTuft), desenhados todos numa malha só pelo programa da decoração em pé (render3d/world/TallGrassField): a
+// mesma brisa do vale, fio a fio, a mesma esteira de quem passa, a mesma rampa do bioma. Este objeto só diz ao campo em
+// que estado o tufo dele está.
 
-// The standing tuft is a FOUR-frame wave (spritefactory/sprites/tall-grass-up.mjs): the gust
-// travels west→east through the blades, one blade dipping a frame after its neighbour — which
-// is what makes wind read as weather instead of a two-frame metronome. ~300ms a frame gives
-// the full wave a ~1.2s period; each tile jitters its clock and starts on a random frame, so
-// a field never sways in lockstep.
-const WIND_FRAME_MS = 300;
-const TALL_WIND_FRAMES = 4;
-const TALL_SHEET = 'tall-grass-up';
-// Frame 4 of the same sheet: the tuft mown to stubs — the SAME plant after the scythe/fire,
-// pale cut faces on the stems, not some unrelated ground-cover art.
-const STUMP_FRAME = 4;
-
-const TUFT_W = 0.98; // fills the tile, never overflows it (the fundamental sprite rule)
-const TUFT_H = 0.98;
-const CUT_COLLAPSE_MS = 210; // the mowed tuft drops out of the scythe's arc into stubble
-
-// Standing grass OWNS its tile (it blocks), so it lives on the actor plane. The moment it is
-// mown the tile opens and the hero can stand on the stump — two upright quads on one spot — so
-// it moves to the GROUND depth layer as it falls. See DEPTH_LAYER in Billboard3D.
-
-const BURN_MS = 1700; // licking flames, then it settles into charred stubble
+const BURN_MS = 1700; // as chamas sobem pelo fio, o tufo murcha e acinzenta, e assenta no toco carbonizado
 const FIRE_FRAME_MS = 110;
 const FIRE_KEYS = ['tiny-fire-0', 'tiny-fire-1', 'tiny-fire-2'] as const;
 
-// The grass BURNS — it does not turn into a picture of fire. The blades stay grass and char
-// from green to ash, and the FLAMES are separate little tiny-fire billboards — the same flame
-// art the campfire and the torch use.
-//
-// Upright grass burns the way real grass does: it catches LOW, at the dry base, and the fire
-// CLIMBS the blades — so each flame starts near the ground and rides up its `climb` over the
-// burn, while the tuft itself WILTS (grass collapses as its structure burns out from under it).
-// Three flames, staggered heights and phases, so the tuft flickers instead of pulsing.
+// O mato QUEIMA — ele não vira o desenho de um fogo. Os fios continuam fios e acinzentam, e as CHAMAS são os foguinhos
+// separados, a mesma arte da fogueira e da tocha. Pega embaixo, no pé seco, e SOBE pelos fios (`climb`), enquanto o tufo
+// MURCHA (afunda no chão) — três chamas em alturas e fases diferentes, para tremular em vez de pulsar.
 const FIRE_SPOTS = [
   { ox: -0.2, elev: 0.06, scale: 0.4, phase: 0, climb: 0.34 },
   { ox: 0.18, elev: 0.12, scale: 0.34, phase: 1, climb: 0.46 },
   { ox: -0.02, elev: 0.02, scale: 0.5, phase: 2, climb: 0.6 },
 ] as const;
-const WILT_FRAC = 0.48; // the burning tuft sinks to roughly half height before it gives way
+const WILT_FRAC = 0.48; // o tufo em chamas afunda até mais ou menos a metade antes de ceder
 
-// Burning grass IS a light source — the same warm firelight model as a campfire or a burning
-// bush, just lower and briefer.
-const BURN_LIGHT_SCALE = 0.42; // under the bush's 0.55: grass burns low and fast
+// Mato queimando É luz — a mesma luz de fogueira, mais baixa e mais breve.
+const BURN_LIGHT_SCALE = 0.42;
 const grassLightCurve = (p: number): number =>
   (p < 15 ? p / 15 : p < 70 ? 1 : Math.max(0, (100 - p) / 30));
 
-const WHITE = new Engine.Display.Color(255, 255, 255);
-const ASH = new Engine.Display.Color(88, 84, 80);
-const CHARRED_TINT = 0x585450;
+/**
+ * OS TOCOS SOMEM (pedido do autor, 2026-11-17: "fica como se fosse o pé do mato ali ainda [...] 2 segundos depois ele
+ * já desaparece, para deixar o chão limpo, para que os objetos que eu coloque não fiquem impedidos"): o toco fica o
+ * bastante para se ver o corte, e afunda na terra. O queimado fica (carvão é marca do fogo).
+ */
+const STUB_LINGER_MS = 2000;
+const STUB_SINK_MS = 450;
+/** O mato voltando sobe de um degrau para o outro neste tempo (objects/CampGrass, runtime/campRegrowth). */
+const GROW_STEP_MS = 1100;
 
-type GrassState = 'tall' | 'cutting' | 'burning' | 'cut';
+/** `growing`: o mato que volta, entre o broto e o quase (passa-se por ele; não bloqueia). */
+type GrassState = 'tall' | 'burning' | 'cut' | 'growing';
 
 export class TallGrassObject implements WorldProp {
   public readonly worldX: number;
   public readonly worldY: number;
 
   private readonly scene: Engine.Scene;
-  private readonly sprite: Billboard3D; // the standing tuft — and, after the cut, its stubs
+  private readonly field: TallGrassField;
+  private readonly tuft: Tuft;
   private fires: Billboard3D[] = [];
   private fireLight?: FireLight3D;
   private fireFrame = 0;
   private state: GrassState = 'tall';
-  private windFrame = 0;
-  private windTimer: Engine.Time.TimerEvent;
   private actionTimer?: Engine.Time.TimerEvent;
+  private vanishTimer?: Engine.Time.TimerEvent;
+  private readonly anim = { t: 0 };
+  /** O degrau do mato que volta (0 = chão limpo; ver runtime/campRegrowth). */
+  private level = 0;
+  /** Quem quer saber do corte da foice (o mato do acampamento: objects/CampGrass anota o tile e a hora). */
+  public onCut?: () => void;
 
-  public constructor(scene: Engine.Scene, worldX: number, worldY: number) {
+  /**
+   * O MATO VERDE DO ACAMPAMENTO (pedido do autor, 2026-11-17; runtime/homeGrid.CAMP_ZONE): úmido da beira do laguinho,
+   * ele não pega fogo nem conduz fogo — só a foice da Morte o corta, e é cortando que o jogador abre espaço para o lar.
+   */
+  public readonly green: boolean;
+
+  public constructor(scene: Engine.Scene, worldX: number, worldY: number, green = false) {
     this.scene = scene;
     this.worldX = worldX;
     this.worldY = worldY;
-    // Upright, foot on its tile, lit like the bush/trees. This is a thicket you push through,
-    // and now also one you SEE — it stands taller than every ground prop around it. It throws
-    // a shadow like the tree does (every standing prop casts one), just softer: grass is wisps,
-    // not trunk — the dry shrub set the precedent for the lighter alpha.
-    this.sprite = world3d()
-      .objects.addBillboard(TALL_SHEET, 0, { groundShadow: { alpha: 0.35 } })
-      .setPosition(worldX, worldY)
-      .setDisplaySize(TUFT_W, TUFT_H);
-
-    // Desynchronize neighbouring tufts so a field doesn't sway in lockstep.
-    this.windFrame = Engine.Math.Between(0, TALL_WIND_FRAMES - 1);
-    this.sprite.setTexture(TALL_SHEET, this.windFrame);
-    this.windTimer = scene.time.addEvent({
-      delay: WIND_FRAME_MS + Engine.Math.Between(-60, 60),
-      callback: this.advanceWind,
-      callbackScope: this,
-      loop: true,
-    });
+    this.green = green;
+    this.field = TallGrassField.for(world3d().scene);
+    this.tuft = this.field.add(worldX, worldY);
   }
 
   public get blocking(): boolean {
@@ -113,33 +89,109 @@ export class TallGrassObject implements WorldProp {
     return this.state === 'tall';
   }
 
+  /** Voltando a crescer (o broto, até o joelho, quase): à vista, mas ainda se passa por ele. */
+  public get isGrowing(): boolean {
+    return this.state === 'growing';
+  }
+
+  /** Quanto o mato está crescido: 1 em pé, o degrau dele voltando, 0 cortado ou queimando. */
+  public get growthLevel(): number {
+    return this.state === 'tall' ? 1 : this.state === 'growing' ? this.level : 0;
+  }
+
   /** Ardendo AGORA — enquanto durar, este tile e uma fonte de calor (ver GameScene.fireHeatAt). */
   public get isBurning(): boolean {
     return this.state === 'burning';
   }
 
-  /** Scythe swing: the tuft drops out of the arc and settles into passable stubble. */
+  /** Os fios em pé, no mundo (de onde o corte os atira: scenes/game/MowFx). Vazio depois do corte. */
+  public get blades(): ReturnType<TallGrassField['bladesOf']> {
+    return this.state === 'tall' ? this.field.bladesOf(this.tuft) : [];
+  }
+
+  /**
+   * A FOICE: o tufo cai inteiro de uma vez — a lâmina passa rente ao pé, e o que estava em pé vira os tocos do mesmo
+   * tufo; dois segundos depois eles afundam na terra e o chão fica limpo. O voo das pontas cortadas é de quem corta
+   * (MowFx), no mesmo instante. O tile abre já.
+   */
   public cut(): boolean {
     if (this.state !== 'tall') return false;
-    this.state = 'cutting';
-    // The tile stops blocking NOW — the hero can step in mid-collapse, so the layer change
-    // belongs to the state change, not to the stump art that arrives 210ms later.
-    this.sprite.setDepthLayer('ground');
-    this.scene.tweens.killTweensOf(this.sprite);
-    this.scene.tweens.add({
-      targets: this.sprite,
-      displayHeight: TUFT_H * 0.12,
-      angle: 8, // the swathe leans with the blade as it goes down
-      duration: CUT_COLLAPSE_MS,
-      ease: 'Quad.easeIn',
-      onComplete: () => this.toCut(false),
-    });
+    this.toCut(false);
+    this.onCut?.();
+    this.vanishTimer = this.scene.time.delayedCall(STUB_LINGER_MS, () => this.sinkAway(STUB_SINK_MS));
     return true;
   }
 
-  /** Fire (a flaming item / bomb / a neighbour alight): catch low, climb, wilt, char. */
+  /**
+   * O MATO QUE VOLTA (objects/CampGrass): sobe até o degrau `level` (0 = chão limpo; entre 0 e 1 o broto, o joelho, o
+   * quase — à vista e de passagem). É o tufo inteiro afundado na terra, e subindo dela: pixel inteiro, sem esticar.
+   */
+  public growTo(level: number, instant = false): void {
+    if (this.state === 'burning' || this.state === 'tall') return;
+    if (level <= 0) {
+      if (this.state === 'growing') this.sinkAway(instant ? 0 : STUB_SINK_MS);
+      return;
+    }
+    this.vanishTimer?.destroy();
+    this.vanishTimer = undefined;
+    const from = this.state === 'growing' ? 1 - this.level : 1;
+    this.state = 'growing';
+    this.level = Math.min(0.999, level);
+    this.field.setChar(this.tuft, 0);
+    this.field.setState(this.tuft, 'tall');
+    this.riseTo(from, 1 - this.level, instant);
+  }
+
+  /** Em pé de novo: o tufo inteiro, que volta a bloquear o tile (quem chama já viu que ninguém fica preso). */
+  public regrow(instant = false): void {
+    if (this.state === 'burning' || this.state === 'tall') return;
+    this.vanishTimer?.destroy();
+    this.vanishTimer = undefined;
+    const from = this.state === 'growing' ? 1 - this.level : 1;
+    this.state = 'tall';
+    this.level = 0;
+    this.field.setChar(this.tuft, 0);
+    this.field.setState(this.tuft, 'tall');
+    this.riseTo(from, 0, instant);
+  }
+
+  /** O tufo sobe da terra de `from` a `to` (o quanto ainda está afundado, 1 = todo). */
+  private riseTo(from: number, to: number, instant: boolean): void {
+    this.scene.tweens.killTweensOf(this.anim);
+    if (instant) {
+      this.field.setSink(this.tuft, to);
+      return;
+    }
+    this.anim.t = from;
+    this.field.setSink(this.tuft, from);
+    this.scene.tweens.add({
+      targets: this.anim, t: to, duration: GROW_STEP_MS, ease: 'Cubic.easeOut',
+      onUpdate: () => this.field.setSink(this.tuft, this.anim.t),
+    });
+  }
+
+  /** O que está à vista (os tocos, o broto) afunda na terra e some: o chão fica limpo. */
+  private sinkAway(ms: number): void {
+    this.vanishTimer = undefined;
+    this.scene.tweens.killTweensOf(this.anim);
+    const done = (): void => {
+      this.state = 'cut';
+      this.level = 0;
+      this.field.setState(this.tuft, 'gone');
+      this.field.setSink(this.tuft, 0);
+    };
+    if (ms <= 0) { done(); return; }
+    this.anim.t = this.state === 'growing' ? 1 - this.level : 0;
+    this.scene.tweens.add({
+      targets: this.anim, t: 1, duration: ms, ease: 'Quad.easeIn',
+      onUpdate: () => this.field.setSink(this.tuft, this.anim.t),
+      onComplete: done,
+    });
+  }
+
+  /** O fogo (um item em chamas, um vizinho aceso): pega embaixo, sobe, murcha e carboniza. */
   public ignite(): boolean {
-    if (this.state !== 'tall') return false;
+    if (this.state !== 'tall' || this.green) return false;
     this.state = 'burning';
 
     this.actionTimer?.destroy();
@@ -159,24 +211,20 @@ export class TallGrassObject implements WorldProp {
       loop: true,
     });
 
-    // Real firelight while it burns — borrowed from the pool, never a new THREE light (adding
-    // one mid-run recompiles every lit material in the world; see World3D.FIRE_LIGHT_SLOTS).
+    // Luz de fogo de verdade enquanto arde — emprestada do pool, nunca uma luz THREE nova (ver World3D.FIRE_LIGHT_SLOTS).
     this.fireLight = world3d().lights.addFireLight(this.worldX, this.worldY, true);
     this.fireLight.setIntensityScale(0);
 
-    // One clock drives the whole burn: the blades char green→ash, the flames CLIMB from the
-    // base toward the tips, the tuft wilts down as its structure gives out, and the light
-    // rides the same curve. At the end the remains settle into charred flat stubble.
-    this.scene.tweens.killTweensOf(this.sprite);
+    // Um relógio só: os fios acinzentam, as chamas SOBEM do pé para a ponta, o tufo murcha e a luz segue a mesma curva.
+    this.scene.tweens.killTweensOf(this.anim);
     this.scene.tweens.addCounter({
       from: 0,
       to: 100,
       duration: BURN_MS,
       onUpdate: (tween) => {
         const progress = tween.getValue() ?? 0;
-        const c = Engine.Display.Color.Interpolate.ColorWithColor(WHITE, ASH, 100, progress);
-        this.sprite.setTint(Engine.Display.Color.GetColor(c.r, c.g, c.b));
-        this.sprite.setDisplaySize(TUFT_W, TUFT_H * (1 - WILT_FRAC * (progress / 100)));
+        this.field.setChar(this.tuft, progress / 100);
+        this.field.setSink(this.tuft, WILT_FRAC * (progress / 100));
         for (let i = 0; i < this.fires.length; i += 1) {
           this.fires[i].setElevation(FIRE_SPOTS[i].elev + FIRE_SPOTS[i].climb * (progress / 100));
         }
@@ -195,71 +243,56 @@ export class TallGrassObject implements WorldProp {
     });
   }
 
-  /**
-   * Planted grass springing out of a watered mound (see PlantSpotObject): the blades scale in
-   * with a vegetal overshoot. Only meaningful right after construction, while still 'tall'.
-   */
+  /** O broto que sobe da terra (o canteiro regado, ver PlantSpotObject): o tufo nasce de dentro do chão. */
   public sproutIn(): void {
     if (this.state !== 'tall') return;
-    this.sprite.setDisplaySize(TUFT_W * 0.15, TUFT_H * 0.15);
+    this.field.setSink(this.tuft, 1);
+    this.anim.t = 1;
     this.scene.tweens.add({
-      targets: this.sprite,
-      displayWidth: TUFT_W,
-      displayHeight: TUFT_H,
+      targets: this.anim,
+      t: 0,
       duration: 700,
-      ease: 'Back.easeOut',
+      ease: 'Cubic.easeOut',
+      onUpdate: () => this.field.setSink(this.tuft, this.anim.t),
     });
   }
 
-  /** Brief rustle for a bump without the scythe — the standing tuft shivers, solid. */
+  /** Um esbarrão sem a foice: os fios do tile sacodem e voltam — o tufo continua sólido. */
   public shake(): void {
     if (this.state !== 'tall') return;
-    this.scene.tweens.killTweensOf(this.sprite);
-    this.scene.tweens.add({
-      targets: this.sprite,
-      angle: { from: -5, to: 5 },
-      duration: 60,
-      yoyo: true,
-      repeat: 1,
-      ease: 'Sine.easeInOut',
-      onComplete: () => this.sprite.setAngle(0),
-    });
+    world3d().objects.shakeGrass(this.worldX, this.worldY);
   }
 
-  // The tuft is down: the SAME billboard swaps to the sheet's stump frame — the same plant
-  // mown to stubs (pale cut faces on the stems), charred if fire did the cutting. The blades
-  // fell in the collapse/burn; the frame swap is what remains standing. Stubs don't sway.
+  /** Já nasce cortado — o chão limpo: o mato do acampamento que o jogador cortou numa sessão de antes (o save lembra). */
+  public settle(): void {
+    if (this.state !== 'tall') return;
+    this.toCut(false);
+    this.sinkAway(0);
+  }
+
+  /** O tufo caiu: ficam os tocos do mesmo tufo — carbonizados, se foi o fogo. */
   private toCut(charred: boolean): void {
     this.state = 'cut';
     this.actionTimer?.destroy();
     this.actionTimer = undefined;
     this.fires.forEach((fire) => fire.destroy());
     this.fires = [];
-    this.fireLight?.destroy(); // the curve already faded it out — just release the pool slot
+    this.fireLight?.destroy(); // a curva já a apagou — só devolve o slot ao pool
     this.fireLight = undefined;
-
-    this.scene.tweens.killTweensOf(this.sprite);
-    this.sprite
-      .setTexture(TALL_SHEET, STUMP_FRAME)
-      .setDisplaySize(TUFT_W, TUFT_H) // undo the collapse/wilt scale — the stump art is short by itself
-      .setAngle(0)
-      .setDepthLayer('ground'); // the burn path skips cut(), so claim the layer here too
-    if (charred) this.sprite.setTint(CHARRED_TINT).setAlpha(0.85);
-  }
-
-  private advanceWind(): void {
-    this.windFrame = (this.windFrame + 1) % TALL_WIND_FRAMES;
-    if (this.state === 'tall') this.sprite.setTexture(TALL_SHEET, this.windFrame);
+    this.scene.tweens.killTweensOf(this.anim);
+    this.field.setState(this.tuft, 'stub');
+    this.field.setSink(this.tuft, 0);
+    this.field.setChar(this.tuft, charred ? 1 : 0);
   }
 
   public destroy(): void {
-    this.windTimer.destroy();
     this.actionTimer?.destroy();
+    this.vanishTimer?.destroy();
     this.fires.forEach((fire) => fire.destroy());
     this.fires = [];
     this.fireLight?.destroy();
     this.fireLight = undefined;
-    this.scene.tweens.killTweensOf(this.sprite);
-    this.sprite.destroy();
+    this.scene.tweens.killTweensOf(this.anim);
+    this.field.remove(this.tuft);
   }
 }

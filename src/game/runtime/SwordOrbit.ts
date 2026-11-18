@@ -1,6 +1,7 @@
 import * as Engine from '@/game/engine';
 
 import { ASSET_KEYS, ITEM_FRAMES, SCENE_DEPTHS } from '@/game/constants';
+import { SwordMow } from './SwordMow';
 import { SwordChop, SLASH_BLADE_FACTOR, TRAIL_ALPHAS, swingLitTint, CHOP_REAR_MS, CHOP_HANG_MS, CHOP_DRIVE_MS, CHOP_RECOIL_MS, CHOP_FADE_MS } from './SwordChop';
 export { AXE_STUCK_MS } from './SwordChop';
 
@@ -76,6 +77,8 @@ export class SwordSlash {
   public readonly chop$ = { angle: 0, handX: 0, handY: 0, size: 0, trail: 0, spin: 1 };
   /** O golpe de machado (ver SwordChop). */
   private readonly chopper = new SwordChop(this);
+  /** A roçada da foice (ver SwordMow). */
+  private readonly mower = new SwordMow(this);
 
   public constructor(scene: Engine.Scene) {
     this.scene = scene;
@@ -99,7 +102,14 @@ export class SwordSlash {
 
   /** O golpe de machado (ver SwordChop.chop). */
   public chop(...args: Parameters<SwordChop['chop']>): void {
+    this.mower.stop();
     this.chopper.chop(...args);
+  }
+
+  /** A roçada da foice no mato (ver SwordMow.mow). */
+  public mow(...args: Parameters<SwordMow['mow']>): void {
+    this.scene.tweens.killTweensOf(this.chop$);
+    this.mower.mow(...args);
   }
 
   /** How lit the tile the hero swings from is (World3D.lightLevelAt), 0..1. */
@@ -120,6 +130,7 @@ export class SwordSlash {
     tileSize: number,
     item?: { texture: string; frame: number; onFire?: boolean; flipX?: boolean; flipY?: boolean },
   ): void {
+    this.mower.stop();
     this.scene.tweens.killTweensOf(this.sprite);
     this.scene.tweens.killTweensOf(this.chop$); // a chop still in the air would fight for the sprite
     this.trails.forEach(t => this.scene.tweens.killTweensOf(t));
@@ -222,6 +233,7 @@ export class SwordSlash {
    * de 180 le um valor embrulhado no frame seguinte e volta girando pelo caminho longo.
    */
   public spin(playerScreenX: number, playerScreenY: number, tileSize: number): void {
+    this.mower.stop();
     this.scene.tweens.killTweensOf(this.sprite);
     this.scene.tweens.killTweensOf(this.chop$);
     this.trails.forEach(t => this.scene.tweens.killTweensOf(t));

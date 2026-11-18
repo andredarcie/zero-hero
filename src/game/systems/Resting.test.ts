@@ -6,8 +6,9 @@ import type { FireBedHost } from '@/game/entities/FireBed';
 import { tLines } from '@/game/i18n/i18n';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import { createHeroView } from '@/game/runtime/HeroView';
+import type { StarGazeHost } from '@/game/entities/StarGaze';
 import {
-  DEATH_SCYTHE_KEY, DEATH_VISIT_KEY, DEATH_VISITS, REST_TIME_SCALE, Resting, SLEEP_TIME_SCALE,
+  DEATH_SCYTHE_KEY, DEATH_VISIT_KEY, DEATH_VISITS, GAZE_SETTLE_MS, REST_TIME_SCALE, Resting, SLEEP_TIME_SCALE,
   type RestBed, type RestHost, type RestParts,
 } from '@/game/systems/Resting';
 
@@ -22,8 +23,12 @@ interface Rig {
   press: (code: string, repeat?: boolean) => void;
   listening: () => number;
   beds: Array<{ host: FireBedHost; calls: string[] }>;
+  gazes: StarGazeHost[];
+  finishGaze: () => void;
   deaths: DeathVisitHost[];
   finishDeath: () => void;
+  /** O relógio da cena (ms): o céu da primeira noite espera o corpo assentar nele. */
+  setNow: (ms: number) => void;
   stood: Array<{ sleeping: boolean; atFind: boolean }>;
   scythes: Array<{ x: number; y: number }>;
 }
@@ -36,13 +41,16 @@ const rig = (over: Partial<RestHost> = {}): Rig => {
   const later: Array<() => void> = [];
   const listeners = new Set<(event: KeyboardEvent) => void>();
   const beds: Rig['beds'] = [];
+  const gazes: StarGazeHost[] = [];
   const deaths: DeathVisitHost[] = [];
   const stood: Rig['stood'] = [];
   const scythes: Rig['scythes'] = [];
+  let endGaze: (() => void) | undefined;
   let endDeath: (() => void) | undefined;
+  const sceneTime = { now: 0, delayedCall: (_ms: number, fn: () => void) => { later.push(fn); } };
   const scene = {
     tweens: { add: () => undefined, killTweensOf: () => undefined },
-    time: { now: 0, delayedCall: (_ms: number, fn: () => void) => { later.push(fn); } },
+    time: sceneTime,
   } as unknown as Engine.Scene;
   const parts: RestParts = {
     bed: (host) => {
@@ -56,6 +64,10 @@ const rig = (over: Partial<RestHost> = {}): Rig => {
         destroy: () => calls.push('destroy'),
       };
       return bed;
+    },
+    gaze: (host) => {
+      gazes.push(host);
+      return { run: () => new Promise<void>((resolve) => { endGaze = resolve; }) };
     },
     death: (host) => {
       deaths.push(host);
@@ -102,8 +114,10 @@ const rig = (over: Partial<RestHost> = {}): Rig => {
   };
   return {
     rest: new Resting(host, parts), log, scales, clock, heard, later, press, listening: () => listeners.size,
-    beds, deaths, stood, scythes,
+    beds, gazes, deaths, stood, scythes,
+    finishGaze: () => endGaze?.(),
     finishDeath: () => endDeath?.(),
+    setNow: (ms) => { sceneTime.now = ms; },
   };
 };
 
@@ -222,42 +236,107 @@ describe('Resting', () => {
     expect(r.deaths).toHaveLength(0);
   });
 
-  it('no acampamento a Morte vem uma vez por noite; ninguém levanta enquanto ela fala; a foice fica onde ela esteve', async () => {
+  it('a primeira noite no acampamento: o escuro chega, a noite espera o corpo assentar, a câmera vai ao céu e só então a Morte vem (pedido do autor)', async () => {
     const r = rig();
     r.rest.lieDown(54, 48, { fixedBed: true, atCamp: true });
     r.clock.sleep = true;
-    r.rest.tick();
-    r.clock.sleep = false;
-    expect(r.rest.tick()).toBe(true);
-    expect(r.deaths).toHaveLength(1);
-    expect(r.log).toContain('cutscene:on');
+    r.clock.night = true;
+    // Acabou de deitar: a noite para (dormindo ela passaria inteira em segundos), e o céu ainda espera.
+    expect(r.rest.tick()).toBe(false);
     expect(r.scales.at(-1)).toBe(0);
+    expect(r.gazes).toHaveLength(0);
+    r.setNow(GAZE_SETTLE_MS);
+    expect(r.rest.tick()).toBe(true);
+    expect(r.gazes).toHaveLength(1);
+    expect(r.gazes[0].at).toEqual({ x: 10, y: 10 });
+    expect(r.deaths).toHaveLength(0);
+    expect(r.log).toContain('cutscene:on');
     expect(r.beds[0].calls).toContain('quiet');
-    // No acampamento ela senta na clareira, ao lado das pedras.
-    expect(r.deaths[0].at).toEqual({ x: 55, y: 49 });
+    // Olhando o céu, ninguém levanta, e o quadro não volta para o jogo.
     r.rest.standUp();
     expect(r.rest.isResting).toBe(true);
+    expect(r.rest.tick()).toBe(false);
+    expect(r.gazes).toHaveLength(1);
+    expect(r.log.filter((l) => l === 'cutscene:off')).toHaveLength(0);
+    // A câmera voltou ao chão: a Morte, na clareira ao lado das pedras.
+    r.finishGaze();
+    await flush();
+    expect(r.deaths).toHaveLength(1);
+    expect(r.deaths[0].at).toEqual({ x: 55, y: 49 });
+    expect(r.log.filter((l) => l === 'cutscene:off')).toHaveLength(0);
     r.finishDeath();
     await flush();
     expect(r.heard.has(DEATH_VISIT_KEY)).toBe(true);
     expect(r.log.at(-1)).toBe('cutscene:off');
     expect(r.scales.at(-1)).toBe(SLEEP_TIME_SCALE);
-    // A mesma noite não traz outra visita: só acorda quando clareia.
-    r.clock.night = true;
+    // A mesma noite não traz outra visita nem outro céu: só acorda quando clareia.
     expect(r.rest.tick()).toBe(false);
+    r.clock.sleep = false;
+    expect(r.rest.tick()).toBe(false);
+    expect(r.log).toContain('grow');
+    expect(r.gazes).toHaveLength(1);
     expect(r.deaths).toHaveLength(1);
+    r.clock.night = false;
+    expect(r.rest.tick()).toBe(true);
+    // Na primeira noite ela só AVISA (pedido do autor, 2026-11-17): a foice fica para o fim da terceira.
+    expect(r.scythes).toEqual([]);
+    expect(r.heard.has(DEATH_SCYTHE_KEY)).toBe(false);
+  });
+
+  it('a foice só fica no fim da TERCEIRA noite, onde a Morte esteve, e uma vez só', async () => {
+    const r = rig();
+    r.heard.add(DEATH_VISITS[0].key);
+    r.heard.add(DEATH_VISITS[1].key);
+    r.rest.lieDown(54, 48, { fixedBed: true, atCamp: true });
+    r.setNow(GAZE_SETTLE_MS * 4);
+    r.clock.sleep = true;
+    r.clock.night = true;
+    r.rest.tick();
+    r.clock.sleep = false;
+    expect(r.rest.tick()).toBe(true);
+    r.finishDeath();
+    await flush();
+    expect(r.heard.has(DEATH_VISITS[2].key)).toBe(true);
+    expect(r.scythes).toEqual([]);
     r.clock.night = false;
     expect(r.rest.tick()).toBe(true);
     expect(r.scythes).toEqual([{ x: 55, y: 49 }]);
     expect(r.heard.has(DEATH_SCYTHE_KEY)).toBe(true);
   });
 
+  it('nas noites seguintes a Morte vem de madrugada, sem o céu, uma vez por noite', async () => {
+    const r = rig();
+    r.heard.add(DEATH_VISIT_KEY);
+    r.rest.lieDown(54, 48, { fixedBed: true, atCamp: true });
+    r.setNow(GAZE_SETTLE_MS * 4);
+    r.clock.sleep = true;
+    r.clock.night = true;
+    expect(r.rest.tick()).toBe(false);
+    expect(r.scales.at(-1)).toBe(SLEEP_TIME_SCALE);
+    r.clock.sleep = false;
+    expect(r.rest.tick()).toBe(true);
+    expect(r.gazes).toHaveLength(0);
+    expect(r.deaths).toHaveLength(1);
+    expect(r.scales.at(-1)).toBe(0);
+    r.finishDeath();
+    await flush();
+    expect(r.heard.has(DEATH_VISITS[1].key)).toBe(true);
+    expect(r.rest.tick()).toBe(false);
+    expect(r.deaths).toHaveLength(1);
+  });
+
   it('as três noites, em ordem, e depois nenhuma', async () => {
     const r = rig();
+    r.setNow(GAZE_SETTLE_MS * 10);
     for (let night = 0; night < DEATH_VISITS.length + 1; night += 1) {
       r.rest.lieDown(54, 48, { fixedBed: true, atCamp: true });
+      r.setNow(GAZE_SETTLE_MS * (11 + night * 2));
       r.clock.sleep = true;
       r.rest.tick();
+      if (night === 0) {
+        r.finishGaze();
+        await flush();
+      }
       r.clock.sleep = false;
       r.rest.tick();
       if (r.deaths.length > night) {
@@ -268,6 +347,7 @@ describe('Resting', () => {
       }
       r.rest.standUp();
     }
+    expect(r.gazes).toHaveLength(1);
     expect(r.deaths).toHaveLength(DEATH_VISITS.length);
     expect(DEATH_VISITS.every((v) => r.heard.has(v.key))).toBe(true);
     expect(DEATH_VISITS.every((v) => tLines(v.lines).length > 0)).toBe(true);
@@ -275,12 +355,17 @@ describe('Resting', () => {
 
   it('a foice só uma vez, e nunca no laboratório', () => {
     const lab = rig({ canVisit: () => false });
-    lab.heard.add(DEATH_VISIT_KEY);
+    for (const v of DEATH_VISITS) lab.heard.add(v.key);
     lab.rest.sit(10, 9);
     lab.rest.standUp();
     expect(lab.scythes).toHaveLength(0);
     const r = rig();
+    // Só a primeira noite ouvida: nada ainda.
     r.heard.add(DEATH_VISIT_KEY);
+    r.rest.sit(10, 9);
+    r.rest.standUp();
+    expect(r.scythes).toHaveLength(0);
+    for (const v of DEATH_VISITS) r.heard.add(v.key);
     r.rest.sit(10, 9);
     r.rest.standUp();
     r.rest.sit(10, 9);

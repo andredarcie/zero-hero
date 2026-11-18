@@ -10944,7 +10944,7 @@
           14,
           null,
           null,
-          19,
+          null,
           0,
           0,
           null
@@ -11720,44 +11720,44 @@
           null
         ],
         [
-          1,
-          19,
-          20,
+          null,
+          null,
+          null,
           0,
           null,
           null,
           null,
           null,
           null,
-          4,
+          null,
           null,
           null
         ],
         [
-          19,
           null,
           null,
-          0,
+          null,
+          null,
+          null,
+          null,
           null,
           null,
           null,
           null,
           4,
-          4,
-          4,
-          1
+          null
         ],
         [
           null,
-          4,
-          4,
-          4,
           null,
           null,
           null,
           null,
-          4,
-          4,
+          null,
+          null,
+          null,
+          null,
+          null,
           4,
           4
         ]
@@ -15201,9 +15201,23 @@
       "upper": [
         [
           4,
-          1,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
           4,
-          4,
+          null,
+          null,
+          null,
           null,
           null,
           null,
@@ -15215,41 +15229,13 @@
         ],
         [
           4,
-          4,
-          null,
-          0,
           null,
           null,
           null,
           null,
           null,
-          4,
-          null,
-          null
-        ],
-        [
-          4,
-          4,
-          0,
-          1,
           null,
           null,
-          null,
-          1,
-          19,
-          null,
-          null,
-          null
-        ],
-        [
-          null,
-          null,
-          null,
-          19,
-          null,
-          null,
-          null,
-          19,
           null,
           null,
           null,
@@ -15259,11 +15245,25 @@
           null,
           null,
           null,
-          20,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        [
+          null,
+          null,
+          null,
+          null,
           null,
           4,
           null,
-          20,
+          null,
           null,
           null,
           null,
@@ -17547,11 +17547,6 @@
       "worldY": 56
     },
     {
-      "type": "youngOak",
-      "worldX": 55,
-      "worldY": 46
-    },
-    {
       "type": "fallenLog",
       "worldX": 48,
       "worldY": 53
@@ -17715,6 +17710,292 @@
       "type": "ironRock",
       "worldX": 8,
       "worldY": 0
+    },
+    {
+      "type": "toolbox",
+      "worldX": 55,
+      "worldY": 45,
+      "dir": 2
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 55,
+      "worldY": 44
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 56,
+      "worldY": 44
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 58,
+      "worldY": 44
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 59,
+      "worldY": 44
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 48,
+      "worldY": 45
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 49,
+      "worldY": 45
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 50,
+      "worldY": 45
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 56,
+      "worldY": 45
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 57,
+      "worldY": 45
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 58,
+      "worldY": 45
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 59,
+      "worldY": 45
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 48,
+      "worldY": 46
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 49,
+      "worldY": 46
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 51,
+      "worldY": 46
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 56,
+      "worldY": 46
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 57,
+      "worldY": 46
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 59,
+      "worldY": 46
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 48,
+      "worldY": 47
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 49,
+      "worldY": 47
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 50,
+      "worldY": 47
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 51,
+      "worldY": 47
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 56,
+      "worldY": 47
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 57,
+      "worldY": 47
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 49,
+      "worldY": 48
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 50,
+      "worldY": 48
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 51,
+      "worldY": 48
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 56,
+      "worldY": 48
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 57,
+      "worldY": 48
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 58,
+      "worldY": 48
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 59,
+      "worldY": 48
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 49,
+      "worldY": 49
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 50,
+      "worldY": 49
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 51,
+      "worldY": 49
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 56,
+      "worldY": 49
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 57,
+      "worldY": 49
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 49,
+      "worldY": 50
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 50,
+      "worldY": 50
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 51,
+      "worldY": 50
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 56,
+      "worldY": 50
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 58,
+      "worldY": 50
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 59,
+      "worldY": 50
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 48,
+      "worldY": 51
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 49,
+      "worldY": 51
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 50,
+      "worldY": 51
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 51,
+      "worldY": 51
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 53,
+      "worldY": 51
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 55,
+      "worldY": 51
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 58,
+      "worldY": 51
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 59,
+      "worldY": 51
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 48,
+      "worldY": 52
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 49,
+      "worldY": 52
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 50,
+      "worldY": 52
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 51,
+      "worldY": 52
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 52,
+      "worldY": 52
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 55,
+      "worldY": 52
+    },
+    {
+      "type": "tallGrass",
+      "worldX": 56,
+      "worldY": 52
     }
   ],
   "dialogs": {

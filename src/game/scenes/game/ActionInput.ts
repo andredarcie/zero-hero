@@ -122,7 +122,7 @@ export class ActionInput {
       && !this.host.hand.itemGetOpen && !this.host.cutsceneActive
       && !this.host.pause.pauseMenu
       && !this.host.orders.orderOverlay && !this.host.forage.foraging && !this.host.camp.notebook.overlay
-      && !this.host.camp.sketching.overlay && this.host.movementController !== undefined;
+      && !this.host.camp.sketching.overlay && !this.host.camp.home.isOpen && this.host.movementController !== undefined;
   }
 
   /**
@@ -193,7 +193,10 @@ export class ActionInput {
     // frente para a mão, o caderno de desenho (a etiqueta "Desenhar" embaixo da tela diz, e fica apagada quando a
     // frente pede outra coisa). Pousar no chão livre saiu (HandItems.handAt), então nenhum dos dois rouba gesto.
     if (this.host.camp.skipping.startAt(front.x, front.y)) return;
-    if (!this.host.itemManager?.kindAt(front.x, front.y) && this.host.camp.sketching.tryOpen()) return;
+    // A mesma regra da etiqueta "Desenhar" (AnimalSketching): só quando a frente não pede nada à mão — o enfeite na mão
+    // diante de chão livre é para pousar, e um passarinho por perto não pode roubar esse gesto.
+    if (!this.host.itemManager?.kindAt(front.x, front.y) && this.host.verbs.handVerbAt(front.x, front.y) === null
+      && this.host.camp.sketching.tryOpen()) return;
     // A MÃO: pegar, trocar ou pousar a coisa do tile da frente.
     if (this.host.hand.handAt(front.x, front.y)) return;
     this.host.bumps.thinkOfNeed(front.x, front.y, true);
@@ -239,9 +242,13 @@ export class ActionInput {
     this.host.bumps.thinkOfNeed(x, y, true);
     if (this.host.questSetup.lumberQuest?.interactAt(x, y)) return;
     if (this.host.questSetup.astronomerQuest?.interactAt(x, y)) return;
+    // ½. A BANCADA DO LAR: o material na mão fica ao lado dela, que é de onde ela gasta (CampHome).
+    if (this.host.camp.home.stockBenchAt(x, y)) return;
     // 1. O ITEM ESCOLHIDO AGE — a tabela inteira (machado→árvore, picareta→rocha, balde→água,
     //    chave→porta, tocha→fogueira, pá→terra, semente→buraco, estação→instala).
     if (this.host.heldItem !== 'none' && this.host.use.useItemAt(x, y)) return;
+    // 1½. O ENFEITE QUE RESPONDE: o relógio de sol diz a hora, o sino toca (CampHome).
+    if (this.host.camp.home.useDecorAt(x, y)) return;
     // 2. A BIGORNA: malha a peça que trabalha, ou devolve a que não trabalha (a martelada no chão saiu).
     if (this.host.forge.workAltarAt(x, y)) return;
     // 3. RECOLHER a máquina que o JOGADOR construiu.

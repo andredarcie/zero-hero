@@ -3,6 +3,7 @@
 import { localStore, platform } from '@/game/platform/platform';
 import { AmbiencePlayer, AMBIENCE_VOL, clamp01, type AmbienceBed } from './AmbiencePlayer';
 import { WorkSounds, SAMPLES, type SampleKey } from './WorkSounds';
+import { MowSounds } from './MowSounds';
 import { UiSounds } from './UiSounds';
 import { NatureSounds } from './NatureSounds';
 import { StorySounds } from './StorySounds';
@@ -199,6 +200,8 @@ export class SoundManager {
   public readonly ambience: AmbiencePlayer = new AmbiencePlayer(this);
   /** O som das mÃ£os e das ferramentas. (ver WorkSounds) */
   public readonly work: WorkSounds = new WorkSounds(this);
+  /** The scythe in the tall grass: the swish and the cut, drawn fresh every stroke. (see MowSounds) */
+  public readonly mow: MowSounds = new MowSounds(this);
   /** O som das telas e do que vai na mÃ£o. (ver UiSounds) */
   public readonly ui: UiSounds = new UiSounds(this);
   /** O som do vale vivo. (ver NatureSounds) */

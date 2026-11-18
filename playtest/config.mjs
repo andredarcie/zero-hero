@@ -37,7 +37,8 @@ export const config = {
     ? { width: Number(process.env.PLAYTEST_VIEWPORT.split('x')[0]), height: Number(process.env.PLAYTEST_VIEWPORT.split('x')[1]) }
     : { width: 1280, height: 800 },
   // Gravando, a escala é 1: com 2 o Chromium ora manda o quadro inteiro, ora só um canto dele.
-  deviceScaleFactor: process.env.PLAYTEST_VIDEO ? 1 : 2,
+  // PLAYTEST_DSF=1 também: um quarto dos pixels, para a partida longa (zerar) caber na memória livre.
+  deviceScaleFactor: Number(process.env.PLAYTEST_DSF ?? (process.env.PLAYTEST_VIDEO ? 1 : 2)),
   videoDir: process.env.PLAYTEST_VIDEO,
 
   // Boot = Vite up + first 2D scene alive.

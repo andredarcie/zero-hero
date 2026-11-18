@@ -2,11 +2,12 @@
 
 import { getDay, getTimeOfDay } from '@/game/runtime/timeOfDay';
 import { adventureState, saveAdventure, type AdventureGroundItem } from '@/game/runtime/adventureState';
+import { nearestRoomyTile } from '@/game/world/roomyTile';
 import type { GameScene } from '../GameScene';
 
 /** O que RunSave usa de GameScene. */
 export type RunSaveHost = Pick<GameScene,
-  'adventure' | 'arc' | 'inventory' | 'itemManager' | 'machines'
+  'adventure' | 'arc' | 'inventory' | 'itemManager' | 'machines' | 'movementController'
   | 'playerWorld' | 'props' | 'query' | 'seenDialogKeys' | 'seenItems'
 >;
 
@@ -58,13 +59,30 @@ export class RunSave {
   }
 
   /**
-   * O tile de onde ele continua. Sentado EM CIMA de algo (a pedra de meditar, um achado com vista) o tile dele é
-   * sólido, e o Continue o punha dentro da pedra, no chão: volta-se do vizinho livre, a frente primeiro.
+   * O tile de onde ele continua. Sentado EM CIMA de algo (a pedra de meditar, um achado com vista, o colchão) o tile
+   * dele é sólido, e o Continue o punha dentro da pedra: volta-se do vizinho livre DE ONDE SE SAI ANDANDO, a frente
+   * primeiro. Só "livre" não basta: do colchão, o primeiro livre era o beco do varal da Shui, e o herói voltava preso.
    */
   private respawnTile(): { worldX: number; worldY: number } {
     const { worldX, worldY } = this.host.playerWorld;
-    if (!this.host.query.isSolidForEntities(worldX, worldY)) return { worldX, worldY };
-    const free = STEP_OFF.find(([dx, dy]) => !this.host.query.isSolidForEntities(worldX + dx, worldY + dy));
+    const solid = (x: number, y: number): boolean => this.host.query.isSolidForEntities(x, y);
+    if (!solid(worldX, worldY)) return { worldX, worldY };
+    const roomy = nearestRoomyTile(worldX, worldY, solid, 1);
+    if (roomy) return { worldX: roomy.x, worldY: roomy.y };
+    const free = STEP_OFF.find(([dx, dy]) => !solid(worldX + dx, worldY + dy));
     return free ? { worldX: worldX + free[0], worldY: worldY + free[1] } : { worldX, worldY };
+  }
+
+  /**
+   * CONTINUAR NUM BECO NÃO PRENDE: um save de antes do conserto acima pode ter o herói num tile livre cercado de
+   * peças. Com o mundo montado (as lembranças do acampamento incluídas), ele continua do tile com espaço mais perto.
+   */
+  public unstickHero(): void {
+    const { worldX, worldY } = this.host.playerWorld;
+    const to = nearestRoomyTile(worldX, worldY, (x, y) => this.host.query.isSolidForEntities(x, y));
+    if (!to || (to.x === worldX && to.y === worldY)) return;
+    this.host.playerWorld.worldX = to.x;
+    this.host.playerWorld.worldY = to.y;
+    this.host.movementController?.interruptMovement(to.x, to.y);
   }
 }

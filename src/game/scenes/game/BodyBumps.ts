@@ -125,7 +125,8 @@ export class BodyBumps {
     // O arbusto seco abre com o fogo OU com o machado: com o machado (nas costas ou guardado) não falta nada.
     if (this.host.query.getDryBushAt(wx, wy)?.blocking) return this.host.torch.heldOnFire || this.host.inventory.owns('axe') ? null : 'torch';
     const grass = this.host.query.getTallGrassAt(wx, wy);
-    if (grass?.blocking && grass.isTall) return held === 'scythe' || this.host.torch.heldOnFire ? null : 'scythe';
+    // O mato verde do acampamento só a foice abre (o fogo não pega nele).
+    if (grass?.blocking && grass.isTall) return held === 'scythe' || (this.host.torch.heldOnFire && !grass.green) ? null : 'scythe';
     const spot = this.host.query.getPlantSpotAt(wx, wy);
     if (spot?.isMound) return held === 'bucketFull' ? null : 'bucketFull';
     if (!pressed) {

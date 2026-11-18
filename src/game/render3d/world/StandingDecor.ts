@@ -256,6 +256,24 @@ export class StandingDecor {
     if (this.quads.has(key) && this.flexible.has(key)) this.rustles.set(key, { x, z, t: 0 });
   }
 
+  /**
+   * Sacode o tile mesmo sem decoração nele: o MATO ALTO (render3d/world/TallGrassField) é desenhado pelo mesmo
+   * programa, e o pisão do shader alcança qualquer fio cujo pé caia no tile — o esbarrão no tufo usa este.
+   */
+  public shake(x: number, z: number): void {
+    this.rustles.set(tileKey(x, z), { x, z, t: 0 });
+  }
+
+  /**
+   * UMA ONDA NO CAPIM a partir de um ponto (o golpe da foice, scenes/game/MowFx): o mesmo anel da esteira de um passo,
+   * com a força que se quiser — todo fio em volta, da decoração e do mato alto, é empurrado para longe e volta
+   * balançando. Ocupa o slot mais velho da esteira.
+   */
+  public ripple(x: number, z: number, strength: number): void {
+    standWakeUniform.value[this.wakeNext].set(x, z, this.host.now(), strength);
+    this.wakeNext = (this.wakeNext + 1) % STAND_WAKE_SLOTS;
+  }
+
   /** A cada quadro: o knob, os pisões e os corpos que passam. */
   public update(dt: number): void {
     standUniform.value = Math.min(1, Math.max(0, this.host.stand()));

@@ -21,6 +21,8 @@ export class Cinema {
   public moonShaft?: Billboard3D;
   public groundCrack?: Billboard3D;
   public dollyBase?: { h: number; b: number };
+  /** O dolly andando agora (ver dollyTo: um de cada vez). */
+  private dollyTween?: { stop: () => unknown };
   public creditsRoll?: CreditsRoll;
 
   public constructor(private readonly host: CinemaHost) {}
@@ -89,16 +91,22 @@ export class Cinema {
     if (!this.dollyBase) this.dollyBase = { h: w3.params.camHeight, b: w3.params.camBack };
     const base = this.dollyBase;
     const from = w3.params.camHeight / base.h;
+    // UM DOLLY DE CADA VEZ: o novo parte de onde o anterior parou e toma o lugar dele. Dois contadores no mesmo eixo
+    // brigavam quadro a quadro (a meditação subindo a câmera e o levantar trazendo de volta). O que sai resolve a
+    // promessa dele, para quem esperava não ficar preso.
+    this.dollyTween?.stop();
     return new Promise<void>((resolve) => {
-      this.host.tweens.addCounter({
+      const tween = this.host.tweens.addCounter({
         from, to: factor, duration, ease,
         onUpdate: (tw) => {
           const f = tw.getValue() ?? factor;
           w3.params.camHeight = base.h * f;
           w3.params.camBack = base.b * f;
         },
-        onComplete: () => resolve(),
+        onComplete: () => { if (this.dollyTween === tween) this.dollyTween = undefined; resolve(); },
+        onStop: () => { if (this.dollyTween === tween) this.dollyTween = undefined; resolve(); },
       });
+      this.dollyTween = tween;
     });
   }
 
@@ -235,12 +243,16 @@ export class Cinema {
     });
   }
 
-  /** OS CRÉDITOS (runtime/CreditsRoll): no fim, a cena volta ao título. */
-  public rollCredits(): void {
+  /**
+   * OS CRÉDITOS (runtime/CreditsRoll). No fim roda `onDone` — na aventura, a manhã no acampamento (MorningAfter); sem
+   * ele, a cena volta ao título (ou recomeça, onde não há título: o playtest do editor).
+   */
+  public rollCredits(onDone?: () => void): void {
     this.creditsRoll?.remove();
     const roll = new CreditsRoll(() => {
       if (this.creditsRoll === roll) this.creditsRoll = undefined;
-      if (this.host.scene.get('title')) this.host.scene.start('title');
+      if (onDone) onDone();
+      else if (this.host.scene.get('title')) this.host.scene.start('title');
       else this.host.scene.restart();
     });
     this.creditsRoll = roll;

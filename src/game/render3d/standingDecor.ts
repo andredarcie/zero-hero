@@ -119,9 +119,28 @@ export interface ShadowDot {
   b: number;
 }
 
-type AnyPiece = StandingPiece | BladePiece | ShadowDot;
+/**
+ * Um RETÂNGULO DEITADO de arte (a sombra pontilhada do mato alto, render3d/world/TallGrassField): a região do quadro
+ * de (col0, row0) a (col1, row1), inclusive, deitada no chão de x0..x1 e z0 (norte) a z1 (sul), olhando para cima.
+ */
+export interface FlatPiece {
+  flatRect: true;
+  x0: number; x1: number; z0: number; z1: number; y: number;
+  frame: number;
+  col0: number; row0: number; col1: number; row1: number;
+  footZ: number;
+  r: number; g: number; b: number;
+}
+
+type AnyPiece = StandingPiece | BladePiece | ShadowDot | FlatPiece;
 const isBlade = (p: AnyPiece): p is BladePiece => (p as BladePiece).blade === true;
 const isDot = (p: AnyPiece): p is ShadowDot => (p as ShadowDot).dot === true;
+const isFlat = (p: AnyPiece): p is FlatPiece => (p as FlatPiece).flatRect === true;
+
+/** A janela de um quadro no atlas (a de `tilesetFrameUv`): os cantos e os centros dos texels da borda. */
+export type FrameUv = ReturnType<typeof tilesetFrameUv>;
+/** De onde sai a janela de cada quadro: o tileset, por padrão; o mato alto passa o atlas dele. */
+export type FrameUvOf = (frame: number) => FrameUv;
 
 /** A altura do quad em pé, em tiles: o desenho inteiro, sem as fileiras vazias de baixo (16 px por tile). */
 export const pieceHeight = (pad: number): number => 1 - pad;
@@ -145,8 +164,8 @@ interface QuadSpec {
  * O tile inteiro em pé, mais a margem de balanço dos dois lados (a arte fica no meio, no lugar dela). A peça PARADA
  * não balança: não tem margem nem é planta para o shader.
  */
-const pieceQuad = (p: StandingPiece): QuadSpec => {
-  const f = tilesetFrameUv(p.frame);
+const pieceQuad = (p: StandingPiece, uvOf: FrameUvOf): QuadSpec => {
+  const f = uvOf(p.frame);
   const h = pieceHeight(p.pad);
   const margin = p.still ? 0 : SWING_MARGIN;
   // a margem em u: a mesma fração do quadro (16 pixels de arte por tile)
@@ -162,8 +181,8 @@ const pieceQuad = (p: StandingPiece): QuadSpec => {
 };
 
 /** A sombra de contato: o pixel dela deitado no chão, olhando para cima, parado (não é planta, não tem altura). */
-const dotQuad = (p: ShadowDot): QuadSpec => {
-  const f = tilesetFrameUv(p.frame);
+const dotQuad = (p: ShadowDot, uvOf: FrameUvOf): QuadSpec => {
+  const f = uvOf(p.frame);
   const tu = (f.u1 - f.u0) / 16;
   const tv = (f.v1 - f.v0) / 16;
   const u0 = f.u0 + p.col * tu;
@@ -184,8 +203,8 @@ const dotQuad = (p: ShadowDot): QuadSpec => {
  * do fio. A janela da arte (`bounds`) é a coluna dele e só ela — o que a curva trouxer de fora some (decorSway.ts) —,
  * então o fio vizinho do desenho nunca aparece neste quad.
  */
-const bladeQuad = (p: BladePiece): QuadSpec => {
-  const f = tilesetFrameUv(p.frame);
+const bladeQuad = (p: BladePiece, uvOf: FrameUvOf): QuadSpec => {
+  const f = uvOf(p.frame);
   const tu = (f.u1 - f.u0) / 16;
   const tv = (f.v1 - f.v0) / 16;
   const m = bladeSwing(grownHeight(p, p.grow));
@@ -205,6 +224,24 @@ const bladeQuad = (p: BladePiece): QuadSpec => {
   };
 };
 
+/** O retângulo deitado: a região dele no quadro, olhando para cima, parada (não é planta, não tem altura). */
+const flatQuad = (p: FlatPiece, uvOf: FrameUvOf): QuadSpec => {
+  const f = uvOf(p.frame);
+  const tu = (f.u1 - f.u0) / 16;
+  const tv = (f.v1 - f.v0) / 16;
+  const u0 = f.u0 + p.col0 * tu;
+  const u1 = f.u0 + (p.col1 + 1) * tu;
+  const vTop = f.v1 - p.row0 * tv;
+  const vBottom = f.v1 - (p.row1 + 1) * tv;
+  return {
+    x0: p.x0, x1: p.x1, y0: p.y, y1: p.y, z: p.z0,
+    u0, u1, v0: vBottom, v1: vTop,
+    bounds: [u0 + tu / 2, vBottom + tv / 2, u1 - tu / 2, vTop - tv / 2],
+    sx: (p.x0 + p.x1) / 2, sz: (p.z0 + p.z1) / 2, h0: 0, h1: 0, phase: 0,
+    flex: 0, blade: [0, 0, 0, 0], flat: { z1: p.z1 }, r: p.r, g: p.g, b: p.b,
+  };
+};
+
 /**
  * Os quads em pé, NA ORDEM dada (o chamador ordena do norte para o sul: ver o topo), de frente para a câmera.
  * Cantos: pé esquerdo, pé direito, topo direito, topo esquerdo. A peça de tile é o tile mais a margem de balanço dos
@@ -215,7 +252,10 @@ const bladeQuad = (p: BladePiece): QuadSpec => {
  * planta, 0 no que é rígido; `aBlade` = (pixels do fio abaixo do quad + 1 — 0 se não é fio —, pixels do pé, altura
  * do fio, crescimento da haste). A sombra de contato é um quad deitado, olhando para cima.
  */
-export const buildStandingDecorGeometry = (pieces: ReadonlyArray<AnyPiece>): THREE.BufferGeometry => {
+export const buildStandingDecorGeometry = (
+  pieces: ReadonlyArray<AnyPiece>,
+  uvOf: FrameUvOf = tilesetFrameUv,
+): THREE.BufferGeometry => {
   const n = pieces.length;
   const pos = new Float32Array(n * 12);
   const uv = new Float32Array(n * 8);
@@ -227,7 +267,7 @@ export const buildStandingDecorGeometry = (pieces: ReadonlyArray<AnyPiece>): THR
   const blade = new Float32Array(n * 16);
   const idx = new Uint32Array(n * 6);
   pieces.forEach((p, i) => {
-    const q = isBlade(p) ? bladeQuad(p) : isDot(p) ? dotQuad(p) : pieceQuad(p);
+    const q = isBlade(p) ? bladeQuad(p, uvOf) : isDot(p) ? dotQuad(p, uvOf) : isFlat(p) ? flatQuad(p, uvOf) : pieceQuad(p, uvOf);
     // em pé: pé esquerdo, pé direito, topo direito, topo esquerdo; deitado: sul esquerdo, sul direito, norte direito,
     // norte esquerdo (a mesma volta, então ele olha para cima)
     if (q.flat) pos.set([q.x0, q.y0, q.flat.z1, q.x1, q.y0, q.flat.z1, q.x1, q.y0, q.z, q.x0, q.y0, q.z], i * 12);

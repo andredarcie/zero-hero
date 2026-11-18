@@ -165,7 +165,8 @@ export abstract class CraftOverlay {
 
 // ── RACHAR ───────────────────────────────────────────────────────────────────────────────────────
 
-export const LOGS_TO_SPLIT = 4;
+/** Os galhos da fogueira do Marco: eram quatro, e a quest ficava comprida demais (pedido do autor, 2026-11-16). */
+export const LOGS_TO_SPLIT = 2;
 const AIM_TOLERANCE = 7;
 const KNOT_RADIUS = 7;
 const FORCE_MIN = 0.62;
@@ -629,8 +630,8 @@ const EMBER_DECAY = 0.13;
 const LAYERS_TO_CATCH = 2;
 const PIT_X = 100;
 const PIT_Y = 128;
-/** As quatro varas, como elas caíram na terra: a mesma tenda que está no mundo. */
-const TENT: ReadonlyArray<readonly [number, number]> = [[-46, 40], [46, -40], [-20, 17], [20, -17]];
+/** As varas, como elas caíram na terra: a mesma tenda que está no mundo (LumberWork.SLOTS), uma por galho rachado. */
+const TENT: ReadonlyArray<readonly [number, number]> = ([[-46, 40], [46, -40], [-20, 17], [20, -17]] as const).slice(0, LOGS_TO_SPLIT);
 const STICK_PX = 84;
 
 export interface FireCallbacks {

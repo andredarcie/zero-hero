@@ -19,6 +19,7 @@ import { OccludedSilhouette } from '@/game/render3d/OccludedSilhouette';
 import { registerCozyTextures } from '@/game/render3d/cozyTextures';
 import { resetHeroView } from '@/game/runtime/HeroView';
 import { registerSkyTextures } from '@/game/render3d/skyTextures';
+import { registerTeaTextures } from '@/game/render3d/teaTextures';
 import { registerWoodTextures } from '@/game/render3d/woodTextures';
 import { registerPaintTextures } from '@/game/render3d/paintTextures';
 import { PlayerMovementController } from '@/game/runtime/PlayerMovementController';
@@ -47,7 +48,7 @@ const SKIP_INTRO_LOCALLY = ['localhost', '127.0.0.1', '::1', '[::1]'].includes(w
 export type RunBootHost = Engine.Scene & Pick<GameScene,
   'actions' | 'add' | 'adventure' | 'arc' | 'bumps' | 'camera' | 'carry' | 'chunkManager' | 'cutsceneActive'
   | 'dialog' | 'events' | 'game' | 'garden' | 'groundItems' | 'handleTileEntered' | 'hero' | 'heroBillboard'
-  | 'intro' | 'inventory' | 'itemManager' | 'movementController' | 'npcManager' | 'playerWorld' | 'query'
+  | 'intro' | 'inventory' | 'itemManager' | 'morning' | 'movementController' | 'npcManager' | 'playerWorld' | 'query'
   | 'registry' | 'save' | 'scale' | 'seenDialogKeys' | 'seenItems' | 'streamCenter' | 'swing' | 'teardown'
   | 'torch' | 'tweens' | 'verbs' | 'view' | 'world3d'
 >;
@@ -80,8 +81,12 @@ export class RunBoot {
     const skipIntro = this.host.adventure && SKIP_INTRO_LOCALLY && !adventureState().introSeen;
     this.host.intro.openingTalk = this.host.adventure && this.host.registry.get(OPENING_TALK_KEY) === true;
     this.host.registry.remove(OPENING_TALK_KEY);
-    // "Continue de onde parou" e um PEDIDO (o Continue do titulo), nunca o padrao.
-    if (this.host.adventure && consumeAdventureRespawn() && adventureState().respawn) {
+    // Depois dos créditos o herói acorda no colchão do acampamento (MorningAfter), e não onde parou. Fora disso,
+    // "continue de onde parou" e um PEDIDO (o Continue do titulo), nunca o padrao.
+    const morning = this.host.morning.takeRequest();
+    if (morning) {
+      start = morning;
+    } else if (this.host.adventure && consumeAdventureRespawn() && adventureState().respawn) {
       start = { ...adventureState().respawn! };
     } else if (skipIntro) {
       start = { ...start, worldY: start.worldY - INTRO_WALK_TILES };
@@ -111,6 +116,7 @@ export class RunBoot {
     registerPaintTextures(this.host);
     registerWoodTextures(this.host);
     registerSkyTextures(this.host);
+    registerTeaTextures(this.host);
     registerHomeTextures(this.host);
     registerFindTextures(this.host);
     // The 3D canvas is position:fixed (z-index 0), which paints ABOVE static content.

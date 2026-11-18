@@ -100,10 +100,11 @@ export class Synth {
    */
   public swell(
     filterType: BiquadFilterType, freqStart: number, freqEnd: number, filterQ: number, vol: number, peakAt: number, duration: number,
+    delay = 0,
   ): void {
     const ctx = this.host.audio;
     if (!ctx) return;
-    const t = ctx.currentTime;
+    const t = ctx.currentTime + delay;
     const len = Math.ceil(ctx.sampleRate * (duration + 0.02));
     const buf = ctx.createBuffer(1, len, ctx.sampleRate);
     const ch = buf.getChannelData(0);
@@ -122,6 +123,28 @@ export class Synth {
     g.connect(this.host.sfxUserBus);
     src.start(t);
     src.stop(t + duration + 0.02);
+  }
+
+  /**
+   * UM TOM QUE VEM E VAI: o oscilador com o envelope do sopro (seno ao quadrado, sem quina), deslizando de `freqStart` a
+   * `freqEnd`. O `osc` é um toque (entra em 5 ms); este é a nota longa de um acorde que cresce e se desfaz.
+   */
+  public tone(
+    type: OscillatorType, freqStart: number, freqEnd: number, vol: number, peakAt: number, duration: number, delay = 0,
+  ): void {
+    const ctx = this.host.audio;
+    if (!ctx) return;
+    const t = ctx.currentTime + delay;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freqStart, t);
+    if (freqEnd !== freqStart) o.frequency.exponentialRampToValueAtTime(Math.max(freqEnd, 0.01), t + duration);
+    g.gain.setValueCurveAtTime(swellCurve(vol, peakAt / duration), t, duration);
+    o.connect(g);
+    g.connect(this.host.sfxUserBus);
+    o.start(t);
+    o.stop(t + duration + 0.02);
   }
 }
 

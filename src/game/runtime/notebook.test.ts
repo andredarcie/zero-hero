@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import { DECOR_KINDS } from '@/game/entities/ItemPickup';
 import { MUSHROOM_KINDS } from '@/game/fungi/fungi';
+import { HOME_BUILDS } from '@/game/objects/homeBuilds';
 import en from '@/game/i18n/locales/en.json';
 import ptBr from '@/game/i18n/locales/pt-br.json';
 import { Inventory } from './Inventory';
@@ -20,7 +22,14 @@ describe('o caderno de campo', () => {
   });
 
   it('o que não se consegue no vale não entra (uma página que nunca se enche seria promessa falsa)', () => {
-    for (const kind of ['sword', 'stool', 'lantern', 'flowerPot', 'furnace', 'altar', 'bucketFull']) expect(kinds).not.toContain(kind);
+    for (const kind of ['sword', 'furnace', 'altar', 'bucketFull']) expect(kinds).not.toContain(kind);
+  });
+
+  it('a CASA tem cada enfeite que a bancada do acampamento constrói, e só eles', () => {
+    const home = NOTEBOOK.find((s) => s.section === 'home')?.kinds ?? [];
+    const built = HOME_BUILDS.filter((b) => b.cost).map((b) => b.kind as string);
+    expect([...home].sort()).toEqual([...DECOR_KINDS].sort());
+    for (const kind of home) expect(built, `${kind} sai da bancada`).toContain(kind);
   });
 
   it('cada página tem nome e nota nas duas línguas', () => {

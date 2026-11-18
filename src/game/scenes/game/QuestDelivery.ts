@@ -96,8 +96,8 @@ export class QuestDelivery {
    * ultimo, o portao do jardim se abre.
    */
   public celebrateQuestDone(_npcWorld: { worldX: number; worldY: number } | undefined): void {
-    // O ACAMPAMENTO: a lembrança de quem pediu aparece no canto do herói (objects/HeroCamp).
-    this.host.time.delayedCall(1500, () => this.host.valley.heroCamp?.refresh(true));
+    // A LEMBRANÇA de quem pediu não aparece mais sozinha no acampamento (pedido do autor, 2026-11-17): ela fica à espera
+    // na bancada, como presente, e é o jogador quem a põe (objects/homeBuilds, scenes/game/BuildMode).
     this.host.marks.refreshQuestMarks();
     getSoundManager().ui.playSingingBowl();
     this.host.sparkle.spawnGrowSparkle(this.host.playerWorld.worldX, this.host.playerWorld.worldY);

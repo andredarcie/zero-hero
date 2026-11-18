@@ -1,5 +1,6 @@
-// O CHÃO DA PEDRA DE MEDITAR (pedido do autor, 2026-11-12; objects/MeditationSpot.ts, com a MESMA tabela de tiles): o
-// alto da colina de capim ao norte do centro do vale, o ponto mais longe de tudo no mapa. As peças (a pedra com a
+// O CHÃO DA PEDRA DE MEDITAR (pedido do autor, 2026-11-12; objects/MeditationSpot.ts, com a MESMA tabela de tiles): a
+// clareira de capim na borda da mata de outono, a leste do centro do vale (desde 2026-11-16: o planalto de antes era o
+// do telescópio da Thea, e a pilha caía no tile do marco dela). As peças (a pedra com a
 // almofada e a pilha de pedras) são objetos do código; aqui só o chão: os dois tiles delas ficam limpos de enfeite,
 // e a prova de BFS garante que, do começo da aventura, sem ferramenta nenhuma, o herói chega à frente da pedra.
 //
@@ -14,14 +15,20 @@ import { fileURLToPath } from 'node:url';
 import { makeCanStep } from './relevo.mjs';
 
 // A MESMA tabela de objects/MeditationSpot.ts: mudou lá, muda aqui.
-const SEAT = [30, 20];
-const CAIRN = [32, 20];
+const SEAT = [44, 39];
+const CAIRN = [46, 39];
 /** O tile logo atrás da pedra: o fundo do herói sentado (o enfeite dele sai, ver abaixo). */
-const BEHIND_SEAT = [30, 19];
+const BEHIND_SEAT = [44, 38];
 /** De onde o Z alcança a pedra (pelo menos um tem de ser chão alcançável). */
-const FRONTS = [[30, 21], [31, 20], [29, 20], [30, 19]];
-/** O alto da colina: as duas peças ficam nele, no mesmo nível. */
-const PLATEAU_LEVEL = 1;
+const FRONTS = [[44, 40], [45, 39], [43, 39], [44, 38]];
+/** O chão da clareira: as duas peças ficam nele, no mesmo nível. */
+const PLATEAU_LEVEL = 0;
+/**
+ * O TRONCO DA CEREJEIRA (objects/SakuraTree.SAKURA_TRUNK, a mesma tabela): no vão entre dois pinheiros da mata, acima
+ * do vão entre a pedra e a pilha, com a linha 38 livre de respiro. Os pinheiros dos lados ficam: árvore do tileset
+ * nunca se apaga.
+ */
+const SAKURA = [45, 37];
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const worldPath = path.resolve(here, '../public/world.json');
@@ -43,14 +50,14 @@ const taken = new Set([
   ...world.props.map((p) => key(p.worldX, p.worldY)),
   ...world.chunks.flatMap((c) => [...(c.pickups ?? []), ...c.npcs].map((p) => key(p.worldX, p.worldY))),
 ]);
-for (const [x, y] of [SEAT, CAIRN]) {
+for (const [x, y] of [SEAT, CAIRN, SAKURA]) {
   const c = chunkOf(x, y);
   const lx = x % CW;
   const ly = y % CH;
   if (c.collisions[ly][lx]) problems.push(`o tile ${key(x, y)} é sólido`);
   if (c.ground[ly][lx] === SEA) problems.push(`o tile ${key(x, y)} é água`);
   if (taken.has(key(x, y))) problems.push(`há uma peça do mapa em ${key(x, y)}`);
-  if (relief(x, y) !== PLATEAU_LEVEL) problems.push(`o tile ${key(x, y)} não está no alto da colina (relevo ${relief(x, y)})`);
+  if (relief(x, y) !== PLATEAU_LEVEL) problems.push(`o tile ${key(x, y)} não está no nível da clareira (relevo ${relief(x, y)})`);
   // Chão + UMA coisa: o enfeite do tile sai (a pedra é a coisa).
   c.upper[ly][lx] = null;
 }
@@ -71,7 +78,7 @@ const solid = (x, y) => {
   const lx = x % CW;
   const ly = y % CH;
   return c.collisions[ly][lx] || SOLID_UPPER.has(c.upper[ly][lx]) || c.ground[ly][lx] === SEA
-    || taken.has(key(x, y)) || key(x, y) === key(...SEAT) || key(x, y) === key(...CAIRN);
+    || taken.has(key(x, y)) || [SEAT, CAIRN, SAKURA].some((p) => key(x, y) === key(...p));
 };
 const start = [world.meta.playerStart.worldX, world.meta.playerStart.worldY];
 const dist = new Map([[key(...start), 0]]);

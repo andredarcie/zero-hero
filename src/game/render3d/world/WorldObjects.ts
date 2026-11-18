@@ -242,6 +242,16 @@ export class WorldObjects {
   }
 
   /** The 2D rustle on this tile's plant: it stands now, so its tip sways and comes back (StandingDecor.rustle). */
+  /** O mato alto deste tile sacode e volta (o esbarrão sem a foice): ver StandingDecor.shake. */
+  public shakeGrass(worldX: number, worldY: number): void {
+    this.host.tiles.standing?.shake(worldX, worldY);
+  }
+
+  /** Uma onda no capim em volta de um ponto (o golpe da foice): ver StandingDecor.ripple. */
+  public rippleGrass(worldX: number, worldY: number, strength: number): void {
+    this.host.tiles.standing?.ripple(worldX, worldY, strength);
+  }
+
   public rustleDecor(worldX: number, worldY: number): void {
     this.host.tiles.standing?.rustle(worldX, worldY);
   }

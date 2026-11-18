@@ -16,16 +16,30 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { makeCanStep } from './relevo.mjs';
 
 // A MESMA tabela de objects/HeroCamp.ts — mudou lá, muda aqui.
-// O colchão (53,48), as pedras, o tronco, as quatro lembranças e o caderno de campo (53,47); o Z do colchão é dado de
-// (54,48), e o do caderno de (54,47).
-const SOLID = [[53, 48], [53, 49], [52, 49], [52, 48], [55, 47], [55, 48], [52, 47], [53, 47]];
-const FRONT = [[54, 48], [54, 47]];
-/** O retângulo do acampamento, com a frente: tudo limpo de enfeite. */
+// O acampamento COMEÇA só com o colchão (53,48), as pedras do fogo (53,49) e o caderno de campo (53,47) (pedido do
+// autor, 2026-11-17: o resto o jogador põe pela bancada); o Z do colchão é dado de (54,48), o do caderno de (54,47). A
+// BANCADA (55,45) é um prop `toolbox` deste arquivo (o jogo a monta como qualquer bancada), lida de (54,45).
+const SOLID = [[53, 48], [53, 49], [53, 47]];
+export const CAMP_BENCH = { worldX: 55, worldY: 45 };
+/**
+ * A FRENTE DA BANCADA (55,46): a bancada olha para o sul (`dir: 2`), e ali morava um carvalhinho do bosque, colado nela —
+ * o herói só a usava de lado. Saiu a pedido do autor (2026-11-17: "remova essa árvore, o herói usa a mesa de frente,
+ * que é mais natural"); o tile fica livre de tudo, e a grade nunca põe peça nele (runtime/homeGrid.CAMP_PASSAGES).
+ */
+export const CAMP_BENCH_FRONT = { worldX: 55, worldY: 46 };
+const FRONT = [[54, 48], [54, 47], [54, 45], [CAMP_BENCH_FRONT.worldX, CAMP_BENCH_FRONT.worldY]];
+/**
+ * O MIOLO do acampamento: a clareira de terra batida e a fileira da bancada, mais a passagem para o sul. Fica limpo de
+ * enfeite, e é o chão livre de saída — em volta dele é o mato alto verde (scripts/mato-do-acampamento.mjs).
+ */
 export const CAMP_TILES = (() => {
   const out = new Set();
-  for (let y = 46; y <= 49; y += 1) for (let x = 52; x <= 55; x += 1) out.add(`${x},${y}`);
+  for (let y = 45; y <= 50; y += 1) for (let x = 52; x <= 55; x += 1) out.add(`${x},${y}`);
+  for (const [x, y] of [[54, 51], [54, 52]]) out.add(`${x},${y}`);
   return out;
 })();
+/** As árvores e paredes do tileset (constants.SOLID_UPPER_FRAMES): sólidas no jogo sem `collisions` no arquivo. */
+const SOLID_UPPER = new Set([3, 4, 14, 15, 16, 17, 18, 21, 22, 25, 36, 37, 39, 40, 73, 74]);
 
 const main = () => {
   const here = path.dirname(fileURLToPath(import.meta.url));
@@ -37,24 +51,40 @@ const main = () => {
   const chunkOf = (x, y) => world.chunks.find((c) => c.cx === Math.floor(x / CW) && c.cy === Math.floor(y / CH));
   const relief = (x, y) => chunkOf(x, y)?.relief?.[y % CH]?.[x % CW] ?? 0;
   const problems = [];
+  // A BANCADA DO LAR: um prop `toolbox` como qualquer outro (idempotente: só entra se ainda não estiver lá).
+  const benchKey = `${CAMP_BENCH.worldX},${CAMP_BENCH.worldY}`;
+  if (!world.props.some((p) => p.type === 'toolbox' && `${p.worldX},${p.worldY}` === benchKey)) {
+    world.props.push({ type: 'toolbox', worldX: CAMP_BENCH.worldX, worldY: CAMP_BENCH.worldY, dir: 2 });
+  }
+  // A frente da bancada fica livre: sai o que estiver nela (o carvalhinho do bosque que a escondia).
+  world.props = world.props.filter((p) => p.worldX !== CAMP_BENCH_FRONT.worldX || p.worldY !== CAMP_BENCH_FRONT.worldY);
   const taken = new Set(world.props.map((p) => `${p.worldX},${p.worldY}`));
   for (const c of world.chunks) {
     for (const p of c.pickups) taken.add(`${p.worldX},${p.worldY}`);
     for (const n of c.npcs) taken.add(`${n.worldX},${n.worldY}`);
   }
+  // As árvores do BOSQUE (objects/BigTrees, postas no /editor) podem fazer sombra na beira da clareira (menos na frente
+  // da bancada, acima). Elas continuam sólidas na prova de caminho.
+  const GROVE = new Set(['oakTree', 'birchTree', 'youngOak', 'fallenLog']);
+  const grove = new Set(world.props.filter((p) => GROVE.has(p.type)).map((p) => `${p.worldX},${p.worldY}`));
+  const treeAt = (x, y) => SOLID_UPPER.has(chunkOf(x, y)?.upper?.[y % CH]?.[x % CW]);
   for (const k of CAMP_TILES) {
     const [x, y] = k.split(',').map(Number);
     const c = chunkOf(x, y);
     if (c.collisions[y % CH][x % CW]) problems.push(`o tile ${k} do acampamento é sólido`);
-    if (taken.has(k)) problems.push(`há uma peça do mapa no acampamento, em ${k}`);
+    if (treeAt(x, y)) problems.push(`há uma árvore do mapa no acampamento, em ${k}`);
+    if (taken.has(k) && k !== benchKey && !grove.has(k)) problems.push(`há uma peça do mapa no acampamento, em ${k}`);
     if (relief(x, y) !== 0) problems.push(`o tile ${k} do acampamento não é chão plano`);
     c.upper[y % CH][x % CW] = null;
   }
 
-  // ── A PROVA: do começo, com as peças sólidas, chega-se ao colchão. ─────────────────────
+  // ── A PROVA: do começo, com as peças sólidas (e as árvores do mapa), chega-se a cada peça. ─────────────────────
   const canStep = makeCanStep(relief);
   const solid = new Set(SOLID.map(([x, y]) => `${x},${y}`));
-  const blocked = (x, y) => { const c = chunkOf(x, y); return !c || c.collisions[y % CH][x % CW] || solid.has(`${x},${y}`) || taken.has(`${x},${y}`); };
+  const blocked = (x, y) => {
+    const c = chunkOf(x, y);
+    return !c || c.collisions[y % CH][x % CW] || treeAt(x, y) || solid.has(`${x},${y}`) || taken.has(`${x},${y}`);
+  };
   const start = world.meta.playerStart;
   const seen = new Set([`${start.worldX},${start.worldY}`]);
   const q = [[start.worldX, start.worldY]];

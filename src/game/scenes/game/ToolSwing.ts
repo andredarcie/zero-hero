@@ -10,6 +10,9 @@ import { materialOf } from '@/game/audio/materials';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import type { GameScene } from '../GameScene';
 import { SwordSlash } from '@/game/runtime/SwordOrbit';
+import { MOW_CONTACT_MS, MOW_FADE_MS, MOW_FOLLOW_MS, MOW_SWEEP_MS, MOW_TOTAL_MS, MOW_WIND_MS } from '@/game/runtime/SwordMow';
+import type { TallGrassObject } from '@/game/objects/TallGrassObject';
+import { MowFx } from './MowFx';
 import { ITEM_VISUAL_2D } from './sceneDefs';
 
 // Where a swing PIVOTS on the hero, in tiles above the ground: a swing comes from the HANDS, and
@@ -28,8 +31,12 @@ export type ToolSwingHost = Pick<GameScene,
 
 export class ToolSwing {
   public swordSlash?: SwordSlash;
+  /** O voo das pontas cortadas e o peso do golpe da foice (ver MowFx). */
+  private readonly mowFx: MowFx;
 
-  public constructor(private readonly host: ToolSwingHost) {}
+  public constructor(private readonly host: ToolSwingHost) {
+    this.mowFx = new MowFx(host);
+  }
 
   /** The axe cuts DEAD wood (dryTree, dryShrub) — and only that: a green tree never moves. */
   public get holdsAnAxe(): boolean {
@@ -76,6 +83,7 @@ export class ToolSwing {
   public swingHeld(wx: number, wy: number): void {
     if (!this.swordSlash || !this.host.camera || this.host.heldItem === 'none') return;
     if (this.host.heldItem === 'axe') { this.swingAxe(wx, wy); return; }
+    if (this.host.heldItem === 'scythe') { this.mowGrass(wx, wy); return; }
     getSoundManager().work.playSwordSlash();
     // The held item flies out in the swing arc, so hide the copy slung on the back for the
     // swing's duration — otherwise the item appears in two places at once.
@@ -178,6 +186,38 @@ export class ToolSwing {
           lean(0.24, 120, 'Sine.easeOut', () => lean(0, 240, 'Sine.easeInOut'));
         }
       });
+    });
+  }
+
+  /**
+   * A ROÇADA (runtime/SwordMow): o recuo, a varrida baixa da direita para a esquerda do herói e o acompanhamento, com o
+   * corpo junto — gira para trás no recuo, entra na varrida e volta. No meio da varrida, se `grass` ainda está em pé, o
+   * corte: as pontas voam (MowFx), o som do corte (MowSounds) e o tufo vira toco. Sem mato, a mesma roçada no ar.
+   */
+  public mowGrass(wx: number, wy: number, grass?: TallGrassObject): void {
+    if (!this.swordSlash || !this.host.camera) return;
+    const dx = Math.sign(wx - this.host.playerWorld.worldX);
+    const dy = Math.sign(wy - this.host.playerWorld.worldY);
+    const sound = getSoundManager();
+    this.host.carry.hideBackItemDuringSwing(MOW_TOTAL_MS);
+    this.host.actions.useCooldownMs = Math.max(this.host.actions.useCooldownMs, MOW_WIND_MS + MOW_SWEEP_MS + 60);
+    const screen = this.swingAnchor(dy);
+    const visual = ITEM_VISUAL_2D.scythe;
+    this.swordSlash.mow(screen.x, screen.y, dx, dy, this.host.tileSize, { texture: visual.texture, frame: visual.frame });
+    this.host.time.delayedCall(MOW_WIND_MS, () => sound.mow.playSwish());
+    this.host.time.delayedCall(MOW_CONTACT_MS, () => {
+      if (!grass?.isTall) return;
+      this.mowFx.burst(grass, dx, dy);
+      sound.mow.playCut(grass.blades.length);
+      grass.cut();
+    });
+    const hero = this.host.hero;
+    this.host.tweens.killTweensOf(hero);
+    const lean = (amount: number, duration: number, ease: string, onComplete?: () => void): void => {
+      this.host.tweens.add({ targets: hero, lungeX: dx * amount, lungeY: dy * amount, duration, ease, onComplete });
+    };
+    lean(-0.06, MOW_WIND_MS, 'Sine.easeOut', () => {
+      lean(0.11, MOW_SWEEP_MS, 'Sine.easeInOut', () => lean(0, MOW_FOLLOW_MS + MOW_FADE_MS, 'Sine.easeInOut'));
     });
   }
 

@@ -7,8 +7,7 @@ import {
   hasAdventureSave, requestAdventureRespawn, resetAdventure,
 } from '@/game/runtime/adventureState';
 import { KEY_BG, KEY_BORDER, KEY_GLYPH } from '@/game/runtime/uiStyle';
-import { setWorldData } from '@/game/world/WorldData';
-import { platform } from '@/game/platform/platform';
+import { reloadWorldData } from '@/game/world/reloadWorld';
 import { TitleValley } from './TitleValley';
 
 // The game's start screen, and now the ONLY screen between the loader and the world: the title,
@@ -220,20 +219,12 @@ export class TitleScene extends Engine.Scene {
     this.cameras.main.once(Engine.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, go);
   }
 
-  /**
-   * ENTRAR NO VALE. O `world.json` volta do disco antes de toda entrada: o mundo em memoria pode
-   * estar mexido (arvores derrubadas, canteiros cavados), e tudo o que merece viver mora no save,
-   * que reaplica os proprios diffs no create.
-   */
+  /** ENTRAR NO VALE, com o `world.json` de novo do disco (ver reloadWorldData). */
   private startAdventure(fresh: boolean): void {
     this.fadeThen(() => {
       if (fresh) resetAdventure();
       else requestAdventureRespawn();
-      void platform().fetch(`${import.meta.env.BASE_URL}world.json`, { cache: 'no-store' })
-        .then((res) => (res.ok ? res.json() : undefined))
-        .then((json) => { if (json) setWorldData(json); })
-        .catch(() => undefined)
-        .finally(() => this.scene.start('game'));
+      void reloadWorldData().finally(() => this.scene.start('game'));
     });
   }
 

@@ -30,6 +30,23 @@ export class NatureSounds {
    * Sintetizada e sem amostra de propósito: ela toca dezenas de vezes por minuto numa mineração, e
    * som que se repete tanto tem de ser barato de tocar e fácil de reafinar quando incomodar.
    */
+  /**
+   * O SINO DE VENTO do lar (objects/DecorLife): lascas de minério batendo umas nas outras — duas ou três notas curtas de
+   * uma escala pentatônica (nenhuma combinação delas desafina), em seno com um nada de triângulo por cima, baixinhas e
+   * desencontradas. `intensity` (a rajada, 0..1) decide quantas batem e quão forte.
+   */
+  public playWindChime(intensity = 1): void {
+    const notes = [523.3, 587.3, 659.3, 784.0, 880.0];
+    const hits = 2 + (intensity > 0.6 ? 1 : 0);
+    const vol = 0.022 + 0.018 * Math.min(1, intensity);
+    for (let i = 0; i < hits; i += 1) {
+      const f = notes[Math.floor(Math.random() * notes.length)];
+      const at = i * (0.11 + Math.random() * 0.16);
+      this.host.synth.osc('sine', f, f, vol, 1.3, at);
+      this.host.synth.osc('triangle', f * 2, f * 2, vol * 0.18, 0.5, at);
+    }
+  }
+
   /** O tchau de longe (entities/NpcWave): dois assobios curtos, o segundo descendo — "oi!". */
   public playFarWave(): void {
     this.host.synth.osc('sine', 880, 1180, 0.035, 0.14);

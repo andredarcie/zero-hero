@@ -12,7 +12,7 @@ import type { GameScene } from '../GameScene';
 export type SceneTeardownHost = Pick<GameScene,
   'actions' | 'boot' | 'bumps' | 'camera' | 'camp' | 'carry' | 'cinema' | 'cutsceneActive' | 'debug'
   | 'dialog' | 'dialogCam' | 'events' | 'fire' | 'forage' | 'forge' | 'game' | 'groundItems' | 'hand'
-  | 'heroBillboard' | 'intro' | 'itemManager' | 'life' | 'machines' | 'marks' | 'npcManager' | 'orders'
+  | 'heroBillboard' | 'intro' | 'itemManager' | 'life' | 'machines' | 'marks' | 'morning' | 'npcManager' | 'orders'
   | 'pause' | 'props' | 'questSetup' | 'roastEnding' | 'scale' | 'steps' | 'swing' | 'swordPlanting' | 'torch'
   | 'tweens' | 'valley' | 'verbs' | 'view' | 'world3d'
 >;
@@ -57,6 +57,9 @@ export class SceneTeardown {
     this.host.questSetup.astronomerQuest = undefined;
     this.host.dialog.greetedNpcs.clear();
     this.host.camp.rest.reset();
+    this.host.camp.tea.reset();
+    this.host.camp.home.destroy();
+    this.host.morning.reset();
     setTimeScale(1);
     this.host.questSetup.clearMug();
     this.host.valley.npcHomes?.destroy();
@@ -66,6 +69,9 @@ export class SceneTeardown {
     this.host.valley.valleyFinds = undefined;
     this.host.valley.heroCamp?.destroy();
     this.host.valley.heroCamp = undefined;
+    this.host.valley.campPieces?.destroy();
+    this.host.valley.campPieces = undefined;
+    this.host.camp.build.destroy();
     this.host.camp.catCare.destroy();
     this.host.valley.waterfall?.destroy();
     this.host.valley.waterfall = undefined;

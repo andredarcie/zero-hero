@@ -1,6 +1,73 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
-import { TILT_PERIOD_S, hopLengths, qualityOf, skipsFor, tiltAt } from './stoneSkip';
+import { SOLID_UPPER_FRAMES } from '@/game/constants';
+import { TILESET } from '@/game/objects/nature/kit';
+import { SKIP_BEDS, TILT_PERIOD_S, drawPebbleBed, hopLengths, pebbleBedSize, qualityOf, skipBedAt, skipsFor, tiltAt } from './stoneSkip';
+
+interface World {
+  meta: { chunkColumns: number; chunkRows: number; playerStart: { worldX: number; worldY: number } };
+  props: Array<{ type: string; worldX: number; worldY: number }>;
+  chunks: Array<{ cx: number; cy: number; collisions: boolean[][]; upper: Array<Array<number | null>> }>;
+}
+const world = JSON.parse(fs.readFileSync(
+  path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../public/world.json'), 'utf8',
+)) as World;
+const STEP = { n: [0, -1], e: [1, 0], s: [0, 1], w: [-1, 0] } as const;
+
+describe('os leitos de seixos (só neles se quica pedra)', () => {
+  const { chunkColumns: CW, chunkRows: CH } = world.meta;
+  const isWater = (x: number, y: number): boolean => world.props.some((p) => p.type === 'water' && p.worldX === x && p.worldY === y);
+  const propAt = (x: number, y: number): boolean => world.props.some((p) => p.worldX === x && p.worldY === y);
+  const tile = (x: number, y: number): { solid: boolean; upper: number | null } => {
+    const c = world.chunks.find((k) => k.cx === Math.floor(x / CW) && k.cy === Math.floor(y / CH));
+    if (!c) return { solid: true, upper: null };
+    return { solid: c.collisions[y % CH][x % CW], upper: c.upper[y % CH][x % CW] };
+  };
+
+  it('cada tile de leito é chão livre da beira, com água aberta à frente por pelo menos quatro tiles', () => {
+    for (const bed of SKIP_BEDS) {
+      const [dx, dy] = STEP[bed.water];
+      for (const [x, y] of bed.tiles) {
+        const here = tile(x, y);
+        expect(isWater(x, y), `${x},${y} é água`).toBe(false);
+        expect(propAt(x, y), `há uma peça em ${x},${y}`).toBe(false);
+        expect(here.solid || (here.upper !== null && SOLID_UPPER_FRAMES.has(here.upper)), `${x},${y} é sólido`).toBe(false);
+        for (let k = 1; k <= 4; k += 1) expect(isWater(x + dx * k, y + dy * k), `${x + dx * k},${y + dy * k} devia ser água`).toBe(true);
+      }
+    }
+  });
+
+  it('fora dos leitos não há seixo: nem na beira ao lado, nem no começo da aventura', () => {
+    for (const bed of SKIP_BEDS) for (const [x, y] of bed.tiles) expect(skipBedAt(x, y)).toBe(bed);
+    expect(skipBedAt(44, 57)).toBeNull();
+    expect(skipBedAt(42, 56)).toBeNull();
+    expect(skipBedAt(world.meta.playerStart.worldX, world.meta.playerStart.worldY)).toBeNull();
+  });
+
+  it('o desenho: só cores do tileset, sem preto, e os seixos juntam rente à água', () => {
+    const allowed = new Set<string>(Object.values(TILESET));
+    for (const bed of SKIP_BEDS) {
+      const { w, h } = pebbleBedSize(bed);
+      const px: Array<[number, number, string]> = [];
+      drawPebbleBed((x, y, c) => { px.push([x, y, c]); }, bed);
+      expect(px.length).toBeGreaterThan(20);
+      for (const [x, y, c] of px) {
+        expect(allowed.has(c), c).toBe(true);
+        expect(c).not.toBe(TILESET.black);
+        expect(x >= 0 && y >= 0 && x < w && y < h).toBe(true);
+      }
+      // A metade da água contra a metade da terra (a distância até a borda do lado da água).
+      const fromWater = ([x, y]: [number, number, string]): number =>
+        bed.water === 'n' ? y : bed.water === 's' ? h - 1 - y : bed.water === 'e' ? w - 1 - x : x;
+      const wet = px.filter((p) => fromWater(p) < 8).length;
+      expect(wet).toBeGreaterThan((px.length - wet) * 2);
+    }
+  });
+});
 
 // A PEDRA QUE QUICA: deitada na hora certa, ela quica muito; de quina, afunda. Cada voo é mais curto que o anterior.
 

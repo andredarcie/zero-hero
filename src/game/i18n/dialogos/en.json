@@ -66,7 +66,7 @@
     "nome": "Shui",
     "filosofia": {
       "escola": "Taoism",
-      "livros": "Laozi: Tao Te Ching (33 and 46 who knows enough is rich; 78 water overcomes stone). Zhuangzi (ch. 1 and 4 the useless tree, which lives long because no one cuts it; ch. 3 Cook Ding, who cuts along the joints and his knife never dulls)",
+      "livros": "Laozi: Tao Te Ching (33 and 46 who knows enough is rich; 78 water overcomes stone). Zhuangzi (ch. 1 and 4 the useless tree, which lives long because no one cuts it; ch. 3 Cook Ding, who cuts along the joints and his knife never dulls; ch. 2 all is one, \"heaven and earth were born together with me, and the ten thousand things and I are one\"; ch. 17 \"Autumn Floods\": the river in flood thought itself the greatest, until it reached the sea and saw it had no end, and the frog in the well, who cannot grasp the sea). The mushroom tea and what she says afterwards come from there",
       "ideia": "Follow the way of nature without forcing (wu wei), and know when it is enough.",
       "voz": "Calm, watches what is unseen. Forces nothing: cut, do not pull; four are enough.",
       "nome": "Shui is \"water\" in Chinese (水): \"the highest good is like water\", serving all without contending (Tao Te Ching 8), and \"nothing is softer than water, yet nothing better overcomes stone\" (78)."
@@ -89,6 +89,20 @@
       },
       "npc.radiationSuitAll": [
         "All eight! You moved the way the vale\nmoves, never against it.\nThe red one's useless; so it lives\nso long. Don't eat a bit."
+      ],
+      "npc.radiationSuitTea": [
+        "Look: the basket hid a small one\nwith thin and pointed cap;\nit clung onto the moss you picked\nand rode home in the gap.",
+        "This kind of mushroom brings on dreams,\na kind of waking light:\nit shows that everything is one,\nyou, river, stone and night.",
+        "I'll make some tea with it for you;\nwe only wait to boil.\nThe water does the work for us;\nthere is no need to toil."
+      ],
+      "npc.radiationSuitTeaDrink": [
+        "Drink slowly, and don't be afraid;\nlet all that comes go by.\nDon't fight the things you start to see:\nbe water, and don't try.",
+        "It lasts a while, and then it fades;\nI'll stay right by your side.\nThis isn't something done for fun:\nit's taken with a guide."
+      ],
+      "npc.radiationSuitTeaAfter": [
+        "You're back. You travelled far, I know;\nyou saw the rest below:\nthe fungus threads that tie as one\nthe stones and all that grow.",
+        "The river, swollen by the rain,\nbelieved that it was vast,\nuntil it reached the open sea\nand saw the sea at last.",
+        "You were a warrior of the road\nwho thought he knew the score;\ntoday you saw a side of life\nyou'd never seen before."
       ],
       "npc.radiationSuitHint": {
         "porcini": [
@@ -237,7 +251,7 @@
           "I lost my business, firewood, all;\nmy hands won't stop their shake.\nThe rest is not mine. But a fire:\nthat one is mine to make.",
           "Look for a dead tree, like this one:\nno leaf, and grey, and dry.\nThen chop a branch off with the axe;\nbring it to me, close by.",
           "Here, to the right, you'll see the stump:\nstand the dead branch up tall;\nthen split it with the axe. Clean, rough:\nit doesn't count at all.",
-          "The halves go to the ground; four times.\nBut look around with care:\ndead trees are rare round here; so walk,\nand search, and don't despair."
+          "The halves go to the ground: just twice.\nBut look around with care:\ndead trees are rare round here; so walk,\nand search, and don't despair."
         ]
       },
       "npc.businessManDone": {
@@ -256,7 +270,7 @@
           "Once it stands up, your axe will split\nthe branch in halves, clean through.\nThe halves go to the fire's ground:\nthat's all you have to do."
         ],
         "ready": [
-          "Four. That's a fire already; all\nit needs is just a spark.\nGo on and light it: all the wood\nis split. Go light the dark."
+          "Two. That's a fire already; all\nit needs is just a spark.\nGo on and light it: all the wood\nis split. Go light the dark."
         ],
         "light": [
           "Go on, and light the fire there:\nthe wood is waiting, split with care."
@@ -273,9 +287,6 @@
         },
         "story": [
           "Sit. Watch the fire with me, the way\nyou'd watch a friend at end of day.",
-          "A fire's not a thing: it's something\nthat happens, in plain sight.\nThe heat draws gas out of the branch:\nthe gas, not wood, alight.",
-          "The gas meets air, and burning gives\nmore heat, which frees more gas:\nthat's why it doesn't stop; alone,\nit burns on, as hours pass.",
-          "And all that light? It's soot, it's grains\nso hot, they start to glow.\nA tree stores sun its whole life long;\nthe fire lets it go.",
           "A strong fire turns what falls in it\nto flame, all that it meets.\nAnd life's the same: what blocks your way\nis fuel the fire eats."
         ],
         "farewell": [
@@ -350,8 +361,7 @@
           "I saw the fire from way up high.\nAny marshmallows left? Oh my!"
         ],
         "goodbye": [
-          "With the sky back, my ship found me.\nThank you for everything:\na friend is another self; I'll take\nyou with me, wandering.",
-          "But I must go back to my planet:\nmy home is up on high.\nWhen you look up at night, just wave:\nit brings us close, the sky."
+          "With the sky back, my ship found me.\nThank you for everything:\na friend is another self; I'll take\nyou with me, wandering."
         ],
         "farewell": [
           "You found all four! The wonder at\nthe moon and stars, I'd say,\nfirst made us think: philosophy\nwas born from it that way.",
@@ -373,16 +383,14 @@
       "escola": "Nihilism, and its overcoming (Nietzsche, to the letter)",
       "livros": "Friedrich Nietzsche: The Gay Science (§125 the death of God; §341 the eternal return), Thus Spoke Zarathustra (the three metamorphoses; the dancing star), Ecce Homo (amor fati; \"become who you are\")",
       "ideia": "The highest values devalue themselves: nothing has a given meaning. The passive nihilist stops there; the active one tears down the idols (the lion) and creates new values playing (the child), and loves fate so much as to want it again, without end.",
-      "voz": "Calm, unthreatening. Three nights: diagnoses, tests, blesses. Never consoles; asks. Leaves the scythe on the first."
+      "voz": "Calm, unthreatening. Three nights: forewarns, tests, blesses. Never consoles; asks. On the first she only says she will come back and leave a gift for the camp at the end; she leaves the scythe at the end of the third."
     },
     "falas": {
       "death": {
         "name": "Death",
         "visit": [
-          "Don't rise. I didn't come for you.\nI know you, from the start:\nI walked behind you through the war;\nI never stood apart.",
-          "Wherever you went, I was there,\nwith all my work to do.\nTonight you sleep beneath the stars;\nyour sword sleeps in the dew.",
-          "Glory and honour, victory:\nthese were your gods. They're dead.\nSo nothing's worth a thing at all,\nand no new gods instead.",
-          "No one will tell you what has worth;\nthe emptiness is yours.\nNow sleep. There is no need to rush:\nI've waited out your wars."
+          "Don't rise. I didn't come for you;\nI only came to see.\nI'll come back on two other nights:\nthere's more to hear from me.",
+          "And on the last, I'll leave a gift\nright here upon your ground,\nto help your camp grow wide and warm:\na hand to have around."
         ],
         "visit2": [
           "Here once again. I said I'd wait.\nYou only did as told:\nyou carried orders on your back,\na camel, bought and sold.",
@@ -394,6 +402,7 @@
           "The final night. When it is done,\nI won't come back to you.\nThe lion turns into a child,\nforgets, and starts anew.",
           "It says yes, and in play it makes\nits values, asking none.\nNo one has given you a meaning:\nyour hands are making one.",
           "Want nothing other, not ahead,\nnor back, nor what could be.\nLove all of it, the way it is,\nfor all eternity.",
+          "My gift, as promised: take my scythe.\nIt reaps no one, you'll find:\nit cuts the tall grass round your camp\nand leaves more room behind.",
           "One must have chaos still within\nto birth a dancing star.\nSleep well, child. This is my goodbye:\nbecome the one you are."
         ]
       }
@@ -462,6 +471,9 @@
         ],
         "chart": [
           "[narrator] The map of stars that Thea drew,\nher way, the way she always knew."
+        ],
+        "tubEmpty": [
+          "[narrator] The tub holds water, clear and plain;\nit needs Sisi's flowers for a stain."
         ]
       },
       "cat.barrel": [

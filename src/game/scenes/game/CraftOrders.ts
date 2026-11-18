@@ -5,6 +5,7 @@ import type { HeldItemKind } from '@/game/entities/ItemPickup';
 import { catalogSteps, isCraftable, nextStep, recipeCost, type CraftStation } from '@/game/objects/toolboxRecipes';
 import type { OrderCatalogView } from '@/game/runtime/ToolboxOrderOverlay';
 import { t } from '@/game/i18n/i18n';
+import { reliefLevelAt } from '@/game/world/relief';
 import { spriteDataUrl } from '@/game/runtime/spriteDataUrl';
 import type * as Engine from '@/game/engine';
 import type { GameScene } from '../GameScene';
@@ -57,8 +58,12 @@ export class CraftOrders {
       x === hx && y === hy ? Number.MAX_SAFE_INTEGER : (x - hx) ** 2 + (y - hy) ** 2
     );
     around.sort((a, b) => rank(a) - rank(b));
+    // O DEGRAU DA SERRA não é vizinho: a bancada do lar encosta no planalto, e a peça que caísse lá em cima ficaria
+    // à vista e fora do alcance (o herói só sobe pela escada). Só o chão do mesmo nível da máquina recebe.
+    const level = reliefLevelAt(propX, propY);
     for (const [x, y] of around) {
       if (this.host.query.isSolidForEntities(x, y) || this.host.itemManager.hasItemAt(x, y)) continue;
+      if (reliefLevelAt(x, y) !== level) continue;
       return [x, y];
     }
     return null;

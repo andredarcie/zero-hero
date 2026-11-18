@@ -4,6 +4,7 @@
 
 import type * as THREE from 'three';
 
+import { TallGrassField } from '@/game/render3d/world/TallGrassField';
 import type { GameScene } from '@/game/scenes/GameScene';
 
 /** O material (o primeiro, se forem vários) de um mesh: o que um cenário lê dele é a textura e a opacidade. */
@@ -21,6 +22,20 @@ export const valleyProbe = (s: GameScene) => {
     return b;
   };
   return {
+    /**
+     * O MATO ALTO (render3d/world/TallGrassField): quantos pedaços de fio a malha desenha, quantos tufos em pé, e os
+     * fios de pé do tufo de (x, y) (vazio se ele já foi cortado).
+     */
+    tallGrass: (x?: number, y?: number) => {
+      const field = s.world3d ? TallGrassField.for(s.world3d.scene) : null;
+      const at = x === undefined || y === undefined ? undefined : s.props.tallGrasses.find((g) => g.worldX === x && g.worldY === y);
+      return {
+        quads: field?.bladeQuads ?? 0,
+        standing: s.props.tallGrasses.filter((g) => g.isTall).length,
+        blades: at?.blades.length ?? null,
+        kinds: at ? [...new Set(at.blades.map((b) => b.kind))] : [],
+      };
+    },
     /** Tudo o que a natureza mostra agora. */
     nature: () => {
       const n = nature();
@@ -89,8 +104,15 @@ export const valleyProbe = (s: GameScene) => {
     resetAmbienceClock: (): void => { s.life.ambienceClockMs = 0; },
 
     /** A peça do acampamento do herói em (x, y): 'bed', 'ring', 'easel'... ou null. */
-    campAt: (x: number, y: number): string | null => s.valley.heroCamp?.at(x, y) ?? null,
-    mementos: (): number => s.valley.heroCamp?.mementoCount ?? 0,
+    campAt: (x: number, y: number): string | null => s.valley.heroCamp?.at(x, y) ?? s.valley.campPieces?.at(x, y) ?? null,
+    /** As peças que o jogador pôs no acampamento (objects/CampPieces). */
+    pieces: () => [...(s.valley.campPieces?.list ?? [])],
+    /** Onde o desenho da peça do tile (x, y) está no mundo (o tronco fica um nada atrás do tile: é de sentar). */
+    pieceBody: (x: number, y: number): { x: number; y: number } | null => {
+      const placed = (s.valley.campPieces?.['pieces'] as Array<{ x: number; y: number; body: { x: number; y: number } }> | undefined)
+        ?.find((p) => p.x === x && p.y === y);
+      return placed ? { x: placed.body.x, y: placed.body.y } : null;
+    },
     /** O achado do vale em (x, y), pelo tipo. */
     findAt: (x: number, y: number): string | null => s.valley.valleyFinds?.at(x, y)?.kind ?? null,
   };

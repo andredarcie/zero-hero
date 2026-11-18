@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { CLIFF_WALL_FRAMES, SEA_TILE_FRAME } from '@/game/constants';
 import { Billboard3D, type Billboard3DOptions } from '../Billboard3D';
+import { starDomeFor } from '../StarDome';
 import { getWoodTexture } from '../woodTexture';
 import { buildFlatTileGeometry, buildTileCubeGeometry, ROCK_CUBE_SHADE } from '../terrainGeometry';
 import type { World3D } from '../World3D';
@@ -83,6 +84,11 @@ export class ShaderPrewarm {
     for (const opts of runtimeVariants) {
       this.warmups.push(new Billboard3D(this.host.scene, FX_DOT_TEXTURE, 0, opts).setDisplaySize(0.001, 0.001));
     }
+    // O céu da primeira noite (entities/StarGaze): a cúpula de estrelas é desenhada aqui uma vez e fica escondida na
+    // cena — no quadro em que a câmera começava a subir, o programa dela travava ~0,2 s.
+    const dome = starDomeFor(this.host.scene);
+    dome.show(true);
+    this.warmups.push({ setVisible: (v: boolean) => dome.show(v) });
 
     // The bridge deck. Its boxes are born when you WALK to a river — the chunk streamer builds the
     // water, and a buildable spot immediately ghosts in its deck — so they are not here to be
@@ -147,6 +153,8 @@ export class ShaderPrewarm {
     this.host.renderer.setRenderTarget(this.host.mirror.warmTarget());
     this.drawEverythingOnce();
     this.host.mirror.afterWarm();
+    // O passo do chá da Shui (TripPass): fora da cena, desligado no compositor — desenhado aqui uma vez, nos alvos dele.
+    this.host.screen.trip.warm(this.host.renderer);
 
     // The shadow mask's material variants too (castMask / solidCastFieldMask): flip the
     // silhouettes into mask mode for one compile pass so toggling hd3d.shadowMask later

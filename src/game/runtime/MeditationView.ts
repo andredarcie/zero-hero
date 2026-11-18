@@ -21,6 +21,8 @@ import type { WorldCamera } from '@/game/runtime/WorldCamera';
  */
 
 export type ThoughtIcon = { texture: string; frame: number };
+/** O pincel do quadro: um retângulo de `size`×`tall` pixels do mundo, na grade dele (ver `render`). */
+type Dot = (c: number, a: number, x: number, y: number, size?: number, tall?: number) => void;
 
 const ICE = 0xd6eef4;
 const COOL = [0x9c, 0xc9, 0xdd] as const;
@@ -59,21 +61,78 @@ const ring = (r: number): ReadonlyArray<readonly [number, number]> => {
   return out;
 };
 
-/** A nuvem: três círculos juntos numa grade de 18×11, com o contorno de um pixel. */
+/**
+ * A nuvem: três bolhas de fundo achatado numa grade de 32×23, com o contorno de um pixel, do tamanho que cabe a coisa
+ * de 16 px INTEIRA dentro. Guardada em tiras por linha (o miolo e o contorno), já em volta do meio (16, 11), que é
+ * inteiro: a nuvem cai na grade do pixel do mundo. A primeira, de 18×11, só cabia a coisa encolhida para 9 px, e o
+ * pixel art encolhido numa escala quebrada perdia traço (a foice virava um risco desbotado).
+ */
+type Strip = { x: number; y: number; w: number };
 const CLOUD = (() => {
-  const inside = (x: number, y: number): boolean => [[5, 6.2, 4.2], [9.5, 4.8, 4.6], [13.4, 6.4, 3.8]]
-    .some(([cx, cy, r]) => Math.hypot(x + 0.5 - cx, y + 0.5 - cy) <= r);
-  const fill: Array<[number, number]> = [];
-  const line: Array<[number, number]> = [];
-  for (let y = 0; y < 11; y += 1) {
-    for (let x = 0; x < 18; x += 1) {
-      if (!inside(x, y)) continue;
-      const edge = !inside(x - 1, y) || !inside(x + 1, y) || !inside(x, y - 1) || !inside(x, y + 1);
-      (edge ? line : fill).push([x - 9, y - 5.5]);
+  const blobs = [[8.4, 14.2, 7.4], [16, 11, 10.2], [23.6, 13.9, 7.6]];
+  const inside = (x: number, y: number): boolean => y <= 20 && blobs.some(([cx, cy, r]) => Math.hypot(x + 0.5 - cx, y + 0.5 - cy) <= r);
+  const fill: Strip[] = [];
+  const line: Strip[] = [];
+  for (let y = 0; y < 23; y += 1) {
+    let run: { edge: boolean; x0: number } | null = null;
+    for (let x = 0; x <= 32; x += 1) {
+      const on = x < 32 && inside(x, y);
+      const edge = on && (!inside(x - 1, y) || !inside(x + 1, y) || !inside(x, y - 1) || !inside(x, y + 1));
+      if (run && (!on || edge !== run.edge)) {
+        (run.edge ? line : fill).push({ x: run.x0 - 16, y: y - 11, w: x - run.x0 });
+        run = null;
+      }
+      if (on && !run) run = { edge, x0: x };
     }
   }
   return { fill, line };
 })();
+/** Metade de cima e de baixo da nuvem (pixels do mundo a partir do meio): onde ela pousa e onde vai a plaquinha. */
+const CLOUD_TOP = 10;
+const CLOUD_BOTTOM = 9;
+/** A coisa dentro da nuvem: 16 px do mundo, um texel por pixel (nunca numa escala quebrada). */
+const THOUGHT_ART = 16;
+/**
+ * A nuvem que se desfaz SOME PIXEL A PIXEL, e nunca fica semitransparente: meio alfa por cima do capim granulado lia
+ * como um fantasma borrado (pedido do autor, 2026-11-16). Cada pixel tem a sua vez, sorteada e puxada pela distância
+ * do meio: a borda vai primeiro, o miolo por último, e a nuvem evapora (a trama de Bayer, regular, virava peneira).
+ */
+const shows = (x: number, y: number, fade: number, seed: number): boolean => {
+  if (fade >= 1) return true;
+  const n = Math.sin(x * 12.9898 + y * 78.233 + seed * 37.719) * 43758.5453;
+  const edge = Math.min(1, Math.hypot(x / 16, y / 11.5));
+  return 0.5 * (n - Math.floor(n)) + 0.5 * edge < fade;
+};
+
+/** O contorno de tinta da coisa (os pixels vazios encostados nos cheios), lido da textura uma vez por quadro dela. */
+type IconFrame = Engine.GameObjects.Image['frame'];
+const outlineCache = new Map<string, ReadonlyArray<readonly [number, number]>>();
+const outlineOf = (frame: IconFrame): ReadonlyArray<readonly [number, number]> => {
+  const key = `${frame.texture.key}#${frame.name}`;
+  const hit = outlineCache.get(key);
+  if (hit) return hit;
+  const out: Array<readonly [number, number]> = [];
+  try {
+    const w = frame.cutWidth;
+    const h = frame.cutHeight;
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    const cx = c.getContext('2d', { willReadFrequently: true });
+    if (cx) {
+      cx.drawImage(frame.source.image as CanvasImageSource, frame.cutX, frame.cutY, w, h, 0, 0, w, h);
+      const data = cx.getImageData(0, 0, w, h).data;
+      const solid = (x: number, y: number): boolean => x >= 0 && y >= 0 && x < w && y < h && data[(y * w + x) * 4 + 3] > 64;
+      for (let y = -1; y <= h; y += 1) {
+        for (let x = -1; x <= w; x += 1) {
+          if (!solid(x, y) && (solid(x - 1, y) || solid(x + 1, y) || solid(x, y - 1) || solid(x, y + 1))) out.push([x, y]);
+        }
+      }
+    }
+  } catch { /* textura sem pixels legíveis: a coisa vai sem contorno */ }
+  outlineCache.set(key, out);
+  return out;
+};
 
 export class MeditationView {
   private readonly g: Engine.GameObjects.Graphics;
@@ -92,7 +151,8 @@ export class MeditationView {
     this.g = scene.add.graphics();
     const first = iconFor({ id: 0, kind: 'memory', pick: 0, angle: 0, dist: 0, state: 'drifting', age: 0 });
     for (let i = 0; i < POOL; i += 1) {
-      this.icons.push(scene.add.image(0, 0, first.texture, first.frame).setVisible(false));
+      // Presa pelo canto: a coisa começa num pixel inteiro do mundo (pelo meio, a de largura ímpar ficava meio pixel fora).
+      this.icons.push(scene.add.image(0, 0, first.texture, first.frame).setOrigin(0, 0).setVisible(false));
       this.labels.push(scene.add.text(0, 0, '', { fontFamily: FONT_FAMILY, color: KEY_GLYPH })
         .setOrigin(0.5, 0.5)
         .setResolution(Math.max(1, Math.ceil(window.devicePixelRatio || 1)))
@@ -105,19 +165,30 @@ export class MeditationView {
   public render(
     s: MeditationSession, camera: WorldCamera, tileSize: number, uiTile: number, timeMs: number, anchor: { x: number; y: number }, lift = 0,
   ): void {
-    const px = tileSize / 16;
-    const at = camera.tileToScreen(anchor.x, anchor.y, tileSize, lift);
-    this.root.setPosition(Math.round(at.x), Math.round(at.y - CHEST * tileSize));
+    // O peito é projetado como ponto do mundo (a altura junto): com a câmera subindo para mostrar a cerejeira, o herói
+    // fica menor na tela, e um peito somado em pixels fixos deixava os pensamentos boiando acima da cabeça.
+    const at = camera.tileToScreen(anchor.x, anchor.y, tileSize, lift + CHEST);
+    // O PIXEL do desenho em pixels INTEIROS da tela (o do balão de ação, tileSize/16, arredondado): 2,9 px fazia cada
+    // linha da nuvem sair com 2 ou 3 (e na tela de 125% o navegador ainda dobra uma coluna em quatro), e o desenho
+    // tremia e borrava andando. Medir o pixel do vale 3D na tela não serve: lá ele tem 6 a 8 px, e a nuvem cobria a
+    // árvore.
+    const px = Math.max(1, Math.round(tileSize / 16));
+    this.root.setPosition(Math.round(at.x), Math.round(at.y));
     const g = this.g.clear();
     this.styleColor = -1;
     // UM fillStyle POR PIXEL era uma cor CSS nova por pixel (o motor desenha no canvas 2D e monta "rgba(...)" a cada
     // troca): ~560 por quadro na quietude, com alfas sempre diferentes, e a meditação custava um terço do quadro
     // (165 → 116 fps). A cor só troca quando muda, e o alfa anda em degraus de 1/32 (o navegador reaproveita a cor).
-    const dot = (c: number, a: number, x: number, y: number, size = 1): void => {
+    // Cada pixel do mundo vai de round(x·px) a round((x+1)·px): com o tile em tamanho quebrado, o retângulo de
+    // tamanho fixo (ceil de px) passava por cima do vizinho, e onde dois se cobriam o semitransparente dobrava: a nuvem
+    // saía quadriculada.
+    const dot = (c: number, a: number, x: number, y: number, size = 1, tall = size): void => {
       const alpha = Math.round(Math.min(1, a) * 32) / 32;
       if (alpha <= 0) return;
       this.style(c, alpha);
-      g.fillRect(Math.round(x * px), Math.round(y * px), Math.ceil(size * px), Math.ceil(size * px));
+      const x0 = Math.round(x * px);
+      const y0 = Math.round(y * px);
+      g.fillRect(x0, y0, Math.max(1, Math.round((x + size) * px) - x0), Math.max(1, Math.round((y + tall) * px) - y0));
     };
     const t = timeMs / 1000;
     const still = isReducedMotion();
@@ -142,7 +213,7 @@ export class MeditationView {
         ring(Math.round(R_MAX + 8 + k * 16)).forEach(([x, y], i) => { if (i % 2 === 0) dot(MOTE, 0.5 * (1 - k), x, y); });
       }
     }
-    this.drawThoughts(s, tileSize, uiTile, t, still, dot);
+    this.drawThoughts(s, px, uiTile, t, still, dot);
   }
 
   /**
@@ -150,7 +221,7 @@ export class MeditationView {
    * de 2×2, e um em cada quatro com um halo: de um pixel, piscando fundo e apagando a subida inteira, eles sumiam
    * contra o capim claro do dia (de 13, viam-se três). Agora piscam de leve e só apagam no fim da subida.
    */
-  private drawMotes(s: MeditationSession, t: number, still: boolean, dot: (c: number, a: number, x: number, y: number, size?: number) => void): void {
+  private drawMotes(s: MeditationSession, t: number, still: boolean, dot: Dot): void {
     const n = Math.round(s.depth * 18);
     for (let i = 0; i < n; i += 1) {
       const a = i * 2.39996 + (still ? 0 : t * 0.12 * (1 + (i % 3) * 0.25));
@@ -166,44 +237,58 @@ export class MeditationView {
     }
   }
 
-  private drawThoughts(
-    s: MeditationSession, tileSize: number, uiTile: number, t: number, still: boolean,
-    dot: (c: number, a: number, x: number, y: number, size?: number) => void,
-  ): void {
-    const px = tileSize / 16;
+  private drawThoughts(s: MeditationSession, px: number, uiTile: number, t: number, still: boolean, dot: Dot): void {
     const textPx = Math.max(1, Math.round(uiTile / 32));
     this.icons.forEach((icon) => icon.setVisible(false));
     this.labels.forEach((label) => label.setVisible(false));
     s.thoughts.slice(0, POOL).forEach((thought, i) => {
       // Chegando: no caminho dele. Pegou: em cima da cabeça, balançando. Percebido ou lapso: se desfaz ONDE ESTAVA (o
-      // percebido ainda no caminho fica no caminho; só o que já tinha pegado o herói está em cima da cabeça).
+      // percebido ainda no caminho fica no caminho; só o que já tinha pegado o herói está em cima da cabeça). O meio
+      // da nuvem cai sempre num pixel inteiro do mundo: nuvem, contorno e coisa ficam na mesma grade, sem borrão.
       const onPath = thought.dist > THOUGHT_CATCH + 1e-6;
       const bob = still ? 0 : Math.sin(t * 2 + thought.id) * 0.6;
-      const cx = onPath ? Math.cos(thought.angle) * thought.dist * 16 : 0;
-      const cy = (onPath ? Math.sin(thought.angle) * thought.dist * 16 * 0.7 : -THOUGHT_CATCH * 16 - 4) + bob;
+      // Percebido: a nuvem sobe um pouco enquanto se desfaz (crescer numa escala quebrada borrava o desenho).
+      const rise = thought.state === 'noticed' ? thought.age * 6 : 0;
+      const cx = Math.round(onPath ? Math.cos(thought.angle) * thought.dist * 16 : 0);
+      // Em cima da cabeça, o fundo da nuvem fica onde ficava o da nuvem pequena (um pixel abaixo do alcance dela).
+      const cy = Math.round((onPath ? Math.sin(thought.angle) * thought.dist * 16 * 0.7 : -THOUGHT_CATCH * 16 + 1 - CLOUD_BOTTOM) + bob - rise);
+      // Percebido ou lapso: a nuvem se desfaz em 1,2 s, pixel a pixel (ver `shows`). O percebido ainda estoura e ganha
+      // o nome; o lapso só vai embora.
       const fade = thought.state === 'noticed' || thought.state === 'lapsed' ? Math.max(0, 1 - thought.age / 1.2) : 1;
-      const swell = thought.state === 'noticed' ? 1 + thought.age * 0.5 : 1;
-      const alpha = fade * (thought.state === 'lapsed' ? 0.5 : 1);
-      if (alpha <= 0.01) return;
-      for (const [x, y] of CLOUD.fill) dot(CLOUD_FILL, 0.85 * alpha, cx + x * swell, cy + y * swell);
-      for (const [x, y] of CLOUD.line) dot(CLOUD_LINE, 0.7 * alpha, cx + x * swell, cy + y * swell);
+      if (fade <= 0.03) return;
+      const strip = (c: number, r: Strip): void => {
+        if (fade >= 1) { dot(c, 1, cx + r.x, cy + r.y, r.w, 1); return; }
+        for (let k = 0; k < r.w; k += 1) if (shows(r.x + k, r.y, fade, thought.id)) dot(c, 1, cx + r.x + k, cy + r.y);
+      };
+      for (const r of CLOUD.fill) strip(CLOUD_FILL, r);
+      for (const r of CLOUD.line) strip(CLOUD_LINE, r);
       // Percebido: a nuvem estoura em pontinhos que se espalham.
       if (thought.state === 'noticed') {
         for (let k = 0; k < 8; k += 1) {
           const a = k * (Math.PI / 4) + thought.id;
-          const r = 6 + thought.age * 14;
-          dot(MOTE, fade, cx + Math.cos(a) * r, cy + Math.sin(a) * r * 0.7);
+          const r = 12 + thought.age * 16;
+          dot(MOTE, fade, Math.round(cx + Math.cos(a) * r), Math.round(cy + Math.sin(a) * r * 0.7), 2);
         }
       }
       const art = this.iconFor(thought);
       const icon = this.icons[i];
       icon.setTexture(art.texture, art.frame);
-      const fit = (9 * px * swell) / Math.max(icon.frame.realWidth, icon.frame.realHeight);
-      icon.setDisplaySize(icon.frame.realWidth * fit, icon.frame.realHeight * fit)
-        .setPosition(Math.round(cx * px), Math.round(cy * px))
-        .setAlpha(alpha)
-        .setVisible(true);
-      if (thought.state === 'noticed') this.drawLabel(i, this.labelFor(thought.kind), cx * px, (cy - 9) * px, textPx, fade);
+      // Um texel por pixel do mundo (só a arte maior que a nuvem encolhe, e então pela metade, um quarto...).
+      const w = icon.frame.realWidth;
+      const h = icon.frame.realHeight;
+      const shrink = Math.max(1, Math.ceil(Math.max(w, h) / THOUGHT_ART));
+      const left = cx - Math.floor(w / shrink / 2);
+      const top = cy - Math.floor(h / shrink / 2);
+      // O contorno de tinta em volta da coisa: a parte clara dela (a lâmina, o vidro) lia contra o branco da nuvem.
+      if (shrink === 1) {
+        for (const [x, y] of outlineOf(icon.frame)) if (shows(left - cx + x, top - cy + y, fade, thought.id)) dot(CLOUD_LINE, 1, left + x, top + y);
+      }
+      // A coisa vai inteira, opaca, até a nuvem passar da metade do desfazer; aí some de uma vez (meio alfa borrava).
+      icon.setDisplaySize(Math.round((left + w / shrink) * px) - Math.round(left * px), Math.round((top + h / shrink) * px) - Math.round(top * px))
+        .setPosition(Math.round(left * px), Math.round(top * px))
+        .setAlpha(1)
+        .setVisible(fade > 0.5);
+      if (thought.state === 'noticed') this.drawLabel(i, this.labelFor(thought.kind), cx * px, (cy - CLOUD_TOP - 5) * px, textPx, fade);
     });
   }
 

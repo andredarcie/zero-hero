@@ -21,6 +21,9 @@ export const ITEM_VISUAL_2D: Record<HeldItemKind, { texture: string; frame: numb
   stool: { texture: 'valley-find-stool', frame: 0 },
   lantern: { texture: 'valley-find-lantern', frame: 0 },
   flowerPot: { texture: 'valley-find-flowerPot', frame: 0 },
+  sundial: { texture: 'valley-find-sundial', frame: 0 },
+  cairn: { texture: 'valley-find-cairn', frame: 0 },
+  windChime: { texture: 'valley-find-windChime', frame: 0 },
   sword: { texture: ASSET_KEYS.swordItemIcon, frame: 0 },
   key: { texture: ASSET_KEYS.keyItem, frame: KEY_FRAMES.held },
   axe: { texture: ASSET_KEYS.axeIcon, frame: 0 },
@@ -55,6 +58,9 @@ export const BACK_ITEM_VISUAL_3D: Record<HeldItemKind, { texture: string; frame:
   stool: { texture: 'valley-find-stool', frame: 0 },
   lantern: { texture: 'valley-find-lantern', frame: 0 },
   flowerPot: { texture: 'valley-find-flowerPot', frame: 0 },
+  sundial: { texture: 'valley-find-sundial', frame: 0 },
+  cairn: { texture: 'valley-find-cairn', frame: 0 },
+  windChime: { texture: 'valley-find-windChime', frame: 0 },
   sword: { texture: 'sword-icon', frame: 0 },
   key: { texture: 'key-item', frame: KEY_FRAMES.held },
   axe: { texture: 'axe-icon', frame: 0 },
@@ -137,6 +143,9 @@ export const INTRO_WALK_TILES = 3;
 
 /** O recado que a cena deixa para si mesma ao reiniciar: quem pulou ainda ouve o mago. */
 export const OPENING_TALK_KEY = 'openingTalkPending';
+
+/** O recado dos créditos para a cena seguinte: o herói acorda no acampamento (ver MorningAfter). */
+export const MORNING_AFTER_KEY = 'morningAfterPending';
 
 export const BUTTERFLY_TINTS = [0xb0a890, 0xb0a070, 0x8a9cb0, 0xb09080, 0xa8a4b0] as const;
 

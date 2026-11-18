@@ -3,6 +3,7 @@ import * as THREE from 'three';
 
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import { DECOR_PAINTERS, FIND_PAINTERS, FIND_SIZE, type FindKind } from '@/game/render3d/findArt';
+import { HOME_DECOR_PAINTERS, registerHomeArt } from '@/game/render3d/homeArt';
 import { paintedCanvas, type HomeKind } from '@/game/render3d/homeTextures';
 import { registerTexture3D } from '@/game/render3d/textures3d';
 import { world3d } from '@/game/render3d/World3D';
@@ -52,7 +53,7 @@ const FINDS: readonly ValleyFind[] = [
 const FIND_TINT = 0xa8a4a0;
 const FIND_SHADOW = { rx: 0.42, rz: 0.2, alpha: 0.3 };
 /** Onde se senta, o corpo do herói fica neste tile: o móvel fica um nada atrás dele. */
-const SEAT_BEHIND = 0.05;
+export const SEAT_BEHIND = 0.05;
 
 const findTexture = (kind: FindKind): string => `valley-find-${kind}`;
 
@@ -60,7 +61,9 @@ const findTexture = (kind: FindKind): string => `valley-find-${kind}`;
 let threeRegistered = false;
 
 export const registerFindTextures = (scene: Engine.Scene): void => {
-  for (const [kind, paint] of Object.entries({ ...FIND_PAINTERS, ...DECOR_PAINTERS })) {
+  // O lar do herói: a tina, a placa, a manta e os quadros extras dos enfeites (só o mundo 3D os desenha).
+  registerHomeArt();
+  for (const [kind, paint] of Object.entries({ ...FIND_PAINTERS, ...DECOR_PAINTERS, ...HOME_DECOR_PAINTERS })) {
     const key = `valley-find-${kind}`;
     const canvas = paintedCanvas(paint, FIND_SIZE, FIND_SIZE);
     if (!threeRegistered) {

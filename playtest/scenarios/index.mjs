@@ -51,6 +51,12 @@ import natureza from './natureza.mjs';
 import cerca from './cerca.mjs';
 import forja from './forja.mjs';
 import biomas from './biomas.mjs';
+import lar from './lar.mjs';
+import matoAlto from './mato-alto.mjs';
+import construirTelas from './construir-telas.mjs';
+import painelTestes from './painel-testes.mjs';
+import matoVolta from './mato-volta.mjs';
+import troncoBancada from './tronco-bancada.mjs';
 
 export const scenarios = {
   smoke,
@@ -106,6 +112,12 @@ export const scenarios = {
   cerca,
   forja,
   biomas,
+  lar,
+  'mato-alto': matoAlto,
+  'construir-telas': construirTelas,
+  'painel-testes': painelTestes,
+  'mato-volta': matoVolta,
+  'tronco-bancada': troncoBancada,
 };
 
 // What `npm run playtest` runs when no scenario is named.

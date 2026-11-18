@@ -11,6 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { CAMP_BENCH } from './acampamento.mjs';
 import { makeCanStep } from './relevo.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -28,7 +29,9 @@ if (!furnace) problems.push('o forno da Vega não está no mapa');
 /** A bigorna: o tile onde a mesa ficava, ao lado do forno (sudoeste dele). */
 const ANVIL = furnace ? { x: furnace.worldX - 1, y: furnace.worldY + 1 } : { x: 0, y: 0 };
 
-world.props = world.props.filter((p) => p.type !== 'toolbox' && p.type !== 'altar');
+// A mesa que sai é a da Vega. A BANCADA DO LAR (scripts/acampamento.mjs, 2026-11-17) é outra: fica no acampamento.
+const homeBench = (p) => p.type === 'toolbox' && p.worldX === CAMP_BENCH.worldX && p.worldY === CAMP_BENCH.worldY;
+world.props = world.props.filter((p) => (p.type !== 'toolbox' || homeBench(p)) && p.type !== 'altar');
 // Logo depois do forno na lista (e não no fim): ponte-do-morel.mjs reescreve a lista com as árvores secas no fim.
 world.props.splice(world.props.indexOf(furnace) + 1, 0, { type: 'altar', worldX: ANVIL.x, worldY: ANVIL.y });
 const at = chunkOf(ANVIL.x, ANVIL.y);

@@ -33,14 +33,16 @@ export default {
       return {
         anvils: g.props.altars().map((a) => [a.x, a.y, a.playerBuilt]),
         furnace: f ? [f.x, f.y] : null,
-        toolboxes: g.props.toolboxes().length,
+        toolboxes: g.props.toolboxes().map((b) => [b.x, b.y]),
       };
     });
     log(`  mapa: ${JSON.stringify(map)}`);
     const [ax, ay] = map.anvils[0] ?? [0, 0];
     assert('Há UMA bigorna, fixa, ao lado do forno', map.anvils.length === 1 && map.anvils[0][2] === false && map.furnace
       && Math.abs(ax - map.furnace[0]) <= 1 && Math.abs(ay - map.furnace[1]) <= 1, JSON.stringify(map));
-    assert('A mesa de ferramentas saiu do mapa', map.toolboxes === 0, String(map.toolboxes));
+    // A mesa da forja saiu; a única bancada do vale é a do LAR, no acampamento do herói (scripts/acampamento.mjs).
+    assert('A mesa de ferramentas da forja saiu do mapa (só fica a bancada do acampamento)',
+      map.toolboxes.every(([x, y]) => x === 55 && y === 45), JSON.stringify(map.toolboxes));
 
     const anvil = () => page.evaluate(() => {
       const g = window.gameDebug;

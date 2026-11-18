@@ -54,8 +54,11 @@
       "glass": "Glass. Take it to Thea.",
       "telescope": "The telescope!",
       "stool": "A stool. It does nothing. It looks nice.",
-      "lantern": "A lantern. Put it where you like.",
-      "flowerPot": "A pot with a flower. Put it where you like."
+      "lantern": "A lantern. It lights up when it gets dark.",
+      "flowerPot": "A stone pot. The flower follows the season.",
+      "sundial": "A sundial. The shadow tells the hour.",
+      "cairn": "Stacked stones, quiet and balanced.",
+      "windChime": "A wind chime. It rings when the wind blows."
     },
     "name": {
       "sword": "Sword",
@@ -93,7 +96,10 @@
       "telescope": "Telescope",
       "stool": "Stool",
       "lantern": "Lantern",
-      "flowerPot": "Flower pot"
+      "flowerPot": "Flower pot",
+      "sundial": "Sundial",
+      "cairn": "Cairn",
+      "windChime": "Wind chime"
     }
   },
   "dialog": {
@@ -226,7 +232,13 @@
     "takeBack": "Take out",
     "pickUp": "Pick up",
     "feed": "Put in",
-    "pet": "Pet"
+    "pet": "Pet",
+    "dye": "Dye",
+    "write": "Write",
+    "stock": "Store",
+    "readHour": "Read the time",
+    "ring": "Ring",
+    "build": "Build"
   },
   "controls": {
     "hint": "Z talk & take · X use",
@@ -392,7 +404,8 @@
       "materials": "Materials",
       "neighbours": "For the neighbours",
       "mushrooms": "Mushrooms",
-      "animals": "Animals"
+      "animals": "Animals",
+      "home": "Home"
     },
     "unknownName": "???",
     "unknownText": "I haven't found this yet.",
@@ -420,7 +433,13 @@
       "dyeSeeds": "Sisi's mixed seeds: four plants that give dye. Each one goes in a hole.",
       "dyeBundle": "The four dye flowers, picked. The colours of Sisi's painting come from them.",
       "brush": "Sisi's brush. With it, the painting on the easel gets the colours of the flowers.",
-      "telescope": "Thea's telescope, with the glass lens. From the top of the plateau it brings the stars closer."
+      "telescope": "Thea's telescope, with the glass lens. From the top of the plateau it brings the stars closer.",
+      "stool": "A twig stool, made at the camp workbench. It is just for looks.",
+      "lantern": "Twig and charcoal. It lights itself when dark falls, and rests by day.",
+      "flowerPot": "A stone pot with charcoal at the bottom: charcoal holds water and nutrients in the soil. The flower changes with the season.",
+      "sundial": "The twig's shadow moves with the sun and points to the hour. At night, with no sun, it tells nothing.",
+      "cairn": "Stones piled up, the biggest at the bottom. Piles like this have marked mountain trails for thousands of years.",
+      "windChime": "Shards of iron ore hung from a hook. They knock together when a gust goes by."
     }
   },
   "meditation": {
@@ -514,6 +533,8 @@
     }
   },
   "ending": {
+    "epigraph": "Maybe life isn't about big things or some meaning behind it all, but about *small things*.",
+    "afterword": "The main adventure is over, but you can keep exploring and doing the side activities.",
     "theEnd": "The End",
     "credits": [
       {
@@ -534,11 +555,47 @@
       },
       {
         "speaker": "npc",
-        "text": "Shui · Sisi · Marco · Thea"
+        "text": "Shui, the mycologist"
+      },
+      {
+        "speaker": "npc",
+        "text": "Sisi, the painter"
+      },
+      {
+        "speaker": "npc",
+        "text": "Marco, the woodcutter"
+      },
+      {
+        "speaker": "npc",
+        "text": "Thea, the astronaut"
       },
       {
         "speaker": "npc",
         "text": "and Sati, the wizard"
+      },
+      {
+        "speaker": "narrator",
+        "text": "playtested by"
+      },
+      {
+        "speaker": "npc",
+        "text": "Adriel Carvalho"
+      },
+      {
+        "speaker": "npc",
+        "text": "Eric Góes"
+      },
+      {
+        "speaker": "npc",
+        "text": "Geovani Darcie"
+      },
+      {
+        "speaker": "npc",
+        "text": "Diego Penha"
+      },
+      {
+        "speaker": "npc",
+        "text": "Rodrigo Alister"
       },
       {
         "speaker": "narrator",
@@ -592,8 +649,18 @@
         "touch": "Tap when the knife is between the marks, to cut."
       },
       "clean": {
-        "keys": "Hold the mouse button and rub the sponge on the mushroom to clean it.",
+        "keys": "Move the sponge over the mushroom with the mouse to clean off the dirt.",
         "touch": "Drag the sponge over the mushroom to clean it."
+      }
+    },
+    "sketch": {
+      "draw": {
+        "keys": "Hold {Z} (or the mouse button) to draw. When the animal lifts its head, let go, or it runs away  ·  {X} closes",
+        "touch": "Hold your finger on the screen to draw. When the animal lifts its head, let go, or it runs away  ·  the × closes"
+      },
+      "done": {
+        "keys": "Drawing done: it went into the field notebook. Press {Z} to close.",
+        "touch": "Drawing done: it went into the field notebook. Tap to close."
       }
     },
     "card": {
@@ -631,6 +698,70 @@
     "paint": {
       "keys": "Pick a paint ({1} to {4} or click a pot) and paint by dragging the mouse. {Enter} finishes.",
       "touch": "Tap a pot and paint by dragging your finger."
+    }
+  },
+  "home": {
+    "tub": {
+      "title": "The dye tub",
+      "cape": "Cloak",
+      "blanket": "Blanket",
+      "keys": "Arrows choose  ·  Z dyes  ·  X closes",
+      "keysTouch": "Tap a colour to dye"
+    },
+    "dye": {
+      "natural": "Natural",
+      "urucum": "Annatto",
+      "anil": "Indigo",
+      "curcuma": "Turmeric",
+      "garanca": "Madder",
+      "violeta": "Violet: indigo and madder"
+    },
+    "sign": {
+      "title": "What is this place called?",
+      "placeholder": "Zero's Camp",
+      "write": "Write",
+      "cancel": "Leave it",
+      "keys": "Enter writes  ·  Esc leaves it",
+      "keysTouch": "Write, then tap Write"
+    },
+    "sundial": {
+      "clock": "12",
+      "hour": "The shadow says {h}.",
+      "night": "No sun, no shadow, no hour."
+    },
+    "arrive": {
+      "day": "home",
+      "night": "home, at night"
+    },
+    "piece": {
+      "log": "Log seat",
+      "stool": "Stool",
+      "sign": "Sign",
+      "tub": "Dye tub",
+      "sundial": "Sundial",
+      "cairn": "Cairn",
+      "lantern": "Lantern",
+      "flowerPot": "Flower pot",
+      "windChime": "Wind chime",
+      "rack": "Shui's rack",
+      "easel": "Sisi's painting",
+      "woodpile": "Marco's woodpile",
+      "chart": "Thea's star map"
+    },
+    "build": {
+      "title": "Build at camp",
+      "choose": "Choose what to place  ·  ← → and Z  ·  ↑ moves or takes apart a piece  ·  X leaves",
+      "chooseTouch": "Tap what to place, or a piece to move it or take it apart",
+      "place": "Pick a green spot  ·  arrows and Z  ·  X goes back",
+      "placeTouch": "Tap a green spot",
+      "move": "Moving it  ·  arrows and Z  ·  Delete takes it apart  ·  X puts it back",
+      "moveTouch": "Tap the new spot, or Take apart",
+      "empty": "Everything is already at camp  ·  ↑ moves or takes apart a piece  ·  X leaves",
+      "emptyTouch": "Everything is already at camp: tap a piece to move it or take it apart",
+      "gift": "a gift",
+      "scrap": "Take apart",
+      "back": "Back",
+      "done": "Done"
     }
   }
 }

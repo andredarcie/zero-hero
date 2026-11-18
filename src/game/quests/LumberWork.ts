@@ -18,7 +18,9 @@ const LAP_ELEVATION = 0.36;
 const STANDING_MIDDLE = 0.9;
 /** O galho assenta, e o minijogo já vem. */
 const SPLIT_PAUSE_MS = 380;
-/** Onde cada galho pousa na terra, e a inclinação: quatro varas encostadas, formando a tenda. */
+/** Rachou limpo nesta parte dos galhos (era 3 de 4): o Marco elogia a mão. */
+const CLEAN_FOR_PRAISE = Math.ceil(STICKS * 0.75);
+/** Onde cada galho pousa na terra, e a inclinação: as varas encostadas, formando a tenda (usa as STICKS primeiras). */
 const SLOTS: ReadonlyArray<{ x: number; y: number; angle: number }> = [
   { x: -0.26, y: 0.04, angle: 30 },
   { x: 0.26, y: 0.04, angle: -30 },
@@ -255,7 +257,7 @@ export class LumberWork {
     this.host.fire = fire;
     const base = { ...this.host.dialogBase(), calm: true };
     const open: I18nLine[] = [
-      { speaker: 'npc', text: t(`npc.businessManNight.split.${this.host.save.clean >= 3 ? 'clean' : 'rough'}`) },
+      { speaker: 'npc', text: t(`npc.businessManNight.split.${this.host.save.clean >= CLEAN_FOR_PRAISE ? 'clean' : 'rough'}`) },
       { speaker: 'npc', text: t(`npc.businessManNight.fire.${attempts === 0 ? 'first' : 'worked'}`) },
     ];
     this.host.host.playNight({

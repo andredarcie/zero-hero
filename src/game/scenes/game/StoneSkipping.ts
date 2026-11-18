@@ -1,12 +1,15 @@
-// A PEDRA QUE QUICA NA ÁGUA (pedido do autor, 2026-11-11; a conta e a arte em objects/stoneSkip): o Z diante de água
-// aberta pega um seixo da beira, o herói mira (o seixo balança na mão e brilha quando passa deitado), e o segundo Z
-// joga. A pedra voa sobre a água de verdade, com um anel, umas gotas e uma nota mais aguda a cada quique, até afundar
-// ou parar na outra margem. Bater o recorde dá corações. O X desiste.
+// A PEDRA QUE QUICA NA ÁGUA (pedido do autor, 2026-11-11; a conta e a arte em objects/stoneSkip): num leito de seixos
+// da beira do lago (objects/PebbleBeds; só ali, desde 2026-11-16), de frente para a água, o Z pega um seixo, o herói
+// mira (o seixo balança na mão e brilha quando passa deitado), e o segundo Z joga. A pedra voa sobre a água de verdade,
+// com um anel, umas gotas e uma nota mais aguda a cada quique, até afundar ou parar na outra margem. Bater o recorde dá
+// corações. O X desiste.
 
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { PROP_TINT } from '@/game/objects/nature/kit';
+import { PebbleBeds } from '@/game/objects/PebbleBeds';
 import {
-  PEBBLE_FRAMES, PEBBLE_H, PEBBLE_W, SKIP_DROP, SKIP_RING, TILT_PERIOD_S, hopLengths, pebbleFrame, qualityOf, skipsFor, tiltAt,
+  PEBBLE_FRAMES, PEBBLE_H, PEBBLE_W, SKIP_DROP, SKIP_RING, TILT_PERIOD_S, hopLengths, pebbleFrame, qualityOf, skipBedAt, skipsFor,
+  tiltAt,
 } from '@/game/objects/stoneSkip';
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
 import { WATER_DEPTH_TILES } from '@/game/render3d/World3D';
@@ -39,6 +42,8 @@ export class StoneSkipping {
   private aim: Aim | null = null;
   private flight: Flight | null = null;
   private bankRest = 0;
+  /** Os seixos à vista na beira do lago (o mundo 3D já tem de existir: ver `build`). */
+  private beds?: PebbleBeds;
   private readonly rings: Ring[] = [];
   private readonly drops: Drop[] = [];
   /** Quantos quiques deu a última pedra (-1: nenhuma ainda; a janela dos playtests). */
@@ -51,12 +56,18 @@ export class StoneSkipping {
     return this.aim !== null;
   }
 
-  /** Dá para quicar daqui: água aberta à frente, e nenhuma pedra na mão nem no ar. */
-  public canSkipAt(x: number, y: number): boolean {
-    return !this.aim && !this.flight && this.host.query.isOpenWaterAt(x, y);
+  /** Os leitos de seixos no mundo (o World3D já tem de existir). */
+  public build(): void {
+    this.beds ??= new PebbleBeds();
   }
 
-  /** O Z diante da água: pega um seixo da beira e começa a mirar. */
+  /** Dá para quicar daqui: o herói num leito de seixos, água aberta à frente, e nenhuma pedra na mão nem no ar. */
+  public canSkipAt(x: number, y: number): boolean {
+    if (this.aim || this.flight) return false;
+    return skipBedAt(this.host.playerWorld.worldX, this.host.playerWorld.worldY) !== null && this.host.query.isOpenWaterAt(x, y);
+  }
+
+  /** O Z no leito, diante da água: pega um seixo e começa a mirar. */
   public startAt(x: number, y: number): boolean {
     const w3 = this.host.world3d;
     if (!w3 || !this.canSkipAt(x, y)) return false;
@@ -234,6 +245,8 @@ export class StoneSkipping {
     this.aim = null;
     this.flight = null;
     this.clearPebble();
+    this.beds?.destroy();
+    this.beds = undefined;
     for (const r of this.rings) r.bb.destroy();
     for (const d of this.drops) d.bb.destroy();
     this.rings.length = 0;

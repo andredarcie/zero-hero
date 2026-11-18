@@ -5,7 +5,10 @@ import type { GameScene } from '@/game/scenes/GameScene';
 type Button = 'z' | 'x';
 
 export const verbProbe = (s: GameScene) => {
-  const ask = (button: Button, x: number, y: number): string | null => (button === 'x' ? s.verbs.useVerbAt(x, y) : s.verbs.handVerbAt(x, y));
+  // A mesma pergunta do balão: o que está nas costas, senão a ferramenta guardada que viria sozinha (ActionVerbs.toolFor).
+  const ask = (button: Button, x: number, y: number): string | null => (button === 'x'
+    ? s.verbs.useVerbAt(x, y) ?? s.verbs.toolFor(x, y, 'use')?.verb ?? null
+    : s.verbs.handVerbAt(x, y) ?? s.verbs.toolFor(x, y, 'hand')?.verb ?? null);
   return {
     /** O verbo do Z em (x, y) (null = nada). */
     hand: (x: number, y: number): string | null => s.verbs.handVerbAt(x, y),

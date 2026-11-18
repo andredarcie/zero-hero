@@ -19,7 +19,7 @@ export type DialogCameraHost = Pick<GameScene,
 
 export class DialogCamera {
   /** O último alvo: é dele que a câmera volta, depois que o `cameraLook` já acabou. */
-  private cameraLookLast?: { x: number; y: number };
+  private cameraLookLast?: { x: number; y: number; drift?: number };
 
   // While a dialog is open the camera pans so the hero + NPC sit centered on the stage ABOVE
   // the speech box (a bar along the bottom). camShifting keeps the world frozen-but-reprojected
@@ -37,16 +37,19 @@ export class DialogCamera {
   public cameraLookOffset(delta: number, camX: number, camY: number): { x: number; y: number } {
     const goal = this.host.cameraLook ? 1 : 0;
     const step = delta / CAMERA_LOOK_MS;
-    this.host.cameraLookBlend = goal > this.host.cameraLookBlend
-      ? Math.min(1, this.host.cameraLookBlend + step)
-      : Math.max(0, this.host.cameraLookBlend - step);
+    // Chegou, fica. Com o olhar inteiro (meta 1, blend 1) o `else` antigo descia o blend um passo e o quadro seguinte o
+    // subia de novo: a câmera tremia um nada a cada dois quadros enquanto olhava (a cadeira do lago, a meditação, a
+    // luneta), e o mundo inteiro era rasterizado em outra fase, piscando.
+    const blend = this.host.cameraLookBlend;
+    this.host.cameraLookBlend = goal > blend ? Math.min(1, blend + step) : goal < blend ? Math.max(0, blend - step) : blend;
     if (this.host.cameraLookBlend === 0) return { x: 0, y: 0 };
     if (this.host.cameraLook) this.cameraLookLast = this.host.cameraLook;
     const at = this.cameraLookLast;
     if (!at) return { x: 0, y: 0 };
     const eased = this.host.cameraLookBlend * this.host.cameraLookBlend * (3 - 2 * this.host.cameraLookBlend);
-    // Bem devagar, de um lado para o outro do bosque: é ele, vivo, e não uma foto.
-    const drift = Math.sin(this.host.time.now * CAMERA_LOOK_DRIFT_RATE) * CAMERA_LOOK_DRIFT_TILES;
+    // Bem devagar, de um lado para o outro do bosque: é ele, vivo, e não uma foto. Um quadro justo (a meditação)
+    // passeia menos, senão a borda dele sai da tela.
+    const drift = Math.sin(this.host.time.now * CAMERA_LOOK_DRIFT_RATE) * (at.drift ?? CAMERA_LOOK_DRIFT_TILES);
     return { x: (at.x + drift - camX) * eased, y: (at.y - camY) * eased };
   }
 

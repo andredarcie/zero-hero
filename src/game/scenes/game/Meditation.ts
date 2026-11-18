@@ -8,7 +8,10 @@ import type * as Engine from '@/game/engine';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import type { HeldItemKind } from '@/game/entities/ItemPickup';
 import { t, tWords } from '@/game/i18n/i18n';
-import { MEDITATION_SEAT, MeditationSpot, type MeditationPiece } from '@/game/objects/MeditationSpot';
+import { MEDITATION_CAIRN, MEDITATION_SEAT, MeditationSpot, type MeditationPiece } from '@/game/objects/MeditationSpot';
+import { SAKURA_DRAW_Y, SAKURA_TRUNK, SakuraTree } from '@/game/objects/SakuraTree';
+import { terrainHeightAt } from '@/game/world/relief';
+import { fitFrame, MEDITATION_DRIFT, MEDITATION_MARGINS, meditationShot } from './meditationFrame';
 import { adventureState } from '@/game/runtime/adventureState';
 import { MeditationSession, type MeditationEvent, type Thought, type ThoughtKind } from '@/game/runtime/meditation';
 import { MeditationOverlay } from '@/game/runtime/MeditationOverlay';
@@ -21,9 +24,20 @@ import { ITEM_VISUAL_2D } from './sceneDefs';
 
 /** O que Meditation usa de GameScene (e a cena do motor, onde o desenho mora). */
 export type MeditationHost = Engine.Scene & Pick<GameScene,
-  'actions' | 'camera' | 'camp' | 'cinema' | 'cutsceneActive' | 'dialog' | 'hand' | 'hero' | 'movementController' | 'pause' | 'playerWorld'
-  | 'save' | 'tileSize' | 'uiTileSize' | 'verbs'
+  'actions' | 'camera' | 'cameraLook' | 'camp' | 'cinema' | 'cutsceneActive' | 'dialog' | 'hand' | 'hero' | 'movementController' | 'pause'
+  | 'playerWorld' | 'save' | 'tileSize' | 'uiTileSize' | 'verbs' | 'world3d'
 >;
+
+/**
+ * A CÂMERA SOBE (pedido do autor, 2026-11-16): o herói assenta na pedra, e ela se move devagar até enquadrar ele
+ * embaixo e a cerejeira inteira acima, JUSTOS, em qualquer tela (o quadro é calculado: ver meditationFrame). Espera o
+ * assentar (ms) e vai por tanto tempo (ms); virando a tela no meio, ela reenquadra neste tempo (ms).
+ */
+const RISE_AFTER_MS = 1500;
+const RISE_MS = 7500;
+const REFRAME_MS = 700;
+/** O que o quadro tem de mostrar (a copa, o herói na pedra, a pilha). */
+const RISE_SHOT = meditationShot(MEDITATION_SEAT, MEDITATION_CAIRN, { x: SAKURA_TRUNK.x, y: SAKURA_DRAW_Y });
 
 /** O que vai dentro de cada tipo de pensamento: as coisas da vida do herói no vale. */
 const THOUGHT_ITEMS: Readonly<Record<ThoughtKind, readonly HeldItemKind[]>> = {
@@ -45,6 +59,8 @@ type CaptionStage = 'breath' | 'waitThought' | 'notice' | 'done';
 
 export class Meditation {
   public spot?: MeditationSpot;
+  /** A cerejeira acima da pedra (objects/SakuraTree). */
+  public sakura?: SakuraTree;
   private session?: MeditationSession;
   private view?: MeditationView;
   private overlay?: MeditationOverlay;
@@ -52,6 +68,8 @@ export class Meditation {
   private stage: CaptionStage = 'done';
   private noticeCaptionUntil = 0;
   private starting = false;
+  /** A proporção da tela em que o quadro foi calculado (0: a câmera ainda não subiu). */
+  private framedAspect = 0;
   /** O corpo do herói na pedra e o vale em volta (a pose, o fôlego, a música, o ambiente, as bordas da tela). */
   private readonly body: MeditationBody;
 
@@ -59,13 +77,15 @@ export class Meditation {
     this.body = new MeditationBody(host);
   }
 
-  /** A pedra e a pilha de pedras no mundo (o World3D já tem de existir). */
+  /** A pedra, a pilha de pedras e a cerejeira no mundo (o World3D já tem de existir). */
   public build(): void {
     this.spot ??= new MeditationSpot();
+    this.sakura ??= new SakuraTree(this.host, () => ({ x: this.host.playerWorld.worldX, y: this.host.playerWorld.worldY }));
   }
 
-  public at(x: number, y: number): MeditationPiece | null {
-    return this.spot?.at(x, y) ?? null;
+  /** A peça deste tile: a pedra, a pilha ou o tronco da cerejeira (sólidos os três). */
+  public at(x: number, y: number): MeditationPiece | 'tree' | null {
+    return this.spot?.at(x, y) ?? (this.sakura?.at(x, y) ? 'tree' : null);
   }
 
   /** Meditando (ou indo sentar): o Z, o X e as setas são da meditação. */
@@ -113,6 +133,23 @@ export class Meditation {
     this.stage = adventureState().meditations >= TAUGHT_AFTER ? 'done' : 'breath';
     if (this.stage === 'breath') this.caption.show('meditation.breath');
     this.host.time.delayedCall(500, () => { if (this.session) getSoundManager().ui.playSingingBowl(); });
+    // A cerejeira solta mais pétalas para quem para embaixo dela, e a câmera sobe para mostrar os dois.
+    this.sakura?.setStillness(1);
+    this.host.time.delayedCall(RISE_AFTER_MS, () => { if (this.session) this.frame(RISE_MS); });
+  }
+
+  /** Leva a câmera ao quadro da cerejeira, calculado para a tela de agora. */
+  private frame(ms: number): void {
+    const w3 = this.host.world3d;
+    if (!w3) return;
+    const base = this.host.cinema.dollyBase ?? { h: w3.params.camHeight, b: w3.params.camBack };
+    const shot = fitFrame(RISE_SHOT, {
+      fov: w3.screen.effectiveFov(w3.camera.aspect), aspect: w3.camera.aspect, height: base.h, back: base.b, zoom: w3.cam.zoomFactor,
+      ground: terrainHeightAt(MEDITATION_SEAT.x, MEDITATION_SEAT.y),
+    }, terrainHeightAt, MEDITATION_MARGINS);
+    this.framedAspect = w3.camera.aspect;
+    this.host.cameraLook = { ...shot.look, drift: MEDITATION_DRIFT };
+    void this.host.cinema.dollyTo(shot.dolly, ms);
   }
 
   private iconFor(thought: Thought): ThoughtIcon {
@@ -132,6 +169,9 @@ export class Meditation {
     this.body.breathe(s.breath);
     this.body.deepen(s.depth, s.quiet);
     if (this.stage === 'notice' && this.host.time.now > this.noticeCaptionUntil) this.teach('done');
+    // A tela virou (o celular deitou, a janela mudou): o quadro de antes cortaria a árvore ou sobraria vale.
+    const aspect = this.host.world3d?.camera.aspect ?? 0;
+    if (this.framedAspect > 0 && Math.abs(aspect - this.framedAspect) > 0.01 * this.framedAspect) this.frame(REFRAME_MS);
     if (this.host.camera) this.view.render(s, this.host.camera, this.host.tileSize, this.host.uiTileSize, this.host.time.now, MEDITATION_SEAT, this.host.hero.lift);
   }
 
@@ -199,6 +239,10 @@ export class Meditation {
   private finish(): void {
     if (this.session && this.session.breaths >= NOTE_AFTER_BREATHS) adventureState().meditations += 1;
     const taken = this.host.dialog.dialogOpen || this.host.hand.itemGetOpen || this.host.cutsceneActive;
+    // A câmera desce de volta para o herói (o levantar do descanso traz o dolly; o olhar volta aqui).
+    this.host.cameraLook = undefined;
+    this.framedAspect = 0;
+    this.sakura?.setStillness(0);
     this.close();
     this.body.rise(this.host.camp.rest.isResting, taken);
     if (this.host.camp.rest.isResting) this.host.camp.rest.getUp();
@@ -243,5 +287,7 @@ export class Meditation {
     this.close();
     this.spot?.destroy();
     this.spot = undefined;
+    this.sakura?.destroy();
+    this.sakura = undefined;
   }
 }

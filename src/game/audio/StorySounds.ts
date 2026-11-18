@@ -126,4 +126,64 @@ export class StorySounds {
     this.host.synth.noise('lowpass', 240, 1.2, 0.2, 0.11, 0.08); // o baque contra o obstaculo
     this.host.synth.osc('sine', 120, 70, 0.09, 0.14, 0.08);
   }
+
+  /** A estrela cadente (a primeira noite): um fio de ar alto que desliza para baixo, e um brilho fino, sem estalo. */
+  public playShootingStar(): void {
+    const d = detune();
+    this.host.synth.swell('bandpass', 2400 * d, 900 * d, 1.6, 0.014, 0.18, 1.1);
+    this.host.synth.tone('sine', 1396 * d, 1047 * d, 0.006, 0.12, 1.2);
+    this.host.synth.tone('sine', 2093 * d, 1568 * d, 0.0025, 0.1, 1.0, 0.05);
+  }
+
+  /** A água começando a ferver na chaleira da Shui: bolhas pequenas e graves, em cacho. */
+  public playTeaBubble(): void {
+    const d = detune();
+    for (let i = 0; i < 5; i += 1) {
+      const f = (220 + Math.random() * 260) * d;
+      this.host.synth.osc('sine', f, f * 1.6, 0.012, 0.05, i * 0.06 + Math.random() * 0.03);
+    }
+    this.host.synth.noise('lowpass', 500 * d, 1, 0.02, 0.3);
+  }
+
+  /** O chá caindo na caneca: um fio de água que desce do agudo para o grave conforme ela enche. */
+  public playTeaPour(): void {
+    const d = detune();
+    this.host.synth.swell('bandpass', 1700 * d, 700 * d, 2.2, 0.03, 0.2, 1.1);
+    this.host.synth.tone('sine', 520 * d, 260 * d, 0.006, 0.4, 1.1);
+  }
+
+  /** A VIAGEM DO CHÁ, etapa por etapa (ver runtime/trip): tudo em fá maior, o tom do vale, entrando e saindo devagar. */
+  public playTrip(stage: TripStage): void {
+    const s = this.host.synth;
+    switch (stage) {
+      case 'inside': // dentro do elmo: um zumbido grave, como o próprio sangue
+        s.tone('sine', 87.3, 87.3, 0.05, 2.5, 9);
+        s.tone('sine', 130.8, 130.8, 0.018, 3, 9);
+        break;
+      case 'tingle': // o formigar: um chiado fino que cresce
+        s.swell('bandpass', 2600, 4200, 3, 0.008, 4, 8);
+        break;
+      case 'colors': // as cores: o acorde de fá subindo devagar
+        [174.6, 220, 261.6, 349.2].forEach((f, i) => s.tone('triangle', f, f, 0.014, 4 + i * 0.5, 10, i * 0.4));
+        break;
+      case 'open': // o elmo abrindo: o acorde sobe uma oitava, e o ar entra
+        for (const f of [349.2, 440, 523.3]) s.tone('sine', f, f * 2, 0.012, 2.6, 3.5);
+        s.swell('highpass', 800, 3000, 0.7, 0.02, 2.4, 3.5);
+        break;
+      case 'tunnel': // o túnel: o vento que acelera, e as notas subindo sem parar
+        s.swell('bandpass', 220, 2600, 0.9, 0.05, 9, 14);
+        [174.6, 261.6, 349.2, 523.3].forEach((f, i) => s.tone('triangle', f, f * 2, 0.008, 8, 14, i * 0.15));
+        break;
+      case 'bloom': // o clarão do fim: sinos claros em arpejo, e o acorde inteiro embaixo
+        [698.5, 880, 1046.5, 1396.9, 1760].forEach((f, i) => s.osc('triangle', f, f, 0.026, 1.8, i * 0.12));
+        for (const f of [174.6, 261.6, 349.2, 440]) s.tone('sine', f, f, 0.016, 4, 16);
+        break;
+      case 'return': // a volta: o acorde desce e assenta
+        for (const f of [349.2, 440, 523.3]) s.tone('sine', f, f * 0.5, 0.012, 1.5, 6);
+        break;
+    }
+  }
 }
+
+/** As etapas da viagem do chá que têm som próprio (ver StorySounds.playTrip). */
+export type TripStage = 'inside' | 'tingle' | 'colors' | 'open' | 'tunnel' | 'bloom' | 'return';

@@ -17,6 +17,8 @@ export type ForagingHandsHost = Pick<ForagingOverlay,
 
 export class ForagingHands {
   public pointer: { id: number; down: boolean } | null = null;
+  /** O mouse já está com a bucha: o primeiro movimento (ou o de quem volta para a tela) só a traz até ele. */
+  private mouseHasSponge = false;
 
   public constructor(private readonly host: ForagingHandsHost) {}
 
@@ -129,11 +131,18 @@ export class ForagingHands {
     if (this.host.stage !== 'clean') return;
     const p = this.toArt(event);
     const pressed = this.pointer?.id === event.pointerId && this.pointer.down;
-    if (event.pointerType === 'mouse' && !pressed) {
-      // O mouse carrega a bucha sem esfregar; esfrega com o botao apertado, como uma borracha.
-      this.host.soil.trackSponge(p.x, p.y);
-      this.host.sponge = p;
+    if (event.pointerType === 'mouse') {
+      // O MOUSE ESFREGA SÓ DE PASSAR (pedido do autor, 2026-11-16): a bucha vai com ele e tira a terra em que encosta,
+      // sem clicar e segurar. Antes ela só apagava com o botão apertado, e quem só movia o mouse não limpava nada. O
+      // primeiro movimento só pega a bucha: arrastá-la do canto até o mouse limparia uma faixa de graça.
       this.host.spongeShown = true;
+      if (!this.mouseHasSponge) {
+        this.mouseHasSponge = true;
+        this.host.soil.trackSponge(p.x, p.y);
+        this.host.sponge = p;
+        return;
+      }
+      this.host.soil.scrubTo(p.x, p.y);
       return;
     }
     if (pressed) this.host.soil.scrubTo(p.x, p.y);
@@ -144,6 +153,7 @@ export class ForagingHands {
   };
 
   public readonly onPointerLeave = (event: PointerEvent): void => {
+    if (event.pointerType === 'mouse') this.mouseHasSponge = false;
     if (event.pointerType === 'mouse' && !this.pointer && this.host.stage === 'clean') this.host.spongeShown = false;
   };
 }

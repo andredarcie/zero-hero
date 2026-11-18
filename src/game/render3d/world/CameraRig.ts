@@ -26,6 +26,17 @@ export type CameraRigHost = Pick<World3D,
   'camTarget' | 'camera' | 'canvas' | 'elapsed' | 'params' | 'projection' | 'renderer' | 'screen'
 >;
 
+/**
+ * A CÂMERA DE CENA, por cima da que segue o herói (o céu da primeira noite, a vista de dentro do elmo no chá da Shui):
+ * um olho e o ponto para onde ele olha, em tiles do mundo (y = altura). `blend` 0 é a câmera de sempre e 1 é só a de
+ * cena; no meio as duas se misturam na posição e na direção, e é assim que a câmera gira até o céu e volta.
+ */
+export interface CameraLens {
+  blend: number;
+  eye: THREE.Vector3;
+  look: THREE.Vector3;
+}
+
 export class CameraRig {
   private shakeDurMs = 1;
   private shakeAmp = 0;
@@ -47,6 +58,9 @@ export class CameraRig {
   /** O deslocamento CSS que o canvas carrega neste quadro (a sobra da câmera de pixel suave). */
   public snapShiftX = 0;
   public snapShiftY = 0;
+  /** A câmera de cena (ver CameraLens); null = só a de sempre. Quem a liga a devolve a null. */
+  public lens: CameraLens | null = null;
+  private readonly lensScratch = { base: new THREE.Vector3(), dir: new THREE.Vector3(), at: new THREE.Vector3() };
 
   public constructor(private readonly host: CameraRigHost) {}
 
@@ -90,8 +104,36 @@ export class CameraRig {
       this.host.camTarget.z + this.host.params.camBack * dist,
     );
     this.host.camera.lookAt(this.host.camTarget.x + ox, this.host.camTarget.y + 0.4 + oy, this.host.camTarget.z);
+    if (this.lensOn) {
+      this.lensScratch.base.set(this.host.camTarget.x + ox, this.host.camTarget.y + 0.4 + oy, this.host.camTarget.z);
+      this.applyLens(this.lens!);
+      return;
+    }
     this.host.camera.updateMatrixWorld();
     this.snapCameraToPixel();
+  }
+
+  /** A câmera de cena está no quadro (a grade de pixel e o tamanho do tile da interface são os da câmera de sempre). */
+  public get lensOn(): boolean {
+    return (this.lens?.blend ?? 0) > 0;
+  }
+
+  /**
+   * Mistura a câmera que acabou de seguir o herói com a de cena: a posição anda em linha reta e a DIREÇÃO gira (a
+   * média das duas, normalizada), então a câmera não atravessa o chão para chegar ao céu. Sem a grade de pixel: ela é
+   * medida na câmera de sempre, e uma câmera virando não tem chão parado para prender.
+   */
+  private applyLens(lens: CameraLens): void {
+    const cam = this.host.camera;
+    const s = this.lensScratch;
+    const b = Math.min(1, lens.blend);
+    s.base.sub(cam.position).normalize();
+    s.dir.copy(lens.look).sub(lens.eye).normalize();
+    s.base.lerp(s.dir, b).normalize();
+    cam.position.lerp(lens.eye, b);
+    cam.lookAt(s.at.copy(cam.position).add(s.base));
+    cam.updateMatrixWorld();
+    this.setSnapShift(0, 0);
   }
 
   /**

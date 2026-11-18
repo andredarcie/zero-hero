@@ -15,9 +15,9 @@ import { LumberWork, STICKS } from './LumberWork';
 
 /**
  * A QUEST DO MARCO: uma fogueira e uma noite. Não há fogueira nenhuma ao lado dele, só a terra
- * preparada. Marco dá o machado (nenhum mais fica solto no mundo), e são quatro voltas: achar uma árvore
+ * preparada. Marco dá o machado (nenhum mais fica solto no mundo), e são STICKS voltas (duas): achar uma árvore
  * seca, que é rara, cortar um galho, levá-lo no colo ao cepo, pô-lo em pé, e o minijogo de rachar já
- * começa. As duas metades vão nas costas para a terra, onde a fogueira vai crescendo. Com as quatro, ele manda acender. Aceso, é uma cena: ele vem
+ * começa. As duas metades vão nas costas para a terra, onde a fogueira vai crescendo. Com todas, ele manda acender. Aceso, é uma cena: ele vem
  * sentar, o herói senta na frente do fogo, o mundo escurece, e ele conta como o fogo funciona.
  *
  * O MACHADO OCUPA A MÃO, como tudo (pedido do autor): pegar o galho deixa o machado no chão. Ao rachar,
@@ -111,6 +111,12 @@ export class LumberQuest {
       this.save.stage = 'light';
       this.save.laid = STICKS;
     }
+    // A quest pedia quatro galhos: quem já pôs dois ou mais na terra tem a tenda pronta.
+    if (this.save.stage === 'gather' && this.save.laid >= STICKS) {
+      this.save.stage = 'ready';
+      this.save.standing = false;
+    }
+    this.save.laid = Math.min(this.save.laid, STICKS);
   }
 
   public setDialogBase(read: () => DialogScript): void {

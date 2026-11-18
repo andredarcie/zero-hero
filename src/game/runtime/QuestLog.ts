@@ -158,6 +158,21 @@ export const recordQuestEvent = (event: QuestEvent): QuestEventResult => {
 };
 
 /**
+ * FECHA UM PEDIDO DE UMA VEZ — só para o painel de testes do localhost (scenes/game/DevTools): todo contador do
+ * pedido vai ao alvo, as opcionais junto. Não é um segundo funil do jogo (nada no mundo chama isto); é o atalho de
+ * quem testa o que vem DEPOIS do pedido (a fala de agradecimento, a lembrança na bancada, a chave do jardim).
+ * Devolve se o pedido fechou agora (era aberto e não é mais).
+ */
+export const forceQuestDone = (dialogId: string): boolean => {
+  const quest = questFor(dialogId);
+  if (!quest) return false;
+  const wasDone = isQuestDone(quest);
+  const progress = adventureState().questProgress;
+  for (const task of quest.tasks) progress.set(progressKey(quest.dialog, task), task.count);
+  return !wasDone && isQuestDone(quest);
+};
+
+/**
  * A FOTO DO CADERNO — para o `gameDebug` e para o playtest, que são os únicos olhos que este
  * sistema tem. Um sistema sem interface que também não pudesse ser LIDO seria um sistema que
  * ninguém consegue provar que funciona.

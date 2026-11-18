@@ -3,7 +3,11 @@
 
 import { CatCompanion } from '@/game/entities/CatCompanion';
 import type { CampfireObject } from '@/game/objects/CampfireObject';
+import { createCanvas } from '@/game/platform/platform';
+import { heroCape } from '@/game/render3d/heroDye';
+import { textureImage } from '@/game/render3d/textures3d';
 import { adventureState } from '@/game/runtime/adventureState';
+import { clothRamp, type ClothDye } from '@/game/runtime/homeState';
 import type { AnimalKind } from '@/game/runtime/sketches';
 import type { GameScene } from '@/game/scenes/GameScene';
 
@@ -20,6 +24,77 @@ export const campProbe = (s: GameScene) => {
       atCamp: s.camp.rest['sleepingAtCamp'],
       deathTile: s.camp.rest['deathTile'] ?? null,
     }),
+
+    /** A manhã depois dos créditos (MorningAfter): ainda por tocar, e o bilhete na tela. */
+    morning: () => ({ pending: s.morning.pending, note: s.morning.noteOpen }),
+
+    /** O LAR (CampHome): o save do lar, as cores da tina, as telas abertas, o título escrito e o mato ainda em pé. */
+    home: () => ({
+      ...adventureState().home,
+      worn: heroCape(),
+      dyes: [...s.camp.home.dyes()],
+      dyeOpen: s.camp.home.dyeCard !== undefined,
+      cursor: s.camp.home.dyeCard?.cursor ?? null,
+      nameOpen: s.camp.home.nameCard !== undefined,
+      title: s.camp.home.titleText,
+      grassStanding: s.camp.home.grassStanding,
+      grassGrowing: s.camp.home.campGrass?.growing ?? 0,
+    }),
+    /**
+     * O MATO DE UM TILE (objects/TallGrassObject): em pé, voltando (e o degrau), ou cortado; e quantos pedaços de fio
+     * e de toco a malha desenha dele (0 = chão limpo).
+     */
+    grassAt: (x: number, y: number) => {
+      const g = s.props.tallGrasses.find((t) => t.worldX === x && t.worldY === y);
+      if (!g) return null;
+      const tuft = g['tuft'] as { state: string; count: number };
+      return { tall: g.isTall, growing: g.isGrowing, level: g.growthLevel, blocking: g.blocking, drawn: tuft.state, quads: tuft.count };
+    },
+    /** Passa o relógio do mato do acampamento de uma vez (o painel de testes): todo cortado e sem uso volta já. */
+    regrowCampGrass: (): void => { s.camp.home.campGrass?.regrowNow(); },
+    /**
+     * O MODO DE CONSTRUÇÃO (BuildMode): aberto, a cena pausada, o que a tela aponta, as cartas (tipo e estado) e a grade
+     * (quantos tiles de cada cor, e o estado de cada um).
+     */
+    build: () => {
+      const open = s.camp.build.overlay !== undefined;
+      const cells = open ? s.camp.build.view().cells : [];
+      const count = (state: string): number => cells.filter((c) => c.state === state).length;
+      return {
+        open,
+        opening: s.camp.build.isOpen && !open,
+        paused: s.scene.isPaused() === true,
+        screen: s.camp.build.overlay?.state ?? null,
+        cards: open ? s.camp.build.view().cards.map((c) => ({ kind: c.kind, state: c.state, next: c.next })) : [],
+        free: count('free'),
+        grass: count('grass'),
+        blocked: count('blocked'),
+        cells: cells.map((c) => ({ x: c.x, y: c.y, state: c.state })),
+      };
+    },
+    /** A cena da tela de construção: um tile da grade (o centro dele) em pixels, para o cenário clicar como um jogador. */
+    buildTilePx: (x: number, y: number): { x: number; y: number } | null => s.world3d?.projection.projectTile(x, y, 0) ?? null,
+    /** Quantos quadradinhos da grade estão deitados no chão do mundo agora (scenes/game/BuildGridView). */
+    gridInWorld: (): number => s.camp.build['grid']?.['cells'].size ?? 0,
+    /** A folha do herói que o mundo 3D desenha agora tem esta cor (#rrggbb) em algum pixel? É a capa tingida de verdade. */
+    heroSheetHas: (hex: string): boolean => {
+      const image = textureImage('hero');
+      if (!image) return false;
+      const canvas = createCanvas();
+      canvas.width = image.width;
+      canvas.height = image.height;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      if (!ctx) return false;
+      ctx.drawImage(image, 0, 0);
+      const data = ctx.getImageData(0, 0, image.width, image.height).data;
+      const want = Number.parseInt(hex.slice(1), 16);
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 3] > 0 && ((data[i] << 16) | (data[i + 1] << 8) | data[i + 2]) === want) return true;
+      }
+      return false;
+    },
+    /** A rampa do pano tingido nesta cor (a mesma conta da capa), para o cenário saber o que procurar. */
+    clothRamp: (dye: ClothDye): readonly string[] => clothRamp(dye),
 
     /** O gato: onde está, se está em casa, e se existe. */
     cat: () => {
@@ -75,5 +150,13 @@ export const campProbe = (s: GameScene) => {
     meditationDepth: (depth: number): void => s.camp.meditation.setDepth(depth),
     /** A pedra que quica: mirando, quantos quiques deu a última, e o recorde. */
     skip: () => ({ aiming: s.camp.skipping.aiming, last: s.camp.skipping.lastSkips, best: adventureState().skipBest }),
+    /** A câmera de cena (o céu da primeira noite, a vista de dentro do elmo): o quanto ela está no quadro, de 0 a 1. */
+    lens: (): number => s.world3d?.cam.lens?.blend ?? 0,
+    /** O chá da Shui: se ele está para vir, se está acontecendo, e o segundo da viagem (null fora dela). */
+    tea: () => ({
+      due: s.camp.tea.due(),
+      active: s.camp.tea.active,
+      trip: s.world3d?.screen.trip.enabled ? s.world3d.screen.trip.look.time : null,
+    }),
   };
 };

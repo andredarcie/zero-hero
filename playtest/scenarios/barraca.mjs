@@ -66,17 +66,19 @@ export default {
     assert('Na primeira noite na barraca, a Morte aparece', deathSeen && after.visited, JSON.stringify({ deathSeen, ...after }));
     assert('Depois dela, o mago avisa que ela volta e manda dormir de novo', after.line === 'again', after.line);
 
-    // Ao levantar, a foice ficou onde ela esteve, no chão do acampamento.
+    // Ao levantar, ainda sem foice: na primeira noite ela só avisa que volta e que deixa um presente no fim da terceira
+    // (pedido do autor, 2026-11-17; o cenário `morte-tres-noites` cobre a entrega).
     await page.keyboard.down('ArrowDown'); await sleep(150); await page.keyboard.up('ArrowDown');
     await sleep(1200);
     const scythe = await page.evaluate(() => window.gameDebug.items.ground().filter((i) => i.kind === 'scythe').map((i) => [i.worldX, i.worldY]));
     log(`  foice: ${JSON.stringify(scythe)}`);
-    assert('A foice que ela deixou está no acampamento', scythe.some(([x, y]) => x >= 51 && x <= 56 && y >= 46 && y <= 51), JSON.stringify(scythe));
+    assert('Na primeira noite a Morte só avisa: nenhuma foice ainda', scythe.length === 0, JSON.stringify(scythe));
 
     // Acordado em cima do colchão, ele sai dele andando (o colchão é sólido para quem chega, não para quem está nele).
     for (let i = 0; i < 10 && (await state()).cutsceneActive; i += 1) await sleep(300);
     const from = await page.evaluate(() => [window.gameDebug.hero.at().x, window.gameDebug.hero.at().y, window.gameDebug.camp.rest().resting]);
-    await page.keyboard.down('ArrowUp'); await sleep(250); await page.keyboard.up('ArrowUp');
+    // Para a direita: acima do colchão fica o caderno de campo (53,47), que é sólido desde 2026-11-11.
+    await page.keyboard.down('ArrowRight'); await sleep(250); await page.keyboard.up('ArrowRight');
     await sleep(700);
     const to = await page.evaluate(() => [window.gameDebug.hero.at().x, window.gameDebug.hero.at().y]);
     log(`  saindo do colchão: ${JSON.stringify(from)} → ${JSON.stringify(to)}`);

@@ -1,6 +1,8 @@
 import type { HeldItemKind } from '@/game/entities/ItemPickup';
 import type { DyeKind } from '@/game/quests/dyePlants';
 import { localStore } from '@/game/platform/platform';
+import { cleanHomeName, isClothDye, type ClothDye } from '@/game/runtime/homeState';
+import { BENCH_MATERIALS, homeBuild, isHomePiece, refund, type BenchMaterial, type HomePieceKind } from '@/game/objects/homeBuilds';
 
 /**
  * A MEMORIA DA AVENTURA — o save.
@@ -88,6 +90,35 @@ export interface LumberQuestSave {
   attempts: number;
 }
 
+/** Uma peça que o jogador pôs no acampamento (objects/homeBuilds, scenes/game/BuildMode). */
+export interface HomePieceSave {
+  kind: HomePieceKind;
+  x: number;
+  y: number;
+}
+
+/** O LAR (runtime/homeState): a cor da capa do herói e da manta do colchão, e o nome que ele deu ao acampamento. */
+export interface HomeSave {
+  cape: ClothDye;
+  blanket: ClothDye;
+  /** Vazio = ainda sem nome (a placa em branco; o título da chegada usa o nome de sempre). */
+  name: string;
+  /** O que o jogador pôs no acampamento, onde pôs. Diff sobre o acampamento de partida (colchão, fogo, caderno). */
+  pieces: HomePieceSave[];
+  /** O material guardado na bancada (o X com material na mão guarda; a construção gasta daqui). */
+  stock: Record<BenchMaterial, number>;
+  /** "x,y" do mato alto do acampamento já cortado: é ESTRUTURA que o jogador fez (o resto do mato do vale volta). */
+  cleared: string[];
+  /**
+   * DESDE QUANDO cada tile cortado está SEM USO, no relógio absoluto do jogo (o dia + a fração do dia): o mato do
+   * acampamento que o herói não usa volta a crescer com o tempo (objects/CampGrass, runtime/campRegrowth). Tile sem
+   * hora conta como cortado agora.
+   */
+  clearedAt: Record<string, number>;
+  /** As construções já feitas uma vez: é por elas que a escada da bancada anda. */
+  built: HomePieceKind[];
+}
+
 export interface AdventureSnapshot {
   /** Vira true no primeiro persist de uma run de verdade — e o que o titulo le para o Continue. */
   started: boolean;
@@ -151,6 +182,7 @@ export interface AdventureSnapshot {
   paintQuest: PaintQuestSave;
   lumberQuest: LumberQuestSave;
   skyQuest: SkyQuestSave;
+  home: HomeSave;
 }
 
 const defaultSnapshot = (): AdventureSnapshot => ({
@@ -186,6 +218,10 @@ const defaultSnapshot = (): AdventureSnapshot => ({
     stage: 'start', standing: false, laid: 0, clean: 0, attempts: 0,
   },
   skyQuest: { stage: 'start', found: [] },
+  home: {
+    cape: 'natural', blanket: 'natural', name: '', pieces: [], stock: { wood: 0, stone: 0, charcoal: 0, ore: 0 }, cleared: [],
+    clearedAt: {}, built: [],
+  },
 });
 
 type StoredSnapshot = {
@@ -219,6 +255,58 @@ type StoredSnapshot = {
   paintQuest?: PaintQuestSave;
   lumberQuest?: Partial<LumberQuestSave>;
   skyQuest?: Partial<SkyQuestSave>;
+  home?: Partial<Record<keyof HomeSave, unknown>>;
+};
+
+/**
+ * O lar do save, conferido: cor que a tina não conhece volta a ser a natural, o nome passa pela limpeza da placa, peça
+ * que o jogo não conhece (ou repetida no mesmo tile) sai, e o estoque é número inteiro e nunca negativo.
+ */
+const cleanHome = (value: StoredSnapshot['home']): HomeSave => {
+  const seen = new Set<string>();
+  const kinds = new Set<string>();
+  const extras: HomePieceKind[] = [];
+  // O BANQUINHO SAIU (pedido do autor, 2026-11-17: o tronco já senta): o que estava posto num save antigo vira tronco,
+  // no mesmo tile, e o assento não some.
+  const legacy = (p: unknown): unknown => ((p as { kind?: unknown } | null)?.kind === 'stool' ? { ...(p as object), kind: 'log' } : p);
+  const pieces = (Array.isArray(value?.pieces) ? (value.pieces as unknown[]).map(legacy) : []).filter((p): p is HomePieceSave => {
+    const piece = p as Partial<HomePieceSave> | null;
+    if (!piece || !isHomePiece(piece.kind) || !Number.isInteger(piece.x) || !Number.isInteger(piece.y)) return false;
+    const at = `${piece.x},${piece.y}`;
+    if (seen.has(at)) return false;
+    // CADA PEÇA UMA VEZ SÓ (2026-11-17, objects/homeBuilds): a repetida de um save de antes sai, e o material volta.
+    if (kinds.has(piece.kind)) { extras.push(piece.kind); return false; }
+    seen.add(at);
+    kinds.add(piece.kind);
+    return true;
+  }).map((p) => ({ kind: p.kind, x: p.x, y: p.y }));
+  const rawStock = (value?.stock ?? {}) as Partial<Record<string, unknown>>;
+  const stock = extras.reduce<Record<BenchMaterial, number>>(
+    (s, kind) => refund(homeBuild(kind).cost, s),
+    Object.fromEntries(BENCH_MATERIALS.map((m) => [m, num(rawStock[m], 0)])) as Record<BenchMaterial, number>,
+  );
+  const strings = (list: unknown): string[] => (Array.isArray(list) ? list.filter((s): s is string => typeof s === 'string') : []);
+  return {
+    cape: isClothDye(value?.cape) ? value.cape : 'natural',
+    blanket: isClothDye(value?.blanket) ? value.blanket : 'natural',
+    name: cleanHomeName(value?.name),
+    pieces,
+    stock,
+    cleared: [...new Set(strings(value?.cleared))],
+    clearedAt: cleanClearedAt(value?.clearedAt, strings(value?.cleared)),
+    built: [...new Set(strings(value?.built).map((k) => (k === 'stool' ? 'log' : k)).filter(isHomePiece))],
+  };
+};
+
+/** As horas dos tiles cortados: só os que ainda estão cortados, e só números de verdade (frações de dia). */
+const cleanClearedAt = (value: unknown, cleared: readonly string[]): Record<string, number> => {
+  const out: Record<string, number> = {};
+  if (!value || typeof value !== 'object') return out;
+  for (const key of cleared) {
+    const at = (value as Record<string, unknown>)[key];
+    if (typeof at === 'number' && Number.isFinite(at) && at >= 0) out[key] = at;
+  }
+  return out;
 };
 
 const num = (value: unknown, fallback: number): number =>
@@ -321,6 +409,7 @@ const load = (): AdventureSnapshot => {
         : base.paintQuest,
       lumberQuest: { ...base.lumberQuest, ...(p.lumberQuest ?? {}) },
       skyQuest: { ...base.skyQuest, ...(p.skyQuest ?? {}) },
+      home: cleanHome(p.home),
     };
   } catch {
     return base;
@@ -374,6 +463,7 @@ export const saveAdventure = (): void => {
     paintQuest: s.paintQuest,
     lumberQuest: s.lumberQuest,
     skyQuest: s.skyQuest,
+    home: s.home,
   };
   try {
     localStore().setItem(STORAGE_KEY, JSON.stringify(stored));

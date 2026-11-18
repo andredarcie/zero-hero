@@ -57,8 +57,9 @@ export class SceneRender {
     w3.cam.follow(cam.camX, cam.camY, false, terrainHeightAt(cam.camX, cam.camY));
 
     // The projected size of one tile at screen centre IS the legacy "tileSize"
-    // every remaining 2D-side FX scales itself by.
-    this.host.tileSize = w3.projection.tileScreenSize();
+    // every remaining 2D-side FX scales itself by. Com a câmera de cena no quadro (o céu, a vista de dentro do elmo)
+    // o herói pode estar atrás dela: o tamanho fica o da câmera de sempre.
+    if (!w3.cam.lensOn) this.host.tileSize = w3.projection.tileScreenSize();
     this.host.uiTileSize = this.host.tileSize / w3.cam.zoomFactor;
     // E o heroi mede EXATAMENTE um tile — aqui, todo frame, junto do numero de que ele depende.
     this.host.hero.sizePx = this.host.tileSize;

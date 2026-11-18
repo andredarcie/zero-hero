@@ -11,15 +11,18 @@ import { ANIMALS } from '@/game/runtime/sketches';
  * enquanto não está pronto.
  *
  * Aqui mora a LISTA (as seções e a ordem) e o registro do que já passou pelas mãos dele. A lista é só do que o vale
- * dá de verdade: a espada fica fincada na entrada, e o vaso, o banquinho, a lanterna, o forno e o altar não saem do
- * mundo (não há bancada nem quem os dê). Uma coleção com uma página que nunca se enche seria uma promessa falsa.
- * O balde cheio é o mesmo balde.
+ * dá de verdade: a espada fica fincada na entrada, e o forno e o altar não saem do mundo (são da Thea, fixos). Uma
+ * coleção com uma página que nunca se enche seria uma promessa falsa. O balde cheio é o mesmo balde.
+ *
+ * A CASA (2026-11-17): os enfeites do lar, que a bancada do acampamento faz (objects/toolboxRecipes). Entram quando o
+ * herói apanha o que a bancada fez, como todo o resto.
  */
-export type NotebookSection = 'tools' | 'materials' | 'neighbours' | 'mushrooms' | 'animals';
+export type NotebookSection = 'tools' | 'materials' | 'home' | 'neighbours' | 'mushrooms' | 'animals';
 
 export const NOTEBOOK: ReadonlyArray<{ section: NotebookSection; kinds: readonly string[] }> = [
   { section: 'tools', kinds: ['knife', 'axe', 'shovel', 'bucket', 'pickaxe', 'scythe', 'key'] },
   { section: 'materials', kinds: ['wood', 'splitWood', 'stone', 'charcoal', 'ore', 'bloom', 'iron', 'sand', 'ash', 'glass'] },
+  { section: 'home', kinds: ['sundial', 'cairn', 'lantern', 'flowerPot', 'windChime'] },
   { section: 'neighbours', kinds: ['dyeSeeds', 'dyeBundle', 'brush', 'telescope'] },
   { section: 'mushrooms', kinds: MUSHROOM_KINDS },
   { section: 'animals', kinds: ANIMALS },

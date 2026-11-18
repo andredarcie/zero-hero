@@ -5,6 +5,7 @@ import type { HeldItemKind } from '@/game/entities/ItemPickup';
 import { FUNGUS_SPECS, isMushroomKind } from '@/game/fungi/fungi';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { t, tWords } from '@/game/i18n/i18n';
+import { adventureState } from '@/game/runtime/adventureState';
 import { notebookEntries, type NotebookEntry } from '@/game/runtime/notebook';
 import { NotebookOverlay, type NotebookPage, type NotebookView } from '@/game/runtime/NotebookOverlay';
 import { isTouchDevice } from '@/game/runtime/PauseMenu';
@@ -48,8 +49,10 @@ export class CampNotebook {
   public view(touch = false): NotebookView {
     const entries = notebookEntries(this.host.seenItems);
     const known = entries.filter((e) => e.known).length;
+    // O caderno é de um lugar: com nome na placa (CampHome), a capa diz de onde.
+    const home = adventureState().home.name;
     return {
-      title: t('notebook.title'),
+      title: home ? `${t('notebook.title')} · ${home}` : t('notebook.title'),
       close: t('notebook.close'),
       count: t('notebook.count').replace('{n}', String(known)).replace('{total}', String(entries.length)),
       pages: entries.map((e) => (e.section === 'animals' ? this.animalPage(e) : this.page(e.kind as HeldItemKind, t(`notebook.sections.${e.section}`), e.known))),

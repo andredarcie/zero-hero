@@ -112,7 +112,7 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
 - **Árvore seca é rara de propósito** (`scripts/arvores-secas.mjs`): a quest do Marco pede procurar. Não espalhe mais delas. Mas NUNCA de enfeite: toda árvore seca é prop `dryTree` (o machado derruba); os tiles de árvore morta (3, 21) viraram secas de verdade ou pinheiro, e bioma nenhum desenha árvore morta.
 - **Cogumelo no chão é SÓLIDO e só a faca o solta** (`ForagingOverlay`); a espécie é o tipo do item
   (`fungi.ts`), e cada espécie existe UMA vez no mundo. O pedido da Shui fecha com 4 quaisquer (`need`), e as outras 2 são opcionais: ela continua aceitando e dando dicas. Colhido, vai para a CESTA, que é a única exceção
-  à lei de uma coisa de cada vez, e a Shui leva a cesta inteira.
+  à lei de uma coisa de cada vez, e a Shui leva a cesta inteira. Fechado o pedido, ela faz o CHÁ do cogumelo que veio na cesta e o herói viaja (`scenes/game/ShuiTea`, uma vez por partida, marca `shui/tea`; o quadro da viagem é o `render3d/TripPass`, desligado fora dela).
 - **O herói anda PRESO ao grid** (um tile por passo, 4 direções): o livre foi tentado e desfeito —
   no celular o grid controla melhor. A posição lógica já é o tile de DESTINO durante o passo.
 - **A parede VIRA o herói** (`PlayerMovementController`): é assim que se mira. Contra tile LIVRE a
@@ -165,13 +165,30 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
 - **Itens devem PRODUZIR, não só apagar** (árvore→graveto/ponte, picareta→pedra).
   Pergunte de qualquer item novo: o que ele *faz*?
 - **Ferramenta não se fabrica nem fica solta** (pedido do autor): o machado só vem do Marco, a foice só da
-  Morte (aparece onde ela esteve, quando o herói levanta depois da visita). A foice corta o mato rente e
-  não dá nada. **Semente só existe a de tinta da Sisi**: o item `seeds` e o plantio genérico saíram.
+  Morte, e só no fim da TERCEIRA noite (pedido do autor, 2026-11-17: na primeira ela avisa que volta e que no fim
+  deixa um presente para o acampamento; `Resting.DEATH_LAST_VISIT_KEY`; aparece onde ela esteve, quando o herói
+  levanta). A foice corta o mato rente e não dá nada; o mato VERDE do acampamento só ela corta.
+- **O MATO ALTO É FIO A FIO, NA MALHA DA DECORAÇÃO** (refeito a pedido do autor, 2026-11-17): a arte é uma BIBLIOTECA
+  de fios gerada em código na paleta do tileset (`render3d/tallGrassArt`, um fio por célula 8×16, testada: paleta, pé
+  escuro, linha sem degrau duplo, nenhum fio repetido); o tufo é um sorteio deles pela posição (`tallGrassTuft`: uma
+  ou duas touceiras, fundo mais alto e escuro, espiga e palha de vez em quando — nunca dois tufos iguais); todos os
+  tufos do vale numa malha só (`render3d/world/TallGrassField`) desenhada pelo MESMO programa da decoração em pé
+  (`standingDecor`/`decorSway`: a brisa do vale, a esteira, a rampa do bioma) — só que GRAVANDO profundidade.
+  O TallGrassObject só diz o estado do tufo. A roçada é `runtime/SwordMow` (recuo, varrida baixa da direita para a
+  esquerda, acompanhamento; o corte em `MOW_CONTACT_MS`), o golpe é `scenes/game/MowFx` (as pontas são a própria ponta
+  do fio, no material do mato — `GrassFlyers` —, a palha, o pó, a onda no capim, hitstop de 50 ms, tranco) e o som é
+  `audio/MowSounds` (sintetizado e sorteado a cada golpe; sobe de tom em sequência). Nada de sprite com cor crua por
+  cima do mato: o que for do mato passa pela rampa do bioma, senão sai escuro. OS TOCOS SOMEM: ficam 2 s à vista
+  (`STUB_LINGER_MS`) e afundam na terra — chão limpo (o queimado fica carbonizado). O MATO DO ACAMPAMENTO VOLTA
+  (`objects/CampGrass` + `runtime/campRegrowth`, `home.clearedAt`): tile cortado e SEM USO fica limpo um dia do jogo,
+  brota e cresce em três degraus no dia seguinte (não bloqueia) e fica em pé de novo (bloqueia, sai do save). USO =
+  peça em cima, o herói pisando (trilha pisada não cresce) ou ser passagem (`pathStaysOpen`: crescer ali não pode
+  trancar peça nem herói). Cenário: `mato-volta`. **Semente só existe a de tinta da Sisi**: o item `seeds` e o plantio genérico saíram.
   Cada árvore seca dá **um** graveto; a ponte do morel pede duas (`scripts/ponte-do-morel.mjs`).
 - **A tela de título é só a mata** (pedido do autor: sem herói, NPC, casa, item ou fogo): `public/assets/ui/title_bg.jpg`
   é uma foto do jogo tirada por `node scripts/capturar-titulo.mjs`; refaça quando o visual do mundo mudar. Por
   cima, a `TitleScene` põe o luar, a névoa, os vaga-lumes e as folhas, o título em pixel e as teclas.
-- **Só se dorme no acampamento** (pedido do autor): o único lugar onde o herói dorme é o colchão fixo dele; nas fogueiras dos vizinhos ele só senta (o X nelas não deita). O sono é AUTOMÁTICO: deitado, nada o levanta (sem "Levantar", setas e botões não fazem nada, o ESC só pausa) — a noite vem, a Morte vem, e ele levanta sozinho de manhã (`Resting.canGetUp`/`getUp`).
+- **Só se dorme no acampamento** (pedido do autor): o único lugar onde o herói dorme é o colchão fixo dele; nas fogueiras dos vizinhos ele só senta (o X nelas não deita). O sono é AUTOMÁTICO: deitado, nada o levanta (sem "Levantar", setas e botões não fazem nada, o ESC só pausa) — a noite vem, a Morte vem (na primeira noite, antes dela, a câmera sobe ao céu estrelado: `entities/StarGaze`), e ele levanta sozinho de manhã (`Resting.canGetUp`/`getUp`). Cena que tira a câmera do herói usa a câmera de cena (`CameraRig.lens` + `WorldScreen.calm`/`fovExtra`) e devolve tudo a zero.
 - **ÁRVORE VERDE NUNCA SAI DO LUGAR.** O `axe` só corta madeira MORTA (props `dryTree`/`dryShrub`);
   a árvore verde é **tile** assado na malha estática do terreno, escrita UMA vez na GPU, sem índice
   nem remendo. **Nenhum item edita terreno em pé** — o machado de aço que fazia isso foi removido.
@@ -208,6 +225,19 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
   catálogo *daquela* máquina, e o que as separa é uma palavra na receita (`station`) — nunca uma
   interação própria. O forno tinha a dele (o A acendia fantasmas), e eram duas gramáticas para o
   mesmo botão contra o mesmo tipo de peça. Estação nova = uma linha na tabela, e nada de código.
+- **A BANCADA DO ACAMPAMENTO (55,45) NÃO É MAIS MESA DE FERRAMENTA: é o MODO CONSTRUIR** (pedido do autor,
+  2026-11-17; `scenes/game/BuildMode` + `runtime/BuildOverlay`). O X nela GUARDA graveto, pedra, carvão e minério
+  (`home.stock`); o Z PARA O JOGO INTEIRO (`scene.pause()` + `setListening(true)`, música junto) e o chão do
+  acampamento vira grade: VERDE onde dá para pôr, VERMELHO no mato e onde a peça fecharia o caminho
+  (`runtime/homeGrid.pathStaysOpen`: o colchão, o caderno, a bancada e as peças de usar ficam ao alcance, e as
+  passagens `CAMP_PASSAGES` nunca recebem peça). Cartas = `homeMenu` (`objects/homeBuilds.ts`): o que já se
+  construiu + UM degrau novo + a lembrança de cada pedido fechado (de graça, uma vez). Toque/clique escolhe o tile;
+  clicar numa peça posta a muda de lugar sem custo. A GRADE É DESENHADA NO CHÃO DO MUNDO (`scenes/game/BuildGridView` +
+  `render3d/campGridArt`: um canteiro de pixel art 16×16 deitado por tile, atrás do mato e das peças; a peça na mão
+  aparece em pé, translúcida, no tile), nunca num canvas por cima da tela. A TÁBUA TEM LETRA GRANDE EM TODA TELA
+  (pedido do autor: acessibilidade): piso de 18 px no texto e 20 px nos botões, alvo de toque ≥ 44 px, e no celular
+  deitado ela vira coluna à direita (`buildPanelOnSide`, a câmera vai junto) — `construir-telas` mede as cinco telas.
+  O texto abaixo vale para as OUTRAS mesas (a do mapa antigo):
 - **A BANCADA É UMA MESA, e o A nela CONSTRÓI** — e o menu mostra o **MÍNIMO PARA CONTINUAR**: os
   degraus que o jogador já cumpriu, mais UM novo (`catalogSteps` + a `LADDER` de `toolboxRecipes`).
   Ele listava as onze receitas de uma vez, e onze cartas na primeira abertura não são ambição, são
@@ -225,7 +255,7 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
   fornada.
 - **O FORNO É UM SÓ, FIXO, E GUIA A QUEST** (o da Thea): não se constrói, não se recolhe e não tem catálogo — pede o próximo item (`AstronomerQuest.furnaceNeed`). Picareta, só a que a Thea dá.
 - **CADA NPC É INDEPENDENTE** (pedido do autor): nenhum pedido precisa de ferramenta ou item de outro vizinho; o jogador faz na ordem que quiser.
-- **O ACAMPAMENTO DO HERÓI** (`objects/HeroCamp.ts`): o colchão fixo (onde ele dorme; a primeira noite nele é a da primeira visita da Morte), as pedras frias, as quatro lembranças, uma por pedido fechado, e o CADERNO DE CAMPO em cima do colchão (a coleção de tudo que passou pelas mãos: a lista em `runtime/notebook.ts`, alimentada só pelo `Inventory.add`; coisa nova que se pega no vale entra na lista e ganha `notebook.entry.<kind>` nos dois locales; a seção Bichos vem do caderno de desenho, `runtime/sketches.ts` + `scenes/game/AnimalSketching.ts`, bicho novo entra em `ANIMALS`, no `ART` e em `sketch.animals.<kind>`), do lado direito do laguinho (margem nordeste). O LAZER mora no `CampLife`: o desenho (`camp.sketching`), a pedra que quica (`camp.skipping`, seixo da beira, nunca a pedra da mochila) e a MEDITAÇÃO na pedra do alto da colina (`camp.meditation`; a regra pura em `runtime/meditation.ts`, testada; cada nota do caderno de lá tem a fonte científica dela, e nota nova só entra com a fonte conferida; o chão é de `scripts/meditacao.mjs`). O chão do acampamento é de `scripts/acampamento.mjs` (a mesma tabela de tiles: mudou num, muda no outro).
+- **O ACAMPAMENTO DO HERÓI COMEÇA SÓ COM O COLCHÃO, O FOGO E O CADERNO** (pedido do autor, 2026-11-17; `objects/HeroCamp.ts`): todo o resto o jogador constrói ou põe pela bancada (as peças são `objects/CampPieces.ts`, salvas em `home.pieces`; as lembranças dos pedidos NÃO aparecem sozinhas: esperam na bancada). Em volta, MATO ALTO VERDE (`scripts/mato-do-acampamento.mjs`, zona `CAMP_ZONE` 48..59 × 44..52): não pega fogo, só a foice corta, e o tile cortado fica cortado (`objects/CampGrass` → `home.cleared`). O colchão fixo (onde ele dorme; as três primeiras noites nele são as das visitas da Morte), as pedras frias, e o CADERNO DE CAMPO em cima do colchão (a coleção de tudo que passou pelas mãos: a lista em `runtime/notebook.ts`, alimentada só pelo `Inventory.add`; coisa nova que se pega no vale entra na lista e ganha `notebook.entry.<kind>` nos dois locales; a seção Bichos vem do caderno de desenho, `runtime/sketches.ts` + `scenes/game/AnimalSketching.ts`, bicho novo entra em `ANIMALS`, no `ART` e em `sketch.animals.<kind>`), do lado direito do laguinho (margem nordeste). O LAZER mora no `CampLife`: o desenho (`camp.sketching`), a pedra que quica (`camp.skipping`, seixo da beira, nunca a pedra da mochila) e a MEDITAÇÃO na pedra do alto da colina (`camp.meditation`; a regra pura em `runtime/meditation.ts`, testada; cada nota do caderno de lá tem a fonte científica dela, e nota nova só entra com a fonte conferida; o chão é de `scripts/meditacao.mjs`). O chão do acampamento é de `scripts/acampamento.mjs` (a mesma tabela de tiles: mudou num, muda no outro). O LAR (`scenes/game/CampHome`): a bancada (prop `toolbox` do mesmo script, usada DE FRENTE de (55,46) — esse tile fica vazio no mapa e é passagem da grade, `CAMP_PASSAGES` — ou de lado de (54,45)) e as peças de usar (tina, placa, tronco, relógio de sol, sino; o banquinho saiu em 2026-11-17 — o tronco já senta — e o save antigo o troca por tronco). CADA PEÇA UMA VEZ SÓ (`homeMenu`): a posta sai das cartas; levantada, muda de lugar de graça ou se DESMONTA (botão/Delete: o material volta à bancada e a carta à tábua); a escada anda pelo `built`; a repetida de um save antigo sai e devolve o material (`cleanHome`). PEÇA DE SENTAR entra em `CampPieces.CAMP_SEAT_LIFT` com a altura do assento: o móvel fica `SEAT_BEHIND` atrás do tile e o corpo sobe (`hero.lift`) até o tampo, senão o herói some atrás dele ou o cobre inteiro; peça nova = uma linha em `HOME_BUILDS` (custo ou `gift` de quest) + `home.piece.<kind>` nos dois locales + arte em `CampPieces.pieceTexture` + a seção Casa do caderno. A capa tingida troca os TRÊS VERDES exatos do `hero.png` na folha inteira (`render3d/heroDye`, `homeState.CAPE_GREENS`): arte nova do herói mantém esses verdes no pano, senão a tina para de tingir.
 - **NADA NA FRENTE DO NPC** (pedido do autor): o tile exatamente de frente para um NPC (o sul dele) nunca guarda item no chão, para a conversa não se misturar com o pegar. Todo item novo cai pelo ponto único `GameScene.dropItem`/`dropNear`, e o que ia cair na frente vai para a DIREITA do NPC, depois a ESQUERDA, depois para TRÁS (`world/npcFront.ts`). O herói não pousa ali, e um save antigo com item ali é corrigido ao carregar (`enforceNpcFrontRule`). Nunca chamar `itemManager.drop` direto para um item novo. O cenário `frente-do-npc` confere.
 - **Nada solto no chão que uma ferramenta produz**: graveto só de árvore seca cortada, pedra só de rocha quebrada (`scripts/ajustes-do-vale.mjs`).
 - **A automação industrial foi removida por completo.** Não existem energia, cabos, esteiras,
@@ -371,7 +401,7 @@ reprova o `playtestContract.test.ts`. Membro novo que um cenário precisa ler vi
 
 A abertura (espada real fincada, mago) → `abertura`; o jogo inteiro, título → créditos → `zerar` (só para mudança que atravessa o arco); machado → `machado`; pedra →
 `pedra`; altar → `altar`; flor da lua → `flor-da-lua`; montanha → `montanha`; vento na mata → `vento`;
-menu → `menu-flow`; nenhum bloqueio sem nada visível → `sem-parede`; trilha, leitos de dia/noite/água e SFX → `audio`; a cerimônia de ganhar item → `item-get`; o vale respondendo aos pedidos e a vida dos NPCs → `marcas`; sentar na fogueira e ver o tempo passar → `descanso`; fogueira de vizinho nunca faz dormir → `fogueira-dormir`; borboletas e folhas do dia → `dia`; a quest inteira da Thea → `telescopio`; os ajustes do autor jogando (cadeira, aceno, bolsa, carvão, lava, título) → `ajustes`; o jardim do fim em dois andares → `jardim-alto`; nenhum risco reto de cor no chão → `chao-sem-risco`; tamanho do herói → `smoke`; fogo e luz → `perf-burn`; frame → `perf-profile`.
+menu → `menu-flow`; nenhum bloqueio sem nada visível → `sem-parede`; trilha, leitos de dia/noite/água e SFX → `audio`; a cerimônia de ganhar item → `item-get`; o vale respondendo aos pedidos e a vida dos NPCs → `marcas`; sentar na fogueira e ver o tempo passar → `descanso`; fogueira de vizinho nunca faz dormir → `fogueira-dormir`; borboletas e folhas do dia → `dia`; a quest inteira da Thea → `telescopio`; os ajustes do autor jogando (cadeira, aceno, bolsa, carvão, lava, título) → `ajustes`; o jardim do fim em dois andares → `jardim-alto`; o lar (bancada guarda material, grade com o jogo parado, peças postas com o mouse, mato verde, foice abrindo espaço, recarga) → `lar`; o acampamento mínimo e a lembrança esperando na bancada → `acampamento`; o mato alto fio a fio, a roçada, as pontas voando, os tocos e a grade no chão → `mato-alto`; os tocos somem e o mato sem uso volta com o tempo → `mato-volta`; o modo construir legível e funcional no computador, tablet e celular → `construir-telas`; as três noites da Morte e a foice só na terceira → `morte-tres-noites`; nenhum risco reto de cor no chão → `chao-sem-risco`; tamanho do herói → `smoke`; fogo e luz → `perf-burn`; frame → `perf-profile`.
 A suíte inteira está verde (2026-11-09): um cenário vermelho é regressão, ou um cenário que precisa acompanhar uma mudança
 de desenho — nunca "conserte" editando conteúdo do jogo para o teste passar.
 
@@ -405,3 +435,11 @@ boot muda o ritmo das chamas e o diff "falha" por 40% da tela sem nada de render
   do `UiState`; o Salvar avisa sobre entidades em tiles inválidos.
 - Profiler: `?prof` boota com ele, **F3** alterna compacto → top, `__prof.report()`/`.csv()`
   despejam. Ele mede GPU de verdade (timer query) e **nomeia a causa** de cada pico.
+- **PAINEL DE TESTES** (só local: dev server ou localhost; `devToolsAllowed`): a tecla **à esquerda do 1**
+  (`Backquote`: ' no ABNT2) abre, para o jogo e fecha com ela ou Esc; no toque, o botão "Testes" no canto. Abas:
+  concluir pedidos (um ou todos — pelo contador do caderno, `QuestLog.forceQuestDone`, e a mesma comemoração do jogo,
+  então a chave do jardim vem), pôr material/ferramenta na mão, encher a bancada, liberar construções, cortar o mato
+  do acampamento, pular as noites da Morte, hora do dia, teleporte, gravar/apagar o save. A tela é `debug/DevPanel` +
+  `debug/devPanelViews`; o que cada botão faz é `scenes/game/DevTools` — sempre pelos caminhos do jogo. Ação nova = um
+  método em DevTools + um botão na aba. Shift+I continua sendo o lançador de páginas (`DevLauncher`).
+  Cenário: `painel-testes`.

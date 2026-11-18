@@ -199,7 +199,11 @@ export const playThea = async ({ driver, shot, assert, skipOpening = false }) =>
   /** A coisa do tile vai para a mão: com a mão cheia o Z TROCA; vazia, o Z pega o que está debaixo. */
   const take = async (kind, label) => {
     const target = await groundTile(kind);
-    if (!target) throw new Error(`nao ha ${kind} no chao`);
+    if (!target) {
+      // A ferramenta que já é dele fica guardada e vem sozinha diante do que ela faz (ActionVerbs.toolFor).
+      if (await page.evaluate((k) => window.gameDebug.items.owns(k), kind)) { console.log(`[telescopio] ${label}: já é dele, guardada`); return; }
+      throw new Error(`nao ha ${kind} no chao`);
+    }
     const st = await state();
     if (st.heldItem === 'none') { await walkTo([target], label); await press('z', 60, 300); }
     else {

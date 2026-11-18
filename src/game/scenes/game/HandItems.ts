@@ -25,6 +25,9 @@ const ITEM_GET_CFG: Record<HeldItemKind, Omit<ItemGetConfig, 'label'>> = {
   stool: { texture: 'valley-find-stool', frame: 0 },
   lantern: { texture: 'valley-find-lantern', frame: 0 },
   flowerPot: { texture: 'valley-find-flowerPot', frame: 0 },
+  sundial: { texture: 'valley-find-sundial', frame: 0 },
+  cairn: { texture: 'valley-find-cairn', frame: 0 },
+  windChime: { texture: 'valley-find-windChime', frame: 0 },
   sword: { texture: ASSET_KEYS.swordItem, frame: ITEM_FRAMES.swordIdle },
   key: { texture: ASSET_KEYS.keyItem, frame: KEY_FRAMES.held },
   axe: { texture: ASSET_KEYS.axeIcon, frame: 0 },
@@ -220,10 +223,21 @@ export class HandItems {
    * O fogo desce junto: um graveto aceso deixado no chão continua queimando e acende o que houver
    * de inflamável ao lado.
    */
+  /** O enfeite na mão pousaria neste tile? (A mesma pergunta do Z, para o balão dizer "Pôr" e o desenho não roubar o gesto.) */
+  public canPlaceAt(wx: number, wy: number): boolean {
+    const held = this.host.heldItem;
+    return held !== 'none' && isDecorKind(held) && this.freeForItem(wx, wy);
+  }
+
+  private freeForItem(wx: number, wy: number): boolean {
+    if (!this.host.itemManager) return false;
+    return !this.host.itemManager.hasItemAt(wx, wy) && !this.host.query.isTileOccupied(wx, wy) && !this.host.groundItems.itemForbiddenAt(wx, wy);
+  }
+
   public placeItemAt(wx: number, wy: number): boolean {
     const kind = this.host.heldItem;
     if (kind === 'none' || !this.host.itemManager) return false;
-    if (this.host.itemManager.hasItemAt(wx, wy) || this.host.query.isTileOccupied(wx, wy) || this.host.groundItems.itemForbiddenAt(wx, wy)) return false;
+    if (!this.freeForItem(wx, wy)) return false;
 
     const fire = this.host.torch.isTorchLit ? { fuelMs: this.host.torch.torchFuelMs } : undefined;
     // O PACOTE pousa inteiro (ver UNIT_PACK_KINDS), e pegá-lo de volta devolve a mesma contagem.

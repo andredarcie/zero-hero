@@ -59,6 +59,9 @@ export const makeFinishShader = (w: number, h: number): THREE.ShaderMaterialPara
     uCloudTint: { value: new THREE.Vector3(0.62, 0.7, 0.88) },
     // O OMBRO das altas-luzes (ver o bloco no shader): 0 = o corte seco de antes.
     uShoulder: { value: 0 },
+    // A CÂMERA DE CENA (WorldScreen.calm): 1 tira o desfoque, a névoa de distância, a sombra das nuvens e a vista do
+    // herói, que são contas de quem olha o chão de cima. Em 0 o quadro é o de sempre.
+    uCalm: { value: 0 },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -100,6 +103,7 @@ export const makeFinishShader = (w: number, h: number): THREE.ShaderMaterialPara
     uniform float uCloudShade;
     uniform vec3 uCloudTint;
     uniform float uShoulder;
+    uniform float uCalm;
     ${CLOUD_FIELD_GLSL}
     varying vec2 vUv;
     // O quadro com o bloom ja somado — a soma aditiva que o UnrealBloomPass fazia numa passada
@@ -118,7 +122,7 @@ export const makeFinishShader = (w: number, h: number): THREE.ShaderMaterialPara
       // como distância. Quem diz "longe" agora é a perspectiva atmosférica abaixo; o desfoque só derrete o fundo.
       float far = smoothstep(uBand + 0.08, uBand + 0.42, dy);   // above the band = distance
       float near = smoothstep(uBand, uBand + 0.46, -dy) * uNear; // below = foreground
-      float t = max(far, near);
+      float t = max(far, near) * (1.0 - uCalm);
       // Quantise the radius to half a pixel: a continuously-varying blur makes the pixel art
       // "boil" as the hero walks, because every frame resamples the same texels differently.
       float radius = floor(uBlur * t * 2.0 + 0.5) * 0.5;
@@ -150,10 +154,10 @@ export const makeFinishShader = (w: number, h: number): THREE.ShaderMaterialPara
       // O céu não entra no quadro, mas passa por cima dele: cada pixel volta ao MUNDO pela profundidade e pergunta ao
       // campo de nuvens (o mesmo que o lago reflete) se há uma sobre aquele chão. Multiplica, e esfria: debaixo de
       // nuvem a luz que sobra é a do céu. Manchas largas e lentas — é a luz do vale mudando, não um efeito em cima dele.
-      if (uCloudShade > 0.0) {
+      if (uCloudShade > 0.0 && uCalm < 1.0) {
         vec4 zhClip = uInvViewProj * vec4(vUv * 2.0 - 1.0, texture2D(tDepth, vUv).x * 2.0 - 1.0, 1.0);
         vec2 zhGround = zhClip.xz / zhClip.w;
-        col *= mix(vec3(1.0), uCloudTint, zhCloud(zhGround) * uCloudShade);
+        col *= mix(vec3(1.0), uCloudTint, zhCloud(zhGround) * uCloudShade * (1.0 - uCalm));
       }
 
       // ── O AR ACESO (AirLight.ts) ──────────────────────────────────────────────
@@ -166,7 +170,7 @@ export const makeFinishShader = (w: number, h: number): THREE.ShaderMaterialPara
       // o escuro de noite) — os pixels continuam nítidos, só mais distantes. O que fica na faixa e abaixo dela não muda.
       if (uHaze > 0.0) {
         // Começa bem acima da faixa: um vizinho a três tiles do herói ainda é primeiro plano, não distância.
-        float zhFar = smoothstep(uFocusY + uBand * 1.5, 1.08, vUv.y);
+        float zhFar = smoothstep(uFocusY + uBand * 1.5, 1.08, vUv.y) * (1.0 - uCalm);
         if (zhFar > 0.0) {
           float zhHl = dot(col, vec3(0.299, 0.587, 0.114));
           col = mix(col, vec3(zhHl), zhFar * uHaze * 0.5);
@@ -210,7 +214,7 @@ export const makeFinishShader = (w: number, h: number): THREE.ShaderMaterialPara
       float sight = 0.0;
       if (uSight > 0.0) {
         vec2 sd = (vUv - uSightAt) / max(uSightR, vec2(0.0001));
-        sight = uSight * (1.0 - smoothstep(0.35, 1.0, length(sd)));
+        sight = uSight * (1.0 - uCalm) * (1.0 - smoothstep(0.35, 1.0, length(sd)));
         // Fora da elipse a vista vale 0 e o pow vira pow(x, 1) = x: a maior parte da tela pagava
         // dois pow por pixel para nao mudar nada.
         if (sight > 0.0) {

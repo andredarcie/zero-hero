@@ -122,7 +122,7 @@ export const recordFixtures = (scene: Engine.Scene): FixtureSprite[] => {
       console.warn(`[editor] peça do jogo "${label}" não montou no editor`, error);
     }
   };
-  make('acampamento', () => new HeroCamp(scene, () => true));
+  make('acampamento', () => new HeroCamp());
   make('barril do gato', () => new CatBarrel());
   make('cachoeira', () => new Waterfall(scene));
   make('lago das carpas', () => new KoiPond(scene, far));

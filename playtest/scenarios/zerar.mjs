@@ -2,21 +2,27 @@
 // mini-games), do jeito que um jogador joga. Só LÊ o jogo para achar caminho. Ver playtest/lib/player.mjs.
 //
 //   abertura → Sisi → Marco → Thea → o colchão do acampamento (a Morte e a foice) → Shui
-//   → a chave do jardim → o portão → a fogueira do fim → os créditos → o título
+//   → a chave do jardim → o portão → a fogueira do fim → a frase das pequenas coisas e os créditos
+//   → a manhã no acampamento (o jogo não volta ao título)
 //
 // ZERAR_FROM=<fase> recomeça de um save gravado no fim da fase anterior (playtest/results/zerar-saves/),
 // para depurar uma fase sem jogar tudo de novo. A prova de verdade é a partida inteira, sem ZERAR_FROM.
+// ZERAR_TO=<fase> para depois dessa fase (com o save gravado): a partida em blocos, cada um em primeiro plano.
+//
+// O CRONÔMETRO: cada fase grava em playtest/results/zerar-tempos.json quanto levou em tempo real (o do robô, que
+// não hesita nem se perde) e no relógio do jogo (dias e minutos de jogo, que é o que as esperas de verdade custam).
 import fs from 'node:fs';
 import path from 'node:path';
 import { makePlayer, sleep } from '../lib/player.mjs';
 import { playThea } from './telescopio.mjs';
 
 const SAVES = path.resolve('playtest/results/zerar-saves');
+const TIMES = path.resolve('playtest/results/zerar-tempos.json');
 const PHASES = ['abertura', 'recon', 'sisi', 'marco', 'thea', 'noite', 'shui', 'fim'];
 
 export default {
   name: 'zerar',
-  description: 'Joga do título ao fim numa partida só: abertura, os pedidos, a primeira noite, o portão, a fogueira e os créditos.',
+  description: 'Joga do título ao fim numa partida só: abertura, os pedidos, a primeira noite, o portão, a fogueira, os créditos e a manhã seguinte.',
   needsGame: false,
   async run({ driver, shot, assert }) {
     const { page } = driver;
@@ -49,7 +55,8 @@ export default {
     const phases = {
       async abertura() {
         await page.evaluate(() => localStorage.removeItem('zh.cozy.v1'));
-        await driver.open('/');
+        // Em localhost a abertura é pulada (RunBoot.SKIP_INTRO_LOCALLY); `?intro` a toca como no site, e o tempo dela conta.
+        await driver.open(process.env.ZERAR_SEM_ABERTURA ? '/' : '/?intro');
         await sleep(2600);
         await shot('00-titulo', { note: 'O título' });
         await P.press('Enter', 80, 600);
@@ -146,7 +153,7 @@ export default {
         await shot('14-sisi-fim', { note: 'A Sisi viu o quadro' });
       },
 
-      // ── O MARCO: o machado, quatro galhos de árvore seca rachados no cepo, a tenda, e acender ──
+      // ── O MARCO: o machado, os galhos de árvore seca rachados no cepo (quantos a quest pedir), a tenda, e acender ──
       async marco() {
         const L = () => page.evaluate(() => { const q = window.gameDebug.quest.lumber(); return { stage: q.stage, laid: q.laid, standing: q.standing, ui: q.overlayOpen }; });
         const held = async () => (await P.state()).heldItem;
@@ -188,8 +195,10 @@ export default {
           await P.drain('as metades');
           return P.free();
         };
-        for (let n = 0; n < 4; n += 1) {
-          if ((await held()) !== 'axe') await pickUp('axe');
+        for (let n = 0; n < 8 && (await L()).stage === 'gather'; n += 1) {
+          // Depois do primeiro galho o machado fica com ele, entre as ferramentas guardadas, e vem sozinho diante da
+          // árvore seca (ActionVerbs.toolFor). Só se pega do chão o que não é dele.
+          if ((await held()) !== 'axe' && !(await page.evaluate(() => window.gameDebug.items.owns('axe')))) await pickUp('axe');
           const trees = await page.evaluate(() => window.gameDebug.props.dryTrees().filter((t) => t.blocking).map((t) => ({ x: t.x, y: t.y })));
           await P.doVerb('x', 'chop', `cortar árvore seca ${n + 1}`, { radius: 60, only: trees, repeat: true });
           await sleep(900);
@@ -204,7 +213,7 @@ export default {
           await sleep(1200);
           await P.free();
         }
-        assert('Os quatro galhos na tenda', (await L()).stage === 'ready', JSON.stringify(await L()));
+        assert('Os galhos na tenda', (await L()).stage === 'ready', JSON.stringify(await L()));
         await shot('21-marco-tenda', { note: 'A tenda pronta' });
         await P.talk('businessMan', 'o Marco (pronta)');
         assert('Ele manda acender', (await L()).stage === 'light', JSON.stringify(await L()));
@@ -230,24 +239,28 @@ export default {
         await P.free();
       },
 
-      // ── A PRIMEIRA NOITE: o colchão do acampamento, a Morte, e a foice que ela deixa ──
+      // ── AS TRÊS NOITES: o colchão do acampamento e a Morte; ela avisa na primeira e deixa a foice no fim da terceira ──
       async noite() {
-        await P.doVerb('z', 'sleep', 'o colchão do acampamento', { near: { x: 53, y: 48 }, radius: 3 });
-        await P.waitFor((s) => s.resting, 'deitar', 8000);
-        const lying = await page.evaluate(() => ({ sleeping: window.gameDebug.camp.rest().sleeping, camp: window.gameDebug.camp.rest().atCamp }));
-        assert('O herói dorme no colchão do acampamento', lying.sleeping && lying.camp, JSON.stringify(lying));
-        await shot('30-noite-colchao', { note: 'Dormindo no acampamento' });
-        say('esperando a noite passar');
-        await P.waitFor((s) => s.dialogOpen, 'a Morte aparecer', 300000);
-        await shot('31-noite-morte', { note: 'A primeira visita da Morte' });
-        await P.drain('a Morte', 200);
-        const visited = await page.evaluate(() => window.gameDebug.dialog.heard('death/visit'));
-        assert('A Morte veio na primeira noite no acampamento', visited, '');
-        for (let i = 0; i < 40 && (await P.state()).resting; i += 1) { await P.press('ArrowDown', 60, 400); await P.drain('levantar'); }
-        await sleep(1500);
-        const st = await P.free();
-        const scythe = st.groundItems.find((g) => g.kind === 'scythe');
-        assert('A foice ficou no acampamento', !!scythe && Math.abs(scythe.worldX - 53) <= 4 && Math.abs(scythe.worldY - 48) <= 4, JSON.stringify(scythe));
+        const keys = ['death/visit', 'death/visit2', 'death/visit3'];
+        for (let n = 1; n <= 3; n += 1) {
+          await P.doVerb('z', 'sleep', 'o colchão do acampamento', { near: { x: 53, y: 48 }, radius: 3 });
+          await P.waitFor((s) => s.resting, 'deitar', 8000);
+          const lying = await page.evaluate(() => ({ sleeping: window.gameDebug.camp.rest().sleeping, camp: window.gameDebug.camp.rest().atCamp }));
+          assert(`Noite ${n}: o herói dorme no colchão do acampamento`, lying.sleeping && lying.camp, JSON.stringify(lying));
+          if (n === 1) await shot('30-noite-colchao', { note: 'Dormindo no acampamento' });
+          say(`esperando a noite ${n} passar`);
+          await P.waitFor((s) => s.dialogOpen, 'a Morte aparecer', 300000);
+          if (n === 1) await shot('31-noite-morte', { note: 'A primeira visita da Morte' });
+          await P.drain('a Morte', 200);
+          const visited = await page.evaluate((k) => window.gameDebug.dialog.heard(k), keys[n - 1]);
+          assert(`A Morte veio na noite ${n} no acampamento`, visited, '');
+          for (let i = 0; i < 40 && (await P.state()).resting; i += 1) { await P.press('ArrowDown', 60, 400); await P.drain('levantar'); }
+          await sleep(1500);
+          const st = await P.free();
+          const scythe = st.groundItems.find((g) => g.kind === 'scythe');
+          if (n < 3) assert(`Noite ${n}: ainda sem foice (a Morte só avisa e volta)`, !scythe, JSON.stringify(scythe));
+          else assert('No fim da terceira noite, a foice ficou no acampamento', !!scythe && Math.abs(scythe.worldX - 53) <= 4 && Math.abs(scythe.worldY - 48) <= 4, JSON.stringify(scythe));
+        }
         assert('O mago deixa de lembrar do acampamento', (await page.evaluate(() => window.gameDebug.dialog.wizardLine())) !== 'tent', '');
       },
 
@@ -262,6 +275,8 @@ export default {
           const st = await P.state();
           const it = st.groundItems.filter((g) => g.kind === kind)
             .sort((a2, b2) => Math.abs(a2.worldX - st.player.worldX) + Math.abs(a2.worldY - st.player.worldY) - Math.abs(b2.worldX - st.player.worldX) - Math.abs(b2.worldY - st.player.worldY))[0];
+          // A ferramenta que já é dele fica guardada e vem sozinha diante do que ela faz (ActionVerbs.toolFor).
+          if (!it && (await page.evaluate((k) => window.gameDebug.items.owns(k), kind))) return;
           if (!it) throw new Error(`nenhum ${kind} no chão (na mão: ${st.heldItem})`);
           if (st.heldItem === 'none') { await P.walkTo([{ x: it.worldX, y: it.worldY }], `pegar ${kind}`); await P.press('z', 60, 350); }
           else { await P.approachFree({ x: it.worldX, y: it.worldY }, `pegar ${kind}`); await P.press('z', 60, 350); }
@@ -291,7 +306,7 @@ export default {
             const open = await page.evaluate(([v, cx, cy]) => {
               const g = window.gameDebug;
               const out = [];
-              for (let y = Math.max(0, cy - 14); y <= Math.min(59, cy + 14); y += 1) for (let x = Math.max(0, cx - 14); x <= Math.min(59, cx + 14); x += 1) if (g.verbs.use(x, y) === v) out.push(`${x},${y}`);
+              for (let y = Math.max(0, cy - 14); y <= Math.min(59, cy + 14); y += 1) for (let x = Math.max(0, cx - 14); x <= Math.min(59, cx + 14); x += 1) if (g.verbs.at('x', x, y) === v) out.push(`${x},${y}`);
               return out;
             }, [verb, target.x, target.y]);
             const openSet = new Set(open);
@@ -313,10 +328,10 @@ export default {
             if ((await P.state()).player.worldX !== way[i - 1].x || (await P.state()).player.worldY !== way[i - 1].y) await P.walkTo([way[i - 1]], `${label}: de volta`);
             if (!(await page.evaluate(([x, y]) => window.gameDebug.world.solid(x, y), [block.x, block.y]))) continue; // abriu sozinho (o fogo anda)
             try { await P.face(block); } catch (e) { say(`  ${label}: ${e.message}`); continue; }
-            const v = await page.evaluate(([x, y]) => window.gameDebug.verbs.use(x, y), [block.x, block.y]);
+            const v = await page.evaluate(([x, y]) => window.gameDebug.verbs.at('x', x, y), [block.x, block.y]);
             if (v !== verb) { say(`  ${label}: ${block.x},${block.y} diz ${v}`); await sleep(500); continue; }
             await P.press('x', 60, 450);
-            for (let k = 0; k < 10 && (await page.evaluate(([x, y]) => window.gameDebug.verbs.use(x, y), [block.x, block.y])) === verb; k += 1) await P.press('x', 60, 450);
+            for (let k = 0; k < 10 && (await page.evaluate(([x, y]) => window.gameDebug.verbs.at('x', x, y), [block.x, block.y])) === verb; k += 1) await P.press('x', 60, 450);
             await P.drain(label);
             // o que cai (o fogo, a pedra afundando, a ponte) leva um tempo
             try { await P.pageWait(([x, y]) => !window.gameDebug.world.solid(x, y), [block.x, block.y], `${label}: ${block.x},${block.y} abrir`, verb === 'burn' ? 40000 : 6000); } catch (e) { say(`  ${e.message}`); }
@@ -374,9 +389,13 @@ export default {
         };
         const harvest = async (kind) => {
           const at = await spot(kind);
+          // Com o graveto ainda aceso nas costas a faca não vem (trocar apagaria o fogo): espera ele apagar.
+          if ((await P.state()).heldOnFire) await P.waitFor((s2) => !s2.heldOnFire, 'o graveto apagar', 90000);
           await hold('knife');
           await P.approachSolid(at, `o ${kind}`);
-          await P.press('x', 60, 300);
+          // O botão que o balão oferece: colher é da mão (Z), com a faca nas costas ou guardada.
+          const zHarvests = (await page.evaluate(([x, y]) => window.gameDebug.verbs.at('z', x, y), [at.x, at.y])) === 'harvest';
+          await P.press(zHarvests ? 'z' : 'x', 60, 300);
           await forage(kind);
           await P.free();
           const gone = !(await P.state()).groundItems.some((g) => g.kind === kind);
@@ -466,7 +485,16 @@ export default {
           await P.drain(`pegar ${kind}`);
           await P.free();
         };
-        await hold('wood');
+        /** O graveto do fim: o que estiver no chão ao alcance; senão o machado (guardado) numa árvore seca. */
+        const stick = async () => {
+          try { await hold('wood'); return; } catch (e) { say(`  graveto do chão: ${e.message}; corto um`); }
+          const trees = await page.evaluate(() => window.gameDebug.props.dryTrees().filter((t) => t.blocking).map((t) => ({ x: t.x, y: t.y })));
+          await P.doVerb('x', 'chop', 'árvore seca (graveto do fim)', { radius: 60, only: trees, repeat: true });
+          await sleep(900);
+          await P.drain('o galho');
+          if ((await P.free()).heldItem !== 'wood') await hold('wood');
+        };
+        await stick();
         assert('Um graveto na mão para o fim', (await P.state()).heldItem === 'wood', (await P.state()).heldItem);
         // Subir o jardim: a primeira pisada no cume é o vento levando a névoa (cena).
         const hearth = await page.evaluate(() => { const h = window.gameDebug.props.hearths()[0]; return h ? { x: h.x, y: h.y } : null; });
@@ -484,34 +512,109 @@ export default {
         st = await P.free();
         assert('A fogueira do fim acesa', st.ending.hearthLit, JSON.stringify(st.ending));
         await shot('52-fogueira', { note: 'A fogueira acesa' });
-        if (st.heldItem !== 'wood') await hold('wood');
+        if (st.heldItem !== 'wood') await stick();
         await P.approachSolid(hearth, 'a fogueira (assar)');
         const verb = await page.evaluate(([x, y]) => window.gameDebug.verbs.hand(x, y), [hearth.x, hearth.y]);
         assert('Com o graveto, o Z assa', verb === 'roast', String(verb));
         await P.press('z', 60, 600);
-        say('o fim: assando, os amigos, a nave, os créditos');
-        for (let i = 0; i < 600; i += 1) {
-          const s4 = await page.evaluate(() => ({ scene: window.gameDebug?.getState()?.scene ?? null, active: window.appDebug?.isActive('game') ?? null, dialog: window.gameDebug?.getState()?.dialogOpen ?? false, keys: window.appDebug?.activeScenes() ?? [] }));
-          if (i % 40 === 0) say(`  ${JSON.stringify(s4)}`);
+        say('o fim: assando, os amigos, a nave, a frase, os créditos e a manhã');
+        // A cena do fogo: as falas passam no Z, até a tela do fim aparecer.
+        const creditsUp = () => page.evaluate(() => !!document.querySelector('.zh-credits'));
+        for (let i = 0; i < 600 && !(await creditsUp()); i += 1) {
           if (i === 30) await shot('53-reencontro', { note: 'O reencontro na fogueira' });
-          if (s4.dialog) await P.press('z', 60, 400);
-          const title = await page.evaluate(() => !window.gameDebug || window.gameDebug.getState()?.scene !== 'game');
-          if (title && i > 5) break;
+          if ((await P.state()).dialogOpen) await P.press('z', 60, 400);
           await sleep(500);
         }
-        await sleep(3000);
-        await shot('54-creditos-ou-titulo', { note: 'Depois do fim' });
+        assert('A tela do fim apareceu', await creditsUp(), '');
+        /** Espera `test` (async) virar verdade, com prazo; devolve se virou. */
+        const until = async (what, test, ms) => {
+          const t0 = Date.now();
+          while (Date.now() - t0 < ms) { if (await test()) return true; await sleep(200); }
+          say(`  prazo esgotado: ${what}`);
+          return false;
+        };
+        // A tela do fim lida no DOM: a opacidade da frase, a maior do resto dela, as pequenas coisas e o "Fim".
+        const ending = () => page.evaluate(() => {
+          const op = (el) => (el ? Number(getComputedStyle(el).opacity) : null);
+          const ep = document.querySelector('.zh-credits-epigraph');
+          const plain = ep ? [...ep.querySelectorAll('span:not([data-strong])')] : [];
+          const strong = ep?.querySelector('span[data-strong]') ?? null;
+          return {
+            phrase: op(ep),
+            rest: plain.length ? Math.max(...plain.map(op)) : null,
+            small: strong?.textContent ?? null,
+            smallWeight: strong ? Number(getComputedStyle(strong).fontWeight) : null,
+            end: op(document.querySelector('.zh-credits-end')),
+            roll: document.querySelector('.zh-credits-roll')?.textContent ?? '',
+          };
+        });
+        await until('a frase inteira', async () => (await ending()).phrase >= 0.99, 15000);
+        let e = await ending();
+        assert('A frase, com as pequenas coisas em negrito', e.small === 'pequenas coisas' && e.smallWeight >= 700 && e.rest >= 0.99, JSON.stringify(e));
+        await shot('54-frase', { note: 'A frase das pequenas coisas' });
+        await until('só as pequenas coisas', async () => { const s = await ending(); return s.rest !== null && s.rest < 0.01; }, 20000);
+        await sleep(600);
+        e = await ending();
+        assert('O resto da frase apagou e só as pequenas coisas ficaram', e.rest < 0.01 && e.phrase >= 0.99, JSON.stringify(e));
+        await shot('55-pequenas-coisas', { note: 'Só as pequenas coisas na tela' });
+        await until('o Fim', async () => (await ending()).end >= 0.99, 20000);
+        e = await ending();
+        assert('O Fim, com as pequenas coisas já apagadas', e.end >= 0.99 && e.phrase < 0.01, JSON.stringify(e));
+        await shot('56-fim', { note: 'Fim' });
+        const testers = ['Adriel Carvalho', 'Eric Góes', 'Geovani Darcie', 'Diego Penha', 'Rodrigo Alister'];
+        assert('Os créditos têm quem testou e validou o jogo', testers.every((n) => e.roll.includes(n)), e.roll);
+        const crew = ['Shui, a micóloga', 'Sisi, a pintora', 'Marco, o lenhador', 'Thea, a astronauta', 'Sati, o mago'];
+        assert('Cada vizinho nos créditos com o que faz', crew.every((n) => e.roll.includes(n)), e.roll);
+        await until('os testadores na tela', () => page.evaluate(() => {
+          const el = [...document.querySelectorAll('.zh-credits-roll div')].find((d) => d.textContent === 'Adriel Carvalho');
+          return !!el && el.getBoundingClientRect().top < window.innerHeight * 0.55;
+        }), 40000);
+        await shot('57-creditos-testadores', { note: 'Quem testou e validou o jogo' });
+        // Os créditos acabam e o jogo NÃO volta ao título: o Zero acorda no acampamento, e o bilhete avisa.
+        const morning = () => page.evaluate(() => (window.gameDebug?.getState()?.scene === 'game' ? window.gameDebug.camp.morning() : null));
+        const asleep = async () => !!(await page.evaluate(() => (window.gameDebug?.getState()?.scene === 'game' ? window.gameDebug.camp.rest() : null)))?.sleeping;
+        assert('Os créditos levam ao Zero dormindo no colchão', await until('dormindo no acampamento', asleep, 90000), '');
+        // O acampamento clareia (2,6 s) e a noite espera um instante antes de passar (MorningAfter).
+        await sleep(3200);
+        assert('Ainda dormindo quando o acampamento aparece', await asleep(), '');
+        await shot('58-dormindo', { note: 'A noite passa: ele dorme no colchão do acampamento' });
+        await until('a manhã no acampamento', async () => (await morning())?.note === true, 30000);
+        await sleep(900);
+        await shot('59-manha-bilhete', { note: 'Acordou no acampamento, e o bilhete' });
+        st = await P.state();
+        assert('Depois dos créditos, o acampamento e o bilhete (e não o título)', (await morning())?.note === true && st.player.worldX === 53 && st.player.worldY === 48, JSON.stringify({ at: st.player }));
+        const clock = await page.evaluate(() => window.gameTime?.get());
+        assert('Acordou de manhã, no dia seguinte', !!clock && clock.phase >= 0.25 && clock.phase < 0.4, JSON.stringify(clock));
+        const rest = await page.evaluate(() => window.gameDebug.camp.rest());
+        assert('Já de pé, e a Morte não veio', !rest.resting && rest.deathTile === null, JSON.stringify(rest));
+        await P.press('z', 60, 600);
+        assert('O bilhete fecha', (await morning())?.note === false, '');
+        await P.free();
+        await shot('60-manha-livre', { note: 'O vale continua aberto' });
         const save = await page.evaluate(() => JSON.parse(localStorage.getItem('zh.cozy.v1') ?? 'null'));
         assert('O save marca o fim visto', save?.endingSeen === true, JSON.stringify({ endingSeen: save?.endingSeen }));
-        const onTitle = await page.evaluate(() => !window.gameDebug || window.gameDebug.getState()?.scene !== 'game');
-        assert('Os créditos voltam ao título', onTitle, '');
       },
     };
 
+    const to = process.env.ZERAR_TO ?? PHASES[PHASES.length - 1];
+    const toIndex = PHASES.indexOf(to);
+    if (toIndex < fromIndex) throw new Error(`ZERAR_TO desconhecida ou antes de ZERAR_FROM: ${to}`);
+    /** Minutos de jogo desde o começo da partida (o relógio do jogo: dia e hora). */
+    const gameMinutes = () => page.evaluate(() => { const g = window.gameTime?.get(); return g ? Math.round((g.day + g.phase) * 24 * 60) : null; });
+    const times = fs.existsSync(TIMES) ? JSON.parse(fs.readFileSync(TIMES, 'utf8')) : {};
+    if (fromIndex === 0) for (const k of Object.keys(times)) delete times[k];
+
     if (fromIndex > 0) await resume(from);
-    for (const name of PHASES.slice(fromIndex)) {
+    for (const name of PHASES.slice(fromIndex, toIndex + 1)) {
       say(`── fase: ${name}`);
+      const t0 = Date.now();
+      const g0 = await gameMinutes().catch(() => null);
       await phases[name]();
+      const g1 = await gameMinutes().catch(() => null);
+      times[name] = { realS: Math.round((Date.now() - t0) / 1000), gameMin: g0 !== null && g1 !== null ? g1 - g0 : null, at: new Date().toISOString() };
+      fs.mkdirSync(path.dirname(TIMES), { recursive: true });
+      fs.writeFileSync(TIMES, JSON.stringify(times, null, 2));
+      say(`⏱ ${name}: ${times[name].realS} s reais, ${times[name].gameMin ?? '?'} min de jogo`);
       await checkpoint(name);
     }
     assert('Sem erro no console', driver.consoleErrors.length === 0, driver.consoleErrors.slice(0, 3).join(' | '));

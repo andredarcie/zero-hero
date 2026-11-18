@@ -1,6 +1,6 @@
 // LAZER: o que se faz no vale entre os pedidos e depois deles (pedidos do autor, 2026-11-11 e 12): o caderno de campo
 // em cima do colchão, o caderno de desenho (a carpa do laguinho), a pedra que quica (o lago a oeste do acampamento) e
-// a meditação na pedra do alto da colina. Tudo pelas sondas (gameDebug.camp) e por teclas de verdade.
+// a meditação na pedra da clareira (44,39). Tudo pelas sondas (gameDebug.camp) e por teclas de verdade.
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export default {
@@ -80,7 +80,7 @@ export default {
     assert('3 · Pedra: o X desiste de jogar', !(await camp(() => window.gameDebug.camp.skip().aiming)), '');
 
     // ── 4. A MEDITAÇÃO: senta, respira junto do guia, percebe um pensamento, levanta com a nota do caderno. ──────
-    await go(30, 21, 0, -1);
+    await go(44, 40, 0, -1);
     log(`  balão diante da pedra: ${JSON.stringify(await prompt())}`);
     await page.keyboard.press('z');
     await page.waitForFunction(() => window.gameDebug.camp.meditation() !== null, null, { timeout: 5000 }).catch(() => {});
@@ -103,7 +103,7 @@ export default {
     }
     if (down) await page.keyboard.up('z');
     const mid = await camp(() => window.gameDebug.camp.meditation());
-    await shot('04-meditacao', { note: 'Meditando na pedra da colina' });
+    await shot('04-meditacao', { note: 'Meditando na pedra da clareira' });
     assert('4 · Meditação: quem segue o guia conta fôlegos, e perceber um pensamento é uma volta', mid && mid.breaths >= 2 && mid.returns >= 1, JSON.stringify(mid));
     await page.keyboard.press('Escape');
     await sleep(800);
@@ -119,7 +119,7 @@ export default {
     assert('4 · Meditação: de pé na pedra, o save volta da frente dela, e não de dentro da pedra', respawn?.worldX === 30 && respawn?.worldY === 21, JSON.stringify(respawn));
 
     // ── 5. DOIS DEDOS: um segura o fôlego, outro sai da tela (o polegar que tocou o B), e o fôlego não cai. ──────
-    await go(30, 21, 0, -1);
+    await go(44, 40, 0, -1);
     await page.keyboard.press('z');
     await page.waitForFunction(() => window.gameDebug.camp.meditation() !== null, null, { timeout: 5000 }).catch(() => {});
     await page.mouse.move(640, 500);

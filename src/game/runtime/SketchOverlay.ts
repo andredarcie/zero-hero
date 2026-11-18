@@ -1,4 +1,5 @@
 import { paintInk, type InkStroke } from '@/game/runtime/inkSketch';
+import { MinigameCaption } from '@/game/runtime/MinigameCaption';
 import { HAND_FONT, INK, KEY_BG, KEY_BORDER, SOFT_BLUR, paperTexture, seedOf, tornEdge } from '@/game/runtime/uiStyle';
 
 /**
@@ -64,7 +65,7 @@ const SCRATCH_MS = 150;
 const CSS = `
 .zh-sketch-backdrop {
   position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 10px; padding: 1rem; ${SOFT_BLUR} opacity: 0; transition: opacity 200ms ease;
+  gap: 10px; padding: 1rem 1rem calc(1rem + 52px); ${SOFT_BLUR} opacity: 0; transition: opacity 200ms ease;
   user-select: none; -webkit-user-select: none; touch-action: none; cursor: crosshair;
 }
 .zh-sketch-backdrop.zh-in { opacity: 1; }
@@ -140,6 +141,8 @@ export class SketchOverlay {
   private readonly page: HTMLDivElement;
   private readonly ink: HTMLCanvasElement;
   private readonly nib: SVGSVGElement;
+  /** A legenda do rodapé (pedido do autor, 2026-11-16): como se desenha, e depois, que o desenho ficou pronto. */
+  private readonly caption = new MinigameCaption();
   private readonly scale: number;
   private progress: number;
   private drawing = false;
@@ -160,11 +163,12 @@ export class SketchOverlay {
     this.progress = v.start;
     this.root = document.createElement('div');
     this.root.className = 'zh-sketch-backdrop';
-    // A medida vem da tela: na baixa, o bicho vai para o lado e os dois encolhem até caber a folha com a nota.
+    // A medida vem da tela: na baixa, o bicho vai para o lado e os dois encolhem até caber a folha com a nota (e a
+    // legenda do rodapé, que tem os seus 52 px reservados embaixo).
     const short = window.innerHeight < 560;
     if (short) this.root.classList.add('zh-short');
-    const modelBox = short ? { w: 150, h: Math.max(48, Math.min(110, window.innerHeight - 200)) } : { w: 200, h: 150 };
-    const inkBox = short ? { w: 220, h: Math.max(48, window.innerHeight - 290) } : { w: 260, h: 170 };
+    const modelBox = short ? { w: 150, h: Math.max(48, Math.min(110, window.innerHeight - 250)) } : { w: 200, h: 150 };
+    const inkBox = short ? { w: 220, h: Math.max(48, window.innerHeight - 300) } : { w: 260, h: 170 };
     this.root.setAttribute('data-zh-ui', '');
     this.root.setAttribute('role', 'dialog');
     this.root.setAttribute('aria-label', v.name);
@@ -226,6 +230,7 @@ export class SketchOverlay {
     window.addEventListener('keydown', this.onKey, true);
     window.addEventListener('keyup', this.onKeyUp, true);
     document.body.appendChild(this.root);
+    this.caption.show('sketch.draw');
     this.paint();
     if (this.progress >= 1) this.finish();
     this.raf = window.requestAnimationFrame(this.tick);
@@ -331,6 +336,7 @@ export class SketchOverlay {
     this.stage.classList.remove('zh-tell', 'zh-alert');
     this.model.src = this.cb.view.calm[0] ?? this.model.src;
     this.page.classList.add('zh-done');
+    this.caption.show('sketch.done');
     this.cb.done?.();
   }
 
@@ -352,6 +358,7 @@ export class SketchOverlay {
   }
 
   private detach(): void {
+    this.caption.destroy();
     window.cancelAnimationFrame(this.raf);
     window.removeEventListener('pointerup', this.onUp);
     window.removeEventListener('pointercancel', this.onUp);

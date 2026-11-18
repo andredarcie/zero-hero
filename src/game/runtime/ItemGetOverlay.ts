@@ -1,11 +1,11 @@
 import * as Engine from '@/game/engine';
 
 import {
-  ASSET_KEYS,
   HERO_FRAMES,
   SCENE_DEPTHS,
 } from '@/game/constants';
 import { getSoundManager } from '@/game/audio/SoundManager';
+import { heroSheet2D } from '@/game/render3d/heroDye';
 import { HAND_FONT, paperTextureCanvas, seedOf, seededRandom } from '@/game/runtime/uiStyle';
 import { createCanvas } from '@/game/platform/platform';
 
@@ -96,7 +96,8 @@ export class ItemGetOverlay {
     scene.tweens.add({ targets: halo, scale: halo.scale * 1.06, duration: 1800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
     // ── o cavaleiro, de frente, com um pulinho de contente ─────────────────────────
-    const hero = reg(scene.add.sprite(cx, heroY, ASSET_KEYS.hero, HERO_FRAMES.idleDown)
+    // Com a capa da cor que ele estiver vestindo (render3d/heroDye).
+    const hero = reg(scene.add.sprite(cx, heroY, heroSheet2D(scene), HERO_FRAMES.idleDown)
       .setOrigin(0.5).setDepth(D + 2).setDisplaySize(heroSize, heroSize).setAlpha(0)) as Engine.GameObjects.Sprite;
     scene.tweens.add({ targets: hero, alpha: 1, duration: 260, ease: 'Sine.easeOut' });
     this.after(300, () => {

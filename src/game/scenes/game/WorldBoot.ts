@@ -41,13 +41,16 @@ import { KoiPond } from '@/game/objects/KoiPond';
 import { NatureLife } from '@/game/objects/nature/NatureLife';
 import { Waterfall } from '@/game/objects/Waterfall';
 import { HeroCamp } from '@/game/objects/HeroCamp';
+import { CampPieces } from '@/game/objects/CampPieces';
 import { FpsCounter } from '@/game/runtime/FpsCounter';
 import { getCampfires, getDryBushes, getDryTrees, getDryShrubs, getLavaTiles, getWaterTiles, getBridgeSpots, getPlantSpots, getToolboxes, getIronRocks, getCoalRocks, getFurnaces, getAltars, getMoonflowers, getLockedDoors, getSwingGates, getRocks, getTallGrass, getPlayerStart, getHearths, getGardenGates } from '@/game/world/WorldData';
 import { adventureState } from '@/game/runtime/adventureState';
 import { allQuestsDone, isQuestDone } from '@/game/runtime/QuestLog';
-import { NPC_QUESTS, questFor } from '@/game/dialogs/NpcQuests';
+import { NPC_QUESTS } from '@/game/dialogs/NpcQuests';
 import { NpcHomes } from '@/game/objects/NpcHomes';
 import { ValleyFinds } from '@/game/objects/ValleyFinds';
+import { applyHeroCape } from '@/game/render3d/heroDye';
+import { inCampZone } from '@/game/runtime/homeGrid';
 import type { GameScene } from '../GameScene';
 import { INTRO_WALK_TILES } from './sceneDefs';
 
@@ -55,7 +58,7 @@ import { INTRO_WALK_TILES } from './sceneDefs';
 export type WorldBootHost = Engine.Scene & Pick<GameScene,
   'actions' | 'adventure' | 'arc' | 'bumps' | 'camp' | 'chunkManager' | 'cinema' | 'cutsceneActive' | 'debug'
   | 'events' | 'fire' | 'forage' | 'forge' | 'game' | 'gardenUnlock' | 'groundItems' | 'input' | 'intro'
-  | 'machines' | 'marks' | 'pause' | 'playerWorld' | 'props' | 'query' | 'questSetup' | 'registry' | 'sparkle'
+  | 'machines' | 'marks' | 'morning' | 'pause' | 'playerWorld' | 'props' | 'query' | 'questSetup' | 'registry' | 'save' | 'sparkle'
   | 'streamChunks' | 'swordPlanting' | 'time' | 'valley' | 'verbs' | 'view' | 'world3d'
 >;
 
@@ -105,7 +108,8 @@ export class WorldBoot {
       ...getIronRocks().map((r) => new RockObject(this.host, r.worldX, r.worldY, 'ore')),
       ...getCoalRocks().map((r) => new RockObject(this.host, r.worldX, r.worldY, 'coal')),
     ];
-    this.host.props.tallGrasses = getTallGrass().map((g) => new TallGrassObject(this.host, g.worldX, g.worldY));
+    // O mato da zona do acampamento é VERDE: não pega fogo, só a foice corta (runtime/homeGrid, CampHome).
+    this.host.props.tallGrasses = getTallGrass().map((g) => new TallGrassObject(this.host, g.worldX, g.worldY, inCampZone(g.worldX, g.worldY)));
     this.host.props.moonflowers = getMoonflowers().map((m) => new MoonflowerObject(this.host, m.worldX, m.worldY));
     this.host.props.plantSpots = getPlantSpots().map((s) => new PlantSpotObject(this.host, s.worldX, s.worldY));
     // Os buracos que a PÁ cavou voltam do save (diff sobre os autorados).
@@ -183,12 +187,12 @@ export class WorldBoot {
     this.host.fire.keptLitFires.clear();
     if (this.host.adventure) {
       this.host.valley.valleyFinds = new ValleyFinds();
-      this.host.valley.heroCamp = new HeroCamp(this.host, (quest) => {
-        const q = questFor(quest);
-        return q !== undefined && isQuestDone(q);
-      });
+      this.host.valley.heroCamp = new HeroCamp();
+      // O que o jogador já pôs no acampamento (o modo de construção da bancada).
+      this.host.valley.campPieces = new CampPieces();
       this.host.camp.catCare.build();
       this.host.camp.meditation.build();
+      this.host.camp.skipping.build();
       this.host.valley.waterfall = new Waterfall(this.host);
       this.host.valley.koiPond = new KoiPond(this.host, () => ({ x: this.host.playerWorld.worldX, y: this.host.playerWorld.worldY }));
       this.host.valley.bigTrees = new BigTrees(this.host);
@@ -231,6 +235,8 @@ export class WorldBoot {
     this.host.questSetup.buildLumberQuest();
     this.host.questSetup.buildAstronomerQuest();
     if (this.host.adventure) this.host.valley.npcHomes = new NpcHomes();
+    // Com tudo no lugar: um save que deixou o herói num beco não o prende (RunSave.unstickHero).
+    if (this.host.adventure) this.host.save.unstickHero();
     this.host.marks.buildQuestMarks();
     this.host.streamChunks(true);
 
@@ -278,11 +284,16 @@ export class WorldBoot {
 
     // O GATO de quem ja fez algum favor volta junto com a partida.
     if (Object.values(NPC_QUESTS).some(isQuestDone)) this.host.camp.catCare.ensure(false);
+    // O LAR: a capa da cor que ele tingiu, a manta, a tina e a placa (CampHome). Fora da aventura, a capa de sempre.
+    if (this.host.adventure) this.host.camp.home.applyLook();
+    else applyHeroCape('natural', this.host);
 
     // A ABERTURA: a primeira vez no vale e uma cena, nao um controle. Ela toca uma vez por partida
     // (o save lembra), e continuar uma partida pula direto para o heroi parado na estrada.
     if (!this.host.arc.has('intro')) void this.host.intro.playIntro();
     else if (this.host.intro.openingTalk) void this.host.intro.playOpeningTalk();
+    // Depois dos créditos: a manhã no acampamento (MorningAfter).
+    else if (this.host.morning.pending) void this.host.morning.play();
     else if (skipIntro) this.host.actions.showControlsHint();
   }
 }
