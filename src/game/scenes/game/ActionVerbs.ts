@@ -15,7 +15,7 @@ import { pieceHandVerb } from './CampHome';
 /** O que ActionVerbs usa de GameScene. */
 export type ActionVerbsHost = Pick<GameScene,
   'actions' | 'bumps' | 'camp' | 'garden' | 'hand' | 'heldItem' | 'inventory' | 'itemManager' | 'machines'
-  | 'movementController' | 'npcManager' | 'playerWorld' | 'query' | 'questSetup' | 'arc' | 'swing'
+  | 'movementController' | 'npcManager' | 'playerWorld' | 'query' | 'questSetup' | 'arc' | 'relics' | 'swing'
   | 'swordPlanting' | 'torch' | 'valley'
 >;
 
@@ -111,9 +111,9 @@ export class ActionVerbs {
     return { view: { rows, ...icons }, at: under || digHere || front.y > hero.y ? hero : front };
   }
 
-  /** A pá cavaria debaixo dos pés dele? A cova rachada, e a pá nas costas ou guardada (e livre para vir). */
+  /** A pá cavaria debaixo dos pés dele? A cova rachada ou a trinca de relíquia, e a pá nas costas ou guardada (e livre para vir). */
   private canDigUnderfoot(hero: { x: number; y: number }): boolean {
-    if (!this.host.garden.canDigAt(hero.x, hero.y, true)) return false;
+    if (!this.host.garden.canDigAt(hero.x, hero.y, true) && !this.host.relics.canDigAt(hero.x, hero.y, true)) return false;
     const held = this.host.heldItem;
     return held === 'shovel' || (this.host.inventory.owns('shovel') && !this.host.torch.heldOnFire && !isMushroomKind(held));
   }
@@ -152,6 +152,10 @@ export class ActionVerbs {
     // A pedra do alto da colina: meditar (a pilha de pedras ao lado é só para ver).
     const stone = this.host.camp.meditation.at(x, y);
     if (stone) return stone === 'seat' ? 'meditate' : null;
+    // a cadeira do guarda-sol da praia: sentar e olhar o mar (SeaWatch)
+    if (this.host.valley.beachSeat?.isChair(x, y)) return 'sit';
+    // a água da fonte termal: entrar nela, de frente, pela beira de baixo (SeaWatch.soakAt)
+    if (this.host.valley.beach?.spring.entry(x, y, { x: this.host.playerWorld.worldX, y: this.host.playerWorld.worldY })) return 'soak';
     const find = this.host.valley.valleyFinds?.at(x, y);
     if (find) {
       if (find.view) return 'sit';
@@ -218,6 +222,8 @@ export class ActionVerbs {
       if (this.host.torch.isFlammableHeld) return this.host.torch.heldOnFire ? 'refuel' : 'light';
       return null;
     }
+    // O MONTINHO DE AREIA da praia: o balde vazio o recolhe (objects/beach/SandMounds).
+    if (this.host.valley.beach?.mounds.at(x, y)) return held === 'bucket' ? 'scoop' : null;
     const water = this.host.query.getWaterAt(x, y);
     if (water?.blocking) {
       if (held === 'bucket') return 'fill';
@@ -238,6 +244,6 @@ export class ActionVerbs {
       return lit && !grass.green ? 'burn' : null;
     }
     if (this.host.query.getLockedDoorAt(x, y)?.blocking) return held === 'key' ? 'unlock' : null;
-    return held === 'shovel' && this.host.garden.canDigAt(x, y) ? 'dig' : null;
+    return held === 'shovel' && (this.host.garden.canDigAt(x, y) || this.host.relics.canDigAt(x, y)) ? 'dig' : null;
   }
 }

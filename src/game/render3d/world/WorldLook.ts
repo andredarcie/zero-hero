@@ -270,6 +270,21 @@ export interface World3DParams {
    * background's: Octopath melts the distance and only softens the front, so this stays < 1.
    */
   dofNear: number;
+  /**
+   * A LENTE HD-2D (2026-11-19, finishShader "A LENTE"): 1 = o desfoque é pela DISTÂNCIA de cada pixel à câmera (o dos
+   * jogos HD-2D), 0 = o tilt-shift por fileira de tela de antes. `dofBand` são os tiles de profundidade nítidos de
+   * cada lado do herói, `dofRamp` os tiles que o borrão leva até o máximo, e `bokeh` o peso das altas-luzes dentro dele
+   * (0 = um borrão comum; 1 = uma chama longe vira um disco de luz).
+   */
+  dofDepth: number;
+  dofBand: number;
+  dofRamp: number;
+  bokeh: number;
+  /**
+   * A COR SEPARA (finishShader): pixels de aberração cromática nos cantos da tela (0 = desligada). Um golpe que sacode a
+   * câmera soma um pulso, proporcional ao baque, que some com ele.
+   */
+  aberration: number;
   /** Vignette darkening at the corners (0 = off) and film-grain amount. */
   vignette: number;
   /**

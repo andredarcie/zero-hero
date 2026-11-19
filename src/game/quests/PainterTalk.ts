@@ -10,7 +10,7 @@ import type { PainterQuest } from './PainterQuest';
 
 /** O que PainterTalk usa de PainterQuest. */
 export type PainterTalkHost = Pick<PainterQuest,
-  'garden' | 'give' | 'host' | 'isDone' | 'resupply' | 'save' | 'shovelTile' | 'studio' | 'table'
+  'garden' | 'give' | 'host' | 'isDone' | 'resupply' | 'save' | 'studio' | 'table'
 >;
 
 export class PainterTalk {
@@ -39,7 +39,7 @@ export class PainterTalk {
       case 'dig': {
         const left = PLOT_COUNT - this.host.host.dugHoles();
         if (left > 0) { say(remaining('dig', left), () => this.host.resupply('shovel', at)); return true; }
-        this.returnShovel(at);
+        // A pá fica com ele (pedido do autor, 2026-11-18): ela ainda tira relíquias das trincas do vale (RelicDig).
         say(step('seeds'), () => {
           this.host.save.stage = 'sow';
           this.host.give('dyeSeeds', PLOT_COUNT, at);
@@ -80,19 +80,6 @@ export class PainterTalk {
       default:
         return false;
     }
-  }
-
-  /** A pá volta (das costas ou das guardadas) e fica ao lado dela, para quem quiser pegar de novo. */
-  private returnShovel(at: { worldX: number; worldY: number }): void {
-    const tile = this.host.shovelTile ?? { x: at.worldX, y: at.worldY + 1 };
-    const hero = this.host.host.hero();
-    const inHand = this.host.host.owns('shovel');
-    if (inHand) this.host.host.removeFromHand('shovel', 1);
-    else if (!this.host.host.takeFromGround('shovel')) return;
-    if (inHand) this.host.host.fling('shovel', hero.x, hero.y, tile.x, tile.y);
-    this.host.host.dropAt('shovel', tile.x, tile.y);
-    getSoundManager().ui.playItemStash();
-    this.host.host.persist();
   }
 
   /** A última conversa: ela pega o pincel de volta (das costas ou das guardadas), e a quest fecha. */

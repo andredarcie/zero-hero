@@ -9,16 +9,18 @@ import { BIOME_IDS, BIOMES, biomeAt, biomeEarthCutAt, biomeTintAt, biomeWeightsA
 import type { WorldData } from './worldSchema';
 
 // OS BIOMAS (world/biomes.ts) são decididos pela coordenada, na hora de desenhar. O que o jogo promete sobre eles:
-// todo o mapa tem bioma, os sete aparecem, a decoração só troca por coisa do mesmo tipo (a colisão não muda) e
+// todo o mapa tem bioma, todos aparecem, a decoração só troca por coisa do mesmo tipo (a colisão não muda) e
 // graveto desenhado não existe (graveto é item).
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const world = JSON.parse(readFileSync(path.resolve(here, '../../../public/world.json'), 'utf8')) as WorldData;
 const W = world.meta.worldChunksX * world.meta.chunkColumns;
 const H = world.meta.worldChunksY * world.meta.chunkRows;
+/** A linha de tile mais ao norte: o mapa cresceu para cima da linha 0 (a praia, `meta.originCy`). */
+const TOP = (world.meta.originCy ?? 0) * world.meta.chunkRows;
 const tiles = (): Array<[number, number]> => {
   const out: Array<[number, number]> = [];
-  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) out.push([x, y]);
+  for (let y = TOP; y < TOP + H; y++) for (let x = 0; x < W; x++) out.push([x, y]);
   return out;
 };
 
@@ -39,9 +41,19 @@ describe('biomas', () => {
     }
   });
 
-  it('os sete biomas aparecem no mapa', () => {
+  it('os oito biomas aparecem no mapa', () => {
     const seen = new Set(tiles().map(([x, y]) => biomeAt(x, y)));
     expect([...seen].sort()).toEqual([...BIOME_IDS].sort());
+  });
+
+  it('a praia é uma faixa ao norte da serra: ao sul da linha -5 ela não pesa nada, e na areia ela manda', () => {
+    const shore = BIOME_IDS.indexOf('shore');
+    // o vale de sempre não mudou um bit: o peso da praia é zero de exato em todo tile que já existia
+    for (let y = -5; y < 60; y++) for (let x = 0; x < W; x++) expect(biomeWeightsAt(x, y)[shore], `${x},${y}`).toBe(0);
+    for (let x = 0; x < W; x++) {
+      expect(biomeAt(x, -14), `${x},-14`).toBe('shore');
+      expect(biomeWeightsAt(x, -14)[shore]).toBe(1);
+    }
   });
 
   it('é determinístico: o mesmo tile dá sempre a mesma resposta', () => {

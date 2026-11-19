@@ -49,7 +49,10 @@ const main = () => {
   const world = JSON.parse(raw);
   const { chunkColumns: CW, chunkRows: CH } = world.meta;
   const chunkOf = (x, y) => world.chunks.find((c) => c.cx === Math.floor(x / CW) && c.cy === Math.floor(y / CH));
-  const relief = (x, y) => chunkOf(x, y)?.relief?.[y % CH]?.[x % CW] ?? 0;
+  // a linha DENTRO do chunk: o mapa tem linhas negativas (a praia do norte, `meta.originCy`), e -1 % 12 é -1
+  const ly = (y) => ((y % CH) + CH) % CH;
+  const lx = (x) => ((x % CW) + CW) % CW;
+  const relief = (x, y) => chunkOf(x, y)?.relief?.[ly(y)]?.[lx(x)] ?? 0;
   const problems = [];
   // A BANCADA DO LAR: um prop `toolbox` como qualquer outro (idempotente: só entra se ainda não estiver lá).
   const benchKey = `${CAMP_BENCH.worldX},${CAMP_BENCH.worldY}`;
@@ -67,7 +70,7 @@ const main = () => {
   // da bancada, acima). Elas continuam sólidas na prova de caminho.
   const GROVE = new Set(['oakTree', 'birchTree', 'youngOak', 'fallenLog']);
   const grove = new Set(world.props.filter((p) => GROVE.has(p.type)).map((p) => `${p.worldX},${p.worldY}`));
-  const treeAt = (x, y) => SOLID_UPPER.has(chunkOf(x, y)?.upper?.[y % CH]?.[x % CW]);
+  const treeAt = (x, y) => SOLID_UPPER.has(chunkOf(x, y)?.upper?.[ly(y)]?.[lx(x)]);
   for (const k of CAMP_TILES) {
     const [x, y] = k.split(',').map(Number);
     const c = chunkOf(x, y);
@@ -83,7 +86,7 @@ const main = () => {
   const solid = new Set(SOLID.map(([x, y]) => `${x},${y}`));
   const blocked = (x, y) => {
     const c = chunkOf(x, y);
-    return !c || c.collisions[y % CH][x % CW] || treeAt(x, y) || solid.has(`${x},${y}`) || taken.has(`${x},${y}`);
+    return !c || c.collisions[ly(y)][lx(x)] || treeAt(x, y) || solid.has(`${x},${y}`) || taken.has(`${x},${y}`);
   };
   const start = world.meta.playerStart;
   const seen = new Set([`${start.worldX},${start.worldY}`]);

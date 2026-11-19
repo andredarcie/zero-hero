@@ -8,8 +8,9 @@ import { fitFrame, MEDITATION_MARGINS, meditationShot, type FrameLens } from './
 
 /** O FOV que o jogo usa para esta proporção (WorldScreen.effectiveFov: a tela em pé abre o FOV até ver largura). */
 const fovFor = (aspect: number): number => {
-  const need = THREE.MathUtils.radToDeg(2 * Math.atan(0.2646 / aspect));
-  return Math.min(Math.max(30, 74), Math.max(30, need));
+  const fov = defaultWorld3DParams().fov;
+  const need = THREE.MathUtils.radToDeg(2 * Math.atan(0.1564 / aspect));
+  return Math.min(Math.max(fov, 48), Math.max(fov, need));
 };
 
 const SCREENS: ReadonlyArray<readonly [string, number, number]> = [
@@ -52,7 +53,7 @@ describe('o quadro da meditação', () => {
 
   it('o zoom do jogador não muda o quadro: o dolly compensa', () => {
     const p = defaultWorld3DParams();
-    const lens: FrameLens = { fov: 30, aspect: 16 / 9, height: p.camHeight, back: p.camBack, zoom: 1, ground: 0 };
+    const lens: FrameLens = { fov: p.fov, aspect: 16 / 9, height: p.camHeight, back: p.camBack, zoom: 1, ground: 0 };
     const a = fitFrame(SHOT, lens, flat, MEDITATION_MARGINS);
     const b = fitFrame(SHOT, { ...lens, zoom: 1.25 }, flat, MEDITATION_MARGINS);
     expect(b.dolly / 1.25).toBeCloseTo(a.dolly, 1);

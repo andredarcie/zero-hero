@@ -21,6 +21,20 @@ export const makeFinishShader = (w: number, h: number): THREE.ShaderMaterialPara
     uBand: { value: 0.16 },
     uBlur: { value: 3.2 },
     uNear: { value: 0.55 },
+    // ── O DESFOQUE DE PROFUNDIDADE (o bloco "A LENTE" no shader) ──
+    // 1 = pela distância da câmera (a lente de verdade); 0 = o tilt-shift por fileira de tela de antes.
+    uDofDepth: { value: 1 },
+    // A profundidade (na direção da visão) do ponto em foco, o herói, em tiles; e o near/far da câmera.
+    uFocusDist: { value: 19 },
+    uNearFar: { value: new THREE.Vector2(0.1, 1000) },
+    // Quantos tiles de profundidade ficam nítidos de cada lado do foco, e quantos o borrão leva para chegar ao máximo.
+    uDofBand: { value: 2.4 },
+    uDofRamp: { value: 7 },
+    // O peso das altas-luzes dentro do borrão: é o que faz uma chama longe virar um disco de luz (o bokeh).
+    uBokeh: { value: 0 },
+    // A COR SEPARA (o bloco no shader): pixels de separação nos cantos, e o tanto a mais de um golpe neste quadro.
+    uAberr: { value: 0 },
+    uAberrKick: { value: 0 },
     uVignette: { value: 0.24 },
     uLift: { value: 1 },
     // A VISTA DO HERÓI (ver setHeroSight): a curva local, onde ela cai na tela, e os dois
@@ -32,6 +46,8 @@ export const makeFinishShader = (w: number, h: number): THREE.ShaderMaterialPara
     uGrain: { value: 0.02 },
     // A DISTÂNCIA SEM BORRAR (ver o bloco no shader): quanto o longe perde cor e puxa para a cor do ar.
     uHaze: { value: 0 },
+    // Quanto a distância perde de cor (a metade). Sobre o mar menos: o mar longe é azul de bruma, não cinza (SeaVista).
+    uHazeGrey: { value: 0.5 },
     uHazeColor: { value: new THREE.Color(0, 0, 0) },
     uGrade: { value: 0.5 },
     // The split-tone the grade lerps between, per region (see updateBiomeGrade): cool woodland by
@@ -79,6 +95,14 @@ export const makeFinishShader = (w: number, h: number): THREE.ShaderMaterialPara
     uniform float uBand;
     uniform float uBlur;
     uniform float uNear;
+    uniform float uDofDepth;
+    uniform float uFocusDist;
+    uniform vec2 uNearFar;
+    uniform float uDofBand;
+    uniform float uDofRamp;
+    uniform float uBokeh;
+    uniform float uAberr;
+    uniform float uAberrKick;
     uniform float uVignette;
     uniform float uLift;
     uniform float uSight;
@@ -86,6 +110,7 @@ export const makeFinishShader = (w: number, h: number): THREE.ShaderMaterialPara
     uniform vec2 uSightR;
     uniform float uGrain;
     uniform float uHaze;
+    uniform float uHazeGrey;
     uniform vec3 uHazeColor;
     uniform float uGrade;
     uniform vec3 uShadowTint;
@@ -112,17 +137,41 @@ export const makeFinishShader = (w: number, h: number): THREE.ShaderMaterialPara
     vec3 frameAt(vec2 uv) {
       return texture2D(tDiffuse, uv).rgb + texture2D(tBloom, uv).rgb;
     }
+    /** A profundidade de um pixel na direção da visão, em tiles (o fundo vazio dá o far: longe de tudo). */
+    float zhViewZ(vec2 uv) {
+      float d = texture2D(tDepth, uv).x;
+      return uNearFar.x * uNearFar.y / (uNearFar.y - d * (uNearFar.y - uNearFar.x));
+    }
+    /**
+     * O CÍRCULO DE CONFUSÃO, 0..1: quanto a lente borra o que está a esta profundidade. Uma faixa de uDofBand tiles de
+     * cada lado do herói é nítida; atrás dela o borrão cresce até o máximo em uDofRamp tiles; na frente ele cresce mais
+     * depressa e só até uNear (o chão sob os pés do jogador nunca some).
+     */
+    float zhCoc(float z) {
+      float dz = z - uFocusDist;
+      float far = smoothstep(uDofBand, uDofBand + uDofRamp, dz);
+      float near = smoothstep(uDofBand, uDofBand + uDofRamp * 0.45, -dz) * uNear;
+      return max(far, near);
+    }
     void main() {
-      // Tilt-shift, asymmetric on purpose: the DISTANCE behind the hero (up the screen) melts
-      // away hard, while the foreground under him only softens — Octopath blurs the background
-      // far more than the front, and blurring the near edge as hard just hides the ground the
-      // player is walking on. uNear scales the near side's ramp.
-      float dy = vUv.y - uFocusY;
-      // O desfoque começa mais LONGE da faixa do herói (2026-11-10): pixel art borrada lê como imagem estragada, não
-      // como distância. Quem diz "longe" agora é a perspectiva atmosférica abaixo; o desfoque só derrete o fundo.
-      float far = smoothstep(uBand + 0.08, uBand + 0.42, dy);   // above the band = distance
-      float near = smoothstep(uBand, uBand + 0.46, -dy) * uNear; // below = foreground
-      float t = max(far, near) * (1.0 - uCalm);
+      // ── A LENTE ──────────────────────────────────────────────────────────────
+      // A CÂMERA HD-2D (2026-11-19): o desfoque é o de uma lente, pela DISTÂNCIA de cada pixel à câmera, como nos jogos
+      // HD-2D. O tilt-shift de antes era por FILEIRA de tela: a copa de uma árvore colada no herói, por subir na tela,
+      // borrava como se fosse longe, e o chão no alto do quadro, longe de verdade, borrava igual a ela. Agora o que está
+      // na profundidade do herói é nítido de cima a baixo, e só o que está longe derrete.
+      float t;
+      float zhZ = uFocusDist;
+      if (uDofDepth > 0.5) {
+        zhZ = zhViewZ(vUv);
+        t = zhCoc(zhZ);
+      } else {
+        // O tilt-shift de antes (uDofDepth = 0): o longe é o alto da tela, assimétrico de propósito.
+        float dy = vUv.y - uFocusY;
+        float far = smoothstep(uBand + 0.08, uBand + 0.42, dy);
+        float near = smoothstep(uBand, uBand + 0.46, -dy) * uNear;
+        t = max(far, near);
+      }
+      t *= 1.0 - uCalm;
       // Quantise the radius to half a pixel: a continuously-varying blur makes the pixel art
       // "boil" as the hero walks, because every frame resamples the same texels differently.
       float radius = floor(uBlur * t * 2.0 + 0.5) * 0.5;
@@ -139,6 +188,40 @@ export const makeFinishShader = (w: number, h: number): THREE.ShaderMaterialPara
       vec3 col;
       if (radius == 0.0) {
         col = frameAt(zhUv);
+        // ── A COR SEPARA (a aberração cromática dos jogos HD-2D) ────────────────
+        // Uma lente de verdade não junta as três cores no mesmo ponto longe do centro: nos cantos o vermelho escorrega
+        // para fora e o azul para dentro, um pixel ou dois. Live A Live usa isto como o toque "moderno" do HD-2D, e
+        // forte num golpe; Octopath no BREAK. Aqui: fraco nos cantos sempre, e um pulso no baque da câmera (golpe,
+        // queda). Só onde a lente não borrou (no borrão um fio de cor se perderia, e custaria o disco três vezes).
+        vec2 zhRad = vUv - 0.5;
+        // (a rampa começa cedo: os cantos de cima e de baixo já são borrão da lente, então a cor separada se vê é nas
+        // laterais da faixa nítida, onde ela chega a ~1 px)
+        float zhCa = uAberr * smoothstep(0.22, 0.72, length(zhRad * vec2(1.0, 0.8))) + uAberrKick;
+        if (zhCa > 0.3) {
+          vec2 zhShift = normalize(zhRad + 1e-5) * zhCa / uResolution;
+          col.r = frameAt(zhUv + zhShift).r;
+          col.b = frameAt(zhUv - zhShift).b;
+        }
+      } else if (uDofDepth > 0.5) {
+        // O DISCO: doze amostras numa espiral de ângulo áureo enchem um círculo por igual (o bokeh é redondo, não a cruz
+        // de sete pontos de antes). Cada amostra só entra se o PRÓPRIO borrão dela alcança este pixel: assim uma coisa
+        // nítida na frente (o herói, uma árvore perto) não escorre para dentro do fundo borrado atrás dela. E as altas
+        // luzes pesam mais (uBokeh): uma chama ou um brilho d'água longe vira um disco de luz, não uma mancha cinza.
+        vec3 zhAcc = frameAt(zhUv);
+        float zhW = 1.0;
+        for (int i = 0; i < 12; i++) {
+          float fi = float(i) + 0.5;
+          float a = fi * 2.39996323;
+          vec2 off = vec2(cos(a), sin(a)) * sqrt(fi / 12.0) * radius;
+          vec2 suv = zhUv + off / uResolution;
+          vec3 s = frameAt(suv);
+          float reach = smoothstep(length(off) - 1.0, length(off), zhCoc(zhViewZ(suv)) * uBlur);
+          float hl = dot(s, vec3(0.299, 0.587, 0.114));
+          float w = reach * (1.0 + uBokeh * 6.0 * hl * hl * hl);
+          zhAcc += s * w;
+          zhW += w;
+        }
+        col = zhAcc / zhW;
       } else {
         vec2 px = radius / uResolution;
         col = frameAt(zhUv) * 0.30;
@@ -163,17 +246,22 @@ export const makeFinishShader = (w: number, h: number): THREE.ShaderMaterialPara
       // ── O AR ACESO (AirLight.ts) ──────────────────────────────────────────────
       // Luz espalhada no ar entre a câmera e o que ela vê: os fachos de sol entre as copas, o halo em volta do fogo.
       // Calculado e suavizado em meia resolução (ar é macio); aqui é uma leitura só, ampliada pelo filtro linear.
-      col += zhAir.rgb;
+      // (Na câmera de cena o ar aceso recua: ele é medido num retângulo em volta do herói, visto de cima, e uma câmera
+      // que olha o horizonte enxerga a beira desse retângulo — uma faixa mais clara no céu, cortada reta.)
+      col += zhAir.rgb * (1.0 - 0.8 * uCalm);
 
       // ── A DISTÂNCIA SEM BORRAR: a perspectiva atmosférica ─────────────────────
       // Acima da faixa do herói o quadro perde cor e se inclina para a cor do AR (o skyColor: poeira dourada de dia,
       // o escuro de noite) — os pixels continuam nítidos, só mais distantes. O que fica na faixa e abaixo dela não muda.
       if (uHaze > 0.0) {
-        // Começa bem acima da faixa: um vizinho a três tiles do herói ainda é primeiro plano, não distância.
-        float zhFar = smoothstep(uFocusY + uBand * 1.5, 1.08, vUv.y) * (1.0 - uCalm);
+        // Começa bem acima da faixa: um vizinho a três tiles do herói ainda é primeiro plano, não distância. Com a lente
+        // de profundidade, a névoa também é pela DISTÂNCIA (a copa de uma árvore colada no herói não enevoa).
+        float zhFar = (uDofDepth > 0.5
+          ? smoothstep(uDofBand + 1.0, uDofBand + 9.0, zhZ - uFocusDist)
+          : smoothstep(uFocusY + uBand * 1.5, 1.08, vUv.y)) * (1.0 - uCalm);
         if (zhFar > 0.0) {
           float zhHl = dot(col, vec3(0.299, 0.587, 0.114));
-          col = mix(col, vec3(zhHl), zhFar * uHaze * 0.5);
+          col = mix(col, vec3(zhHl), zhFar * uHaze * uHazeGrey);
           col = mix(col, uHazeColor, zhFar * uHaze * 0.32);
         }
       }

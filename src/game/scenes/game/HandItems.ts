@@ -39,6 +39,7 @@ const ITEM_GET_CFG: Record<HeldItemKind, Omit<ItemGetConfig, 'label'>> = {
   iron: { texture: ASSET_KEYS.ironItem, frame: 0 },
   bucket: { texture: 'bucket-icon', frame: 0 },
   bucketFull: { texture: 'bucket-full-icon', frame: 0 },
+  bucketSand: { texture: 'bucket-sand-icon', frame: 0 },
   charcoal: { texture: 'charcoal-item', frame: 0 },
   ore: { texture: ASSET_KEYS.oreItem, frame: 0 },
   bloom: { texture: ASSET_KEYS.bloomItem, frame: 0 },
@@ -299,6 +300,11 @@ export class HandItems {
 
   // Zelda-style "item get" beat: freeze the game, spotlight the hero, raise the item.
   public showItemGet(kind: HeldItemKind, afterClose: () => void): void {
+    this.showGet({ ...ITEM_GET_CFG[kind], label: t(`items.get.${kind}`) }, afterClose);
+  }
+
+  /** A mesma cerimônia para o que não é item de mão: a relíquia que saiu da terra (RelicDig). */
+  public showGet(config: ItemGetConfig, afterClose: () => void): void {
     if (this.itemGetOpen) { afterClose(); return; }
     this.itemGetOpen = true;
     getSoundManager().music.fadeMusicOut();
@@ -308,9 +314,7 @@ export class HandItems {
     // once so everything realigns to the final camera before the ceremony freezes it (otherwise
     // props/items look shifted a tile until the overlay closes).
     this.host.view.reprojectStatic();
-    this.itemGetOverlay = new ItemGetOverlay(this.host, {
-      ...ITEM_GET_CFG[kind], label: t(`items.get.${kind}`),
-    }, () => {
+    this.itemGetOverlay = new ItemGetOverlay(this.host, config, () => {
       this.itemGetOverlay?.destroy();
       this.itemGetOverlay = undefined;
       this.itemGetOpen = false;

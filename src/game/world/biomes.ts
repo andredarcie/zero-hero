@@ -11,6 +11,7 @@
 //   moss    a Shui e os cogumelos: o bosque úmido, verde azulado de musgo
 //   garden  o jardim da fogueira do fim, no centro: a grama cuidada, neutra
 //   fields  o sul, onde a aventura chega: campo de palha dourada
+//   shore   a praia do norte, depois da serra: a duna de capim ralo, a areia e o mar
 //
 // NADA DISTO É DADO DO MUNDO. O `world.json` continua guardando o mesmo chão e a mesma decoração (a lei
 // do CLAUDE.md: script não reescreve `ground` nem o que o autor pôs). O bioma é decidido pela COORDENADA,
@@ -21,7 +22,7 @@
 // ruído suave: a fronteira serpenteia em vez de ser reta, e numa faixa de ~3 tiles um bioma se mistura
 // com o vizinho (as cores se somam pelo peso de cada um), então nunca se vê uma emenda.
 
-export type BiomeId = 'ash' | 'meadow' | 'stars' | 'woods' | 'moss' | 'garden' | 'fields';
+export type BiomeId = 'ash' | 'meadow' | 'stars' | 'woods' | 'moss' | 'garden' | 'fields' | 'shore';
 export type Rgb = readonly [number, number, number];
 
 /**
@@ -94,7 +95,16 @@ export const BIOME_DECOR = {
  * centro inteiro do vale —: `scripts/jardim-no-alto.mjs` as põe só dentro do jardim e na sebe dele.
  */
 export const ANCIENT_GROVE = { treeA: 73, treeB: 74, bush: 75, grass: 76 } as const;
+/**
+ * A DECORAÇÃO DA PRAIA DO NORTE (spritefactory/sprites/beach-decor.mjs, frames 145..153): o capim-da-praia e a
+ * aveia-do-mar (em fios, como o capim do vale), a salsa-da-praia, e o que a maré deixa — conchas, estrela-do-mar,
+ * madeira branqueada, cocos, seixos e sargaço. O mapa as guarda direto (scripts/praia-do-norte.mjs).
+ */
+export const BEACH_DECOR = {
+  grass: 145, seaOats: 146, vine: 147, shells: 148, starfish: 149, driftwood: 150, coconuts: 151, stones: 152, seaweed: 153,
+} as const;
 const F = BIOME_DECOR;
+const B = BEACH_DECOR;
 
 // AS CORES (2026-11-10): cada bioma era um multiplicador sobre a arte inteira, e isso não troca uma cor por outra —
 // a cerejeira saía marrom e o pinheiro dos campos, com a fruta laranja multiplicada pelo dourado, parecia em brasa.
@@ -118,6 +128,9 @@ export const BIOMES: Readonly<Record<BiomeId, BiomeDef>> = {
   // árvores: ouro de outono (o ocre na copa; a fruta laranja da arte fica laranja, não vira brasa)
   // O capim oliva-amarelado e a copa ferrugem: os dois do mesmo valor seriam ocre sobre ocre, e o pomar sumia no chão.
   fields: define({ grass: '#59612f', canopy: '#8a5f30', earthCut: 0.58, small: [F.wheat, F.wheat, 8, F.daisies, 7, F.wheat], trees: [15, 4] }),
+  // A PRAIA DO NORTE (2026-11-19): o capim da duna, ralo e amarelado de sol e sal, e a copa num verde quente. Quase
+  // sem terra à mostra (a "terra" dali é a areia, que é chão próprio). O rasteiro do vale vira a flora da duna.
+  shore: define({ grass: '#646b36', canopy: '#5f6b33', earthCut: 0.92, small: [B.grass, B.vine, B.grass, B.seaOats, 7, B.grass], tall: [B.seaOats, B.grass] }),
 };
 
 /** As sementes: a casa (ou o marco) de cada bioma. Um bioma pode ter mais de uma. */
@@ -135,6 +148,17 @@ const SEEDS: ReadonlyArray<{ id: BiomeId; x: number; y: number }> = [
   { id: 'fields', x: 30, y: 51 },
   { id: 'fields', x: 49, y: 50 },
 ];
+
+/**
+ * A PRAIA NÃO É SEMENTE (2026-11-19). Ela é uma FAIXA: tudo ao norte da serra, de fora a fora. Como semente, ela
+ * disputaria com as casas do vale a terra de ninguém do alto do mapa (longe de todas, a linha 0 entre x 20 e 30), e o
+ * vale de sempre mudaria de cor. Como faixa, o peso dela é ZERO de exato da linha -5 para o sul — nenhum tile que já
+ * existia muda um bit —, sobe numa mistura de ~3 tiles no alto da serra e vale 1 da duna para o norte. A linha
+ * serpenteia um pouco (um ruído próprio, mais curto que o das fronteiras do vale).
+ */
+const SHORE_LINE = -8.5;
+const SHORE_WARP = 1.5;
+const SHORE_BLEND = 1.6;
 
 /** Quão longe a fronteira entorta (tiles) e quão larga é a mistura entre dois biomas. */
 const WARP_TILES = 4;
@@ -162,6 +186,7 @@ const valueNoise = (x: number, y: number, salt: number): number => {
 const IDS = Object.keys(BIOMES) as BiomeId[];
 /** Os biomas na ordem dos pesos de `biomeWeightsAt`. */
 export const BIOME_IDS: readonly BiomeId[] = IDS;
+const SHORE = IDS.indexOf('shore');
 const cache = new Map<number, Float32Array>();
 
 /**
@@ -183,8 +208,17 @@ export const biomeWeightsAt = (x: number, y: number): Float32Array => {
   const min = Math.min(...best);
   const w = new Float32Array(IDS.length);
   let sum = 0;
+  // (a praia não tem semente: `best` dela é infinito, e o peso sai 0 daqui)
   for (let i = 0; i < IDS.length; i++) { w[i] = Math.exp(-(best[i] - min) / BLEND); sum += w[i]; }
   for (let i = 0; i < IDS.length; i++) w[i] /= sum;
+  // A FAIXA DA PRAIA por cima (ver SHORE_LINE): ao sul dela nada muda; dentro dela os biomas do vale cedem.
+  const line = y + (valueNoise(x, y, 907) - 0.5) * 2 * SHORE_WARP;
+  if (line < SHORE_LINE + SHORE_BLEND) {
+    const t = Math.min(1, (SHORE_LINE + SHORE_BLEND - line) / (2 * SHORE_BLEND));
+    const s = t * t * (3 - 2 * t);
+    for (let i = 0; i < IDS.length; i++) w[i] *= 1 - s;
+    w[SHORE] += s;
+  }
   cache.set(key, w);
   return w;
 };

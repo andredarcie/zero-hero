@@ -148,7 +148,8 @@
       "npc.painter": {
         "name": "Sisi",
         "lines": [
-          "Whatever I paint comes out grey;\ncolour comes from the ground.\nTake this shovel; dig the four cracks\nright by me, in the ground."
+          "Whatever I paint comes out grey;\ncolour comes from the ground.\nTake this shovel; dig the four cracks\nright by me, in the ground.",
+          "This shovel digs the flower holes,\nbut that is not its end:\nand where the valley's ground is cracked,\na relic waits, my friend."
         ]
       },
       "npc.painterDone": {
@@ -163,7 +164,7 @@
           "Still {n} to dig, and only where\nthe ground is cracked: just dig them there."
         ],
         "seeds": [
-          "Four holes! The shovel stays right here,\nbeside me, leaning there.\nMixed seeds: put one in every hole,\nand plant each one with care."
+          "Four holes! The shovel's yours to keep;\nyou'll need it everywhere.\nMixed seeds: put one in every hole,\nand plant each one with care."
         ],
         "sow": [
           "One seed in every hole, and then:\n{n} more, and colour starts again."
@@ -341,10 +342,10 @@
       "npc.astronautStep": {
         "tripod": [
           "Iron! This becomes the tripod.\nThe lens is missing: glass,\nand glass is made of sand and ash:\nthe ash helps melt the mass.",
-          "The ash lies by the fire; the sand,\nbeside the big lake, south.\nBoth of them go into the furnace,\none open, waiting mouth."
+          "The ash lies by the fire; the sand,\nup on the northern beach:\na bucket from a little mound,\nthe furnace within reach."
         ],
         "wait": [
-          "Sand from the big lake to the south;\nthe ash from the fire, near;\nand both together, in the furnace,\nand glass will soon appear."
+          "Sand in a bucket, from the beach;\nthe ash from the fire, near;\nand both together, in the furnace,\nand glass will soon appear."
         ],
         "polish": [
           "Good glass! Now it becomes a lens:\nthe rough stone gives the curve;\nthe fine one clears the haze away,\nand leaves it clear to serve.",

@@ -1,7 +1,10 @@
-// A PAUSA: abrir o menu (o jogo para por baixo) e fechar (ele volta); e o ajuste do zoom, que abre das opções.
+// A PAUSA: abrir o menu (o jogo para por baixo) e fechar (ele volta); o ajuste do zoom, que abre das opções; e o
+// caderno das conversas, que abre do menu.
 
 import { PauseMenu } from '@/game/runtime/PauseMenu';
+import { TalkLogOverlay } from '@/game/runtime/TalkLogOverlay';
 import { ZoomSetup } from '@/game/runtime/ZoomSetup';
+import { adventureState } from '@/game/runtime/adventureState';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import type * as Engine from '@/game/engine';
 import type { GameScene } from '../GameScene';
@@ -9,7 +12,7 @@ import { PauseTouchButton } from '@/game/runtime/PauseMenu';
 
 /** O que PauseControl usa de GameScene (e a cena do motor, que ele passa a quem monta objetos do mundo). */
 export type PauseControlHost = Engine.Scene & Pick<GameScene,
-  'actions' | 'cutsceneActive' | 'dialog' | 'dialogCam' | 'hand' | 'save' | 'scene' | 'view' | 'world3d'
+  'actions' | 'adventure' | 'cutsceneActive' | 'dialog' | 'dialogCam' | 'hand' | 'save' | 'scene' | 'view' | 'world3d'
 >;
 
 export class PauseControl {
@@ -20,6 +23,8 @@ export class PauseControl {
   public pauseTouchButton?: PauseTouchButton;
   /** O ajuste do zoom, aberto das opções por cima do jogo parado (ver ZoomSetup). */
   public zoomSetup?: ZoomSetup;
+  /** O caderno das conversas, aberto do menu por cima do jogo parado (ver TalkLogOverlay). */
+  public talkLog?: TalkLogOverlay;
 
   public constructor(private readonly host: PauseControlHost) {}
 
@@ -48,6 +53,7 @@ export class PauseControl {
         }
         : undefined,
       onZoom: () => this.openZoomSetup(),
+      onTalks: this.host.adventure ? () => this.openTalkLog() : undefined,
     });
     this.host.actions.useBufferMs = 0;
     this.host.scene.pause();
@@ -76,10 +82,33 @@ export class PauseControl {
     this.pauseMenu?.wake();
   }
 
+  /** AS CONVERSAS (runtime/talkLog): o menu some, o caderno abre por cima; o Voltar devolve o menu. */
+  private openTalkLog(): void {
+    if (!this.pauseMenu || this.talkLog) return;
+    this.pauseMenu.suspend();
+    this.talkLog = new TalkLogOverlay(adventureState().talks, {
+      portrait: (asset, frame) => this.portrait(asset, frame),
+      onClose: () => {
+        this.talkLog = undefined;
+        this.pauseMenu?.wake();
+      },
+    });
+  }
+
+  /** O retrato de quem falou, como a caixa de fala o desenha (DialogOverlay.buildPortraitUrl). */
+  private portrait(asset: string, frame?: number): string | null {
+    const textures = this.host.textures;
+    if (!textures.exists(asset)) return null;
+    const f = frame ?? (textures.get(asset).has('0') ? '0' : undefined);
+    return f === undefined ? textures.getBase64(asset) : textures.getBase64(asset, String(f));
+  }
+
   private closePauseMenu(): void {
     if (!this.pauseMenu) return;
     this.zoomSetup?.destroy();
     this.zoomSetup = undefined;
+    this.talkLog?.destroy();
+    this.talkLog = undefined;
     this.pauseMenu.destroy();
     this.pauseMenu = undefined;
     this.pauseTouchButton?.setVisible(true);

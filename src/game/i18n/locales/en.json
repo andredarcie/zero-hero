@@ -30,6 +30,7 @@
       "stone": "A stone.",
       "bucket": "A bucket. Fill it at the water.",
       "bucketFull": "Water.",
+      "bucketSand": "Beach sand. Take it to Thea's furnace.",
       "charcoal": "Charcoal. Smelts ore.",
       "iron": "Iron.",
       "ore": "Iron ore. Smelt it.",
@@ -49,7 +50,7 @@
       "dyeBundle": "The four flowers. Take them to the table.",
       "brush": "A brush. The canvas awaits.",
       "splitWood": "The branch, in two. Take it to the dirt.",
-      "sand": "Sand from the shore.",
+      "sand": "Sand from the beach.",
       "ash": "Ash from the fire.",
       "glass": "Glass. Take it to Thea.",
       "telescope": "The telescope!",
@@ -74,6 +75,7 @@
       "bloom": "Iron Bloom",
       "bucket": "Bucket",
       "bucketFull": "Full Bucket",
+      "bucketSand": "Bucket of Sand",
       "charcoal": "Charcoal",
       "furnace": "Furnace",
       "knife": "Mushroom Knife",
@@ -106,6 +108,15 @@
     "continue": "Next",
     "close": "Close"
   },
+  "talks": {
+    "title": "Conversations",
+    "all": "Everyone",
+    "day": "Day {n}",
+    "empty": "No conversations yet. Talk to someone in the valley: whatever they say is kept here to read again.",
+    "hint": "↑ ↓ scroll  ·  ← → pick who  ·  X goes back",
+    "hintTouch": "Drag to scroll; tap a name to see only their conversations",
+    "back": "Back"
+  },
   "pause": {
     "sectionAccess": "Accessibility",
     "textSize": "Text size",
@@ -120,6 +131,7 @@
     "pressKey": "Press a key",
     "title": "PAUSED",
     "resume": "Resume game",
+    "talks": "Conversations",
     "options": "Options",
     "quit": "Quit",
     "back": "Back",
@@ -190,6 +202,7 @@
     "take": "Take",
     "swap": "Swap",
     "sit": "Sit",
+    "soak": "Soak",
     "sleep": "Sleep",
     "getUp": "Get up",
     "knock": "Knock",
@@ -223,6 +236,7 @@
     "break": "Break",
     "water": "Water",
     "fill": "Fill",
+    "scoop": "Scoop sand",
     "ford": "Lay stone",
     "bridge": "Build",
     "cover": "Cover",
@@ -405,7 +419,8 @@
       "neighbours": "For the neighbours",
       "mushrooms": "Mushrooms",
       "animals": "Animals",
-      "home": "Home"
+      "home": "Home",
+      "relics": "Relics"
     },
     "unknownName": "???",
     "unknownText": "I haven't found this yet.",
@@ -427,7 +442,7 @@
       "ore": "Iron ore: stone with iron trapped inside, as rust. On its own it is good for nothing.",
       "bloom": "The iron bloom that comes out of the furnace: spongy iron, full of slag. It only becomes a bar by being hammered.",
       "iron": "A real iron bar. From the ore to here: the coal, the furnace and the hammer.",
-      "sand": "Sand from the lake shore. It is almost all silica, the stuff glass is made of.",
+      "sand": "Sand from the north beach, in a bucket, from a little mound the wind piled up. It is almost all silica, the stuff glass is made of.",
       "ash": "Ash from a fire. It has potash, which helps the sand melt in a cooler fire.",
       "glass": "Glass of sand and ash, melted in Thea's furnace. Polished, it becomes a lens.",
       "dyeSeeds": "Sisi's mixed seeds: four plants that give dye. Each one goes in a hole.",
@@ -440,6 +455,66 @@
       "sundial": "The twig's shadow moves with the sun and points to the hour. At night, with no sun, it tells nothing.",
       "cairn": "Stones piled up, the biggest at the bottom. Piles like this have marked mountain trails for thousands of years.",
       "windChime": "Shards of iron ore hung from a hook. They knock together when a gust goes by."
+    }
+  },
+  "relics": {
+    "get": "You found {name}!\nThe relic went into the field notebook.",
+    "briansMansion": {
+      "name": "Brian's Mansion",
+      "what": "Mega Drive cartridge · 2011",
+      "text": "A horror game in a haunted mansion, made in RPG Maker by a boy, for kids: the first dream of making games. It never came out on a cartridge; this is the cartridge he dreamed of."
+    },
+    "zeroToOne": {
+      "name": "Zero To One",
+      "what": "Blue cartridge · a Bitsy game",
+      "text": "Zero is a programmer stuck in a pointless routine. In five days he drops everything and leaves: from zero to one. In the game, everything alive is blue."
+    },
+    "tinyRpgStudio": {
+      "name": "Tiny RPG Studio",
+      "what": "Floppy disk · game engine, 2025",
+      "text": "A web game engine with a big community: more than 60 games made and shared with it. In 2026 came the first Tiny RPG Jam, with 17 entries."
+    },
+    "diploma": {
+      "name": "Computer Science diploma",
+      "what": "Bachelor's diploma",
+      "text": "The science of what can be computed, and how: algorithms, data, languages and machines. It began on paper, with Ada Lovelace and Alan Turing, before computers existed: the machine is just the fastest way to do the sum."
+    },
+    "journey": {
+      "name": "Journey",
+      "what": "PlayStation 3 disc · 2012",
+      "text": "A robed traveller crosses the desert toward the light on top of the mountain. No one speaks: whoever you meet on the way has no name and talks by singing. This is where games started to be thought of as art."
+    },
+    "goneHome": {
+      "name": "Gone Home",
+      "what": "PC game box · 2013",
+      "text": "A stormy night in 1995: a daughter comes home from abroad to an empty house; in the letters and drawers, her sister's story. The walking sim that got famous: it showed games can go beyond action and combat and move you."
+    },
+    "discoElysium": {
+      "name": "Disco Elysium",
+      "what": "A book (that is a game) · 2019",
+      "text": "A detective wakes up in a hostel without remembering his own name, with a hanged man in the yard to investigate. No combat: his skills are voices arguing inside his head.",
+      "notes": ["Over a million words: a game you read like a novel."]
+    },
+    "book1984": {
+      "name": "1984",
+      "what": "Book by George Orwell · 1949",
+      "text": "Winston rewrites the past at the Ministry of Truth, under Big Brother's eyes. Newspeak shrinks the words until there is no way left to think against the Party.",
+      "notes": ["Freedom is being able to say that two and two make four."]
+    },
+    "odyssey2001": {
+      "name": "2001: A Space Odyssey",
+      "what": "VHS tape · Stanley Kubrick, 1968",
+      "text": "From apes facing the monolith to a ship bound for Jupiter, with HAL 9000, the computer that refuses to open the door. This is where the astronaut's missions in this valley came from."
+    },
+    "bookClub": {
+      "name": "The club's bookmark",
+      "what": "Clube de Leitura nas Montanhas",
+      "text": "Everyone reads the same technical or science book at home, and then the group talks it over. The mountains in the drawing are the ones in the name."
+    },
+    "nomadPostcard": {
+      "name": "Postcard from the coast",
+      "what": "Postcard · 2024",
+      "text": "A whole year of moving, one state at a time, up the coast of Brazil: the sea, the sand, the palm trees, and the work fitting in a backpack."
     }
   },
   "meditation": {

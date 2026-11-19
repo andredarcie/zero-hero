@@ -68,7 +68,7 @@ export class SceneRender {
     tickHeroView(this.host.hero, delta);
     this.host.valley.npcHomes?.syncNight(isNightTime(), adventureState().skyQuest.departed ? THEA_GONE : NOBODY_GONE);
     this.syncHeroBillboard();
-    this.host.steps.fadeFootprints();
+    this.host.steps.tick();
     // Os vaga-lumes vivem aqui e nao no update: eles sao a moldura das cutscenes (a abertura e o
     // fim), e o update fica parado justamente nelas.
     profiler.begin('life.fireflies');
@@ -140,6 +140,8 @@ export class SceneRender {
     b.setAlpha(h.alpha);
     b.setAngle(h.spin);
     this.heroSilhouette?.sync();
+    // afundado no chão de propósito (na fonte termal), o que some é o que está debaixo d'água: sem contorno
+    this.heroSilhouette?.setEnabled(h.lift > -0.05);
 
     // The carried item rides the just-synced hero position.
     this.host.carry.positionBackItem();
@@ -196,7 +198,6 @@ export class SceneRender {
     this.host.hero.x = this.host.camera.screenCenterX;
     this.host.hero.y = this.host.camera.screenCenterY;
     this.host.carry.positionBackItem();
-    this.host.steps.updateFootprints();
     this.host.itemManager?.render(this.host.tileSize, this.host.camera);
     this.host.npcManager?.render(this.host.tileSize, this.host.camera, this.host.uiTileSize);
     this.renderProps();

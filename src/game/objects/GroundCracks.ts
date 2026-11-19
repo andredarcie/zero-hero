@@ -68,16 +68,23 @@ const register = (): void => {
 export class GroundCracks {
   private readonly bodies = new Map<string, Billboard3D>();
 
-  public constructor(tiles: ReadonlyArray<{ x: number; y: number }>) {
+  /**
+   * `texture`: a rachadura (o padrão) ou outra pintura deitada do mesmo jeito — a terra revirada onde a pá já tirou
+   * uma relíquia (render3d/relicTextures, DUG_PATCH_TEXTURE).
+   */
+  public constructor(tiles: ReadonlyArray<{ x: number; y: number }>, private readonly texture = TEXTURE) {
     register();
-    for (const [i, { x, y }] of tiles.entries()) {
-      // Pintura no chão, por baixo das sombras, como as estradas; espelhada de tile em tile, para não repetir.
-      const body = world3d().objects.addBillboard(TEXTURE, 0, { flat: true, flatY: CRACK_Y, depthWrite: false, renderOrder: 1 })
-        .setPosition(x, y)
-        .setDisplaySize(1, 1)
-        .setFlipX(i % 2 === 1);
-      this.bodies.set(`${x},${y}`, body);
-    }
+    for (const [i, { x, y }] of tiles.entries()) this.add(x, y, i % 2 === 1);
+  }
+
+  /** Pintura no chão, por baixo das sombras, como as estradas; espelhada de tile em tile, para não repetir. */
+  public add(x: number, y: number, flip = (x + y) % 2 === 1): void {
+    if (this.bodies.has(`${x},${y}`)) return;
+    const body = world3d().objects.addBillboard(this.texture, 0, { flat: true, flatY: CRACK_Y, depthWrite: false, renderOrder: 1 })
+      .setPosition(x, y)
+      .setDisplaySize(1, 1)
+      .setFlipX(flip);
+    this.bodies.set(`${x},${y}`, body);
   }
 
   /** As rachaduras que ainda estão no chão. */

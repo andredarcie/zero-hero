@@ -11,6 +11,7 @@ import type { PropDir, PropKind } from '@/game/world/worldSchema';
 import { setWorldData } from '@/game/world/WorldData';
 import { ensureFixtureTexture, recordFixtures } from '@/game/editor/EditorFixtures';
 import { bosqueIconKey } from '@/game/objects/BigTrees';
+import { palmIconKey } from '@/game/objects/CoconutPalms';
 import { fenceIconKey } from '@/game/objects/WoodFence';
 import { yardIconKey } from '@/game/objects/LumberYard';
 import { forgeIconKey } from '@/game/objects/OldForge';
@@ -85,6 +86,8 @@ const PROP_VISUAL: Record<PropKind, { key: string; frame?: number }> = {
   shipHull: { key: crashIconKey('shipHull') },
   shipThruster: { key: crashIconKey('shipThruster') },
   shipFin: { key: crashIconKey('shipFin') },
+  // O coqueiro da praia do norte: o ícone é o desenho dele (registerPalmTextures, no create).
+  coconutPalm: { key: palmIconKey() },
 };
 const CHIP_COLOR: Record<PlacedEntity['list'], number> = {
   npcs: 0x4488ff,

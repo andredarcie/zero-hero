@@ -186,7 +186,10 @@ export const STAND_VERTEX_GLSL = /* glsl */ `
     // de tile é 0: ela tremula como sempre tremulou.
     float zhRate = 2.9 + fract(aStand.w * 0.159) * 1.2;
     float zhFlutter = sin(uFlowTime * zhRate + aStand.x * 1.9 + aStand.y * 1.3 + aStand.w) * ${FLUTTER_TEXELS};
-    float zhBend = ((zhWindWave(aStand.xy) * ${SWAY_TEXELS} + zhFlutter) * uWind + zhPush.x * ${PART_TEXELS}
+    // a RAJADA do vale (zhGust): o capim deita para leste junto com a mata e tremula mais enquanto ela passa
+    float zhGs = zhGust(aStand.xy);
+    float zhBend = (((zhWindWave(aStand.xy) * (1.0 + 0.25 * zhGs) + 0.45 * zhGs) * ${SWAY_TEXELS} + zhFlutter * (1.0 + 0.6 * zhGs)) * uWind
+      + zhPush.x * ${PART_TEXELS}
       + zhWake.x * ${WAKE_TEXELS} + zhRustle) * zhLive * zhTip;
     // o fio nunca passa da margem do quad dele (a ponta sumiria): seis décimos da altura em pé, entre 2 e o máximo —
     // a mesma conta de grassBlades.bladeSwing

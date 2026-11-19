@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { HOME_NAME_MAX } from './homeState';
 import { NameCard } from './NameCard';
@@ -15,6 +15,12 @@ const typeKey = (target: EventTarget, key: string): KeyboardEvent => {
 
 describe('NameCard', () => {
   const opened: NameCard[] = [];
+  // O PRIMEIRO cartão paga sozinho o que é de uma vez só (o papel da interface, desenhado em canvas): com a máquina
+  // ocupada (a suíte inteira logo depois do tsc e do eslint) isso passava dos 5 s e o 1º teste caía por tempo, de vez
+  // em quando. Pago aqui, com folga, e os testes medem só o cartão.
+  beforeAll(() => {
+    new NameCard('', 'Acampamento do Zero', { onWrite: () => {}, onClose: () => {} }).destroy();
+  }, 30000);
   beforeEach(() => {
     document.body.innerHTML = '';
     vi.useFakeTimers({ toFake: ['requestAnimationFrame'] });

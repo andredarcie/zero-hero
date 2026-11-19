@@ -2,8 +2,10 @@
 // decoração, sólido, serra, escada, vazio — numa passada só, para os passos do assado.
 
 import {
-  CHUNK_COLUMNS, CHUNK_ROWS, groundFrameAt, SEA_TILE_FRAME, SEA_TILE_FRAMES, terrainVariant, SOLID_UPPER_FRAMES, TREE_UPPER_FRAMES,
+  CHUNK_COLUMNS, CHUNK_ROWS, groundFrameAt, SAND_TILE_FRAME, SAND_TILE_FRAMES, SEA_TILE_FRAME, SEA_TILE_FRAMES, terrainVariant,
+  SOLID_UPPER_FRAMES, TREE_UPPER_FRAMES,
 } from '@/game/constants';
+import { isSpringPool } from '@/game/world/hotSpring';
 import { getBridgeSpots, getChunkTerrain, getLavaTiles, getWaterTiles, getWorldBounds, isInsideWorld } from '@/game/world/WorldData';
 import { reliefAt, reliefLevelAt, stairBase, stairUp } from '@/game/world/relief';
 import { decorFrameAt } from '@/game/world/biomes';
@@ -32,8 +34,20 @@ export interface TerrainSort {
   pitTiles: TerrainTile[];
   groundTiles: TerrainTile[];
   bedTiles: TerrainTile[];
+  /** O mar do vale (lago, enseada pintada): afundado, com barranco e espelho. */
   seaTiles: TerrainTile[];
+  /**
+   * A PRAIA DO NORTE (render3d/surf.ts): o OCEANO é o mar que encosta na areia e todo mar ligado a ele (o de fora do
+   * mapa também); a AREIA é o chão de areia no nível do chão. Os dois saem numa malha só, com as ondas.
+   */
+  oceanTiles: TerrainTile[];
+  sandTiles: TerrainTile[];
   lavaBedTiles: TerrainTile[];
+  /**
+   * A BACIA DA FONTE TERMAL (world/hotSpring): os tiles dela não viram chão — o terreno cava ali uma bacia de verdade
+   * (TerrainFeatures.bakeSpring), com o leito de areia, a borda e a parede. O frame é o do leito.
+   */
+  springTiles: TerrainTile[];
   decorTiles: TerrainTile[];
   highGroundTiles: TerrainTile[];
   reliefNear: Array<TerrainTile & { level: number; far: boolean }>;
@@ -77,7 +91,9 @@ export class TerrainSorter {
     // current, the breaking shore — see the SEA_* GLSL in pixelArtLight). Everything else about
     // them is unchanged: same sunken bed height, same earthen banks, same place in `sunkenTiles`.
     const seaTiles: Array<{ x: number; z: number; frame: number }> = [];
+    const sandTiles: Array<{ x: number; z: number; frame: number }> = [];
     const lavaBedTiles: Array<{ x: number; z: number; frame: number }> = [];
+    const springTiles: Array<{ x: number; z: number; frame: number }> = [];
     const decorTiles: Array<{ x: number; z: number; frame: number }> = [];
     // O chao do PLANALTO, um nivel acima (ver world/relief). A grama dele e a mesma do mundo; o
     // que muda e a altura do quad.
@@ -98,7 +114,8 @@ export class TerrainSorter {
           for (let col = 0; col < CHUNK_COLUMNS; col++) {
             const wx = cx * CHUNK_COLUMNS + col;
             const wy = cy * CHUNK_ROWS + row;
-            if (outside) voidTiles.push({ x: wx, z: wy });
+            // O mar de fora (WorldData.isVoidSea) é água aberta até o horizonte: sem névoa negra, sem chão de mata.
+            if (outside && chunk.ground[row][col] !== SEA_TILE_FRAME) voidTiles.push({ x: wx, z: wy });
             const tile = { x: wx, z: wy, frame: chunk.ground[row][col] };
             const tk = `${wx},${wy}`;
             if (tile.frame === SEA_TILE_FRAME) {
@@ -111,6 +128,8 @@ export class TerrainSorter {
             else if (waterSet.has(tk)) bedTiles.push(tile);
             else if (lavaSet.has(tk)) lavaBedTiles.push(tile);
             else if (pitSet.has(tk)) pitTiles.push(tile);
+            // a bacia da fonte termal: o leito dela é areia (o claro por baixo é o que deixa a água turquesa)
+            else if (!outside && isSpringPool(wx, wy)) springTiles.push({ ...tile, frame: groundFrameAt(SAND_TILE_FRAME, wx, wy) });
             else {
               // …and the same for the WORLD'S FLOOR, except there the swap is the MINORITY: most
               // of the ground keeps the field it always was, and one patch in GROUND_DETAIL_IN
@@ -127,6 +146,7 @@ export class TerrainSorter {
               }
               if (nearRelief) reliefNear.push({ ...tile, level, far: outside });
               if (level > 0) this.host.tiles.reliefTiles.push({ x: wx, z: wy });
+              else if (SAND_TILE_FRAMES.has(tile.frame)) sandTiles.push(tile); // a areia é da malha da praia
               else groundTiles.push(tile);
               // A escada mora no andar de onde sai: a do chão fica no chão, a do cume em cima do planalto.
               const code = outside ? 0 : reliefAt(wx, wy);
@@ -155,8 +175,39 @@ export class TerrainSorter {
     const solidSet = new Set(this.host.tiles.solidTiles.map((t) => tileKey(t.x, t.z)));
     const treeSet = new Set(this.host.tiles.solidTiles.filter((t) => TREE_UPPER_FRAMES.has(t.frame)).map((t) => tileKey(t.x, t.z)));
 
+    const { ocean, inland } = this.splitOcean(seaTiles, sandTiles);
     return {
-      b, pitSet, pitTiles, groundTiles, bedTiles, seaTiles, lavaBedTiles, decorTiles, highGroundTiles, reliefNear, voidTiles, solidSet, treeSet,
+      b, pitSet, pitTiles, groundTiles, bedTiles, seaTiles: inland, oceanTiles: ocean, sandTiles, lavaBedTiles, springTiles, decorTiles,
+      highGroundTiles,
+      reliefNear, voidTiles, solidSet, treeSet,
     };
+  }
+
+  /**
+   * O OCEANO é o mar que encosta na areia, e todo mar ligado a ele pelos lados (uma inundação a partir da praia). O
+   * resto do mar — um lago pintado com o frame de mar, longe de qualquer areia — continua sendo o mar afundado de
+   * sempre, com barranco e espelho. Sem areia no mapa não há oceano, e nada muda.
+   */
+  private splitOcean(seaTiles: TerrainTile[], sandTiles: readonly TerrainTile[]): { ocean: TerrainTile[]; inland: TerrainTile[] } {
+    if (sandTiles.length === 0 || seaTiles.length === 0) return { ocean: [], inland: seaTiles };
+    const sea = new Map<number, TerrainTile>();
+    for (const t of seaTiles) sea.set(tileKey(t.x, t.z), t);
+    const ocean = new Set<number>();
+    const queue: TerrainTile[] = [];
+    const visit = (x: number, z: number): void => {
+      const k = tileKey(x, z);
+      const t = sea.get(k);
+      if (!t || ocean.has(k)) return;
+      ocean.add(k);
+      queue.push(t);
+    };
+    for (const s of sandTiles) {
+      visit(s.x + 1, s.z); visit(s.x - 1, s.z); visit(s.x, s.z + 1); visit(s.x, s.z - 1);
+    }
+    for (let i = 0; i < queue.length; i++) {
+      const t = queue[i];
+      visit(t.x + 1, t.z); visit(t.x - 1, t.z); visit(t.x, t.z + 1); visit(t.x, t.z - 1);
+    }
+    return { ocean: queue, inland: seaTiles.filter((t) => !ocean.has(tileKey(t.x, t.z))) };
   }
 }

@@ -114,7 +114,8 @@ export const DAY_SKY: Partial<World3DParams> = {
   // tone mapping não há a tradução torta que um pipeline com ACES imporia.
   skyColor: '#c7b389',
   // 0,026 ÷ 1,285 (2026-11-10): a câmera recuou pelo dolly zoom (worldParams.camHeight), e o fog conta da câmera.
-  fogDensity: 0.0202,
+  // × 0,591 (2026-11-19): a câmera HD-2D recuou de novo, pelo mesmo motivo.
+  fogDensity: 0.01194,
   // A perspectiva atmosférica (finishShader): de dia o longe se perde na poeira dourada — é o que dá ar ao quadro sem
   // borrar a pixel art (o desfoque, que fazia esse papel, cedeu).
   haze: 0.85,

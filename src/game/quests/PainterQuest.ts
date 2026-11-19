@@ -11,7 +11,7 @@ import { EASEL_ART_TEXTURE, EASEL_BLANK_TEXTURE, paintTableTexture, publishEasel
 import { FX_DOT_TEXTURE, world3d } from '@/game/render3d/World3D';
 import { adventureState, type PaintQuestSave } from '@/game/runtime/adventureState';
 import { PaintingOverlay } from '@/game/runtime/PaintingOverlay';
-import { crackTiles, PainterCracks } from './PainterCracks';
+import { PainterCracks } from './PainterCracks';
 import { PainterGarden, SIZE_PLANT } from './PainterGarden';
 import { PainterStudio, SIZE_TABLE, SIZE_EASEL, EASEL_SPOTS } from './PainterStudio';
 import { PainterTalk } from './PainterTalk';
@@ -62,7 +62,6 @@ export class PainterQuest {
   public easel?: Billboard3D;
   public tableTile?: { x: number; y: number };
   public easelTile?: { x: number; y: number };
-  public shovelTile?: { x: number; y: number };
   public npc?: { worldX: number; worldY: number };
   public overlay?: PaintingOverlay;
 
@@ -83,12 +82,6 @@ export class PainterQuest {
     this.npc = npc;
     const w3 = world3d();
     this.tableTile = this.pick([[-1, 0], [1, 0], [-1, -1], [1, -1]], []);
-    // A pá devolvida não deita onde o herói para para usar a mesa ou uma cova: de pé em cima dela, o Z pegaria a pá
-    // em vez de misturar ou colher (achado jogando do começo ao fim, 2026-11-16). Sem lugar assim, o de antes.
-    const shovelSpots: ReadonlyArray<readonly [number, number]> = [[2, 0], [-2, 0], [2, -1], [-2, -1], [-1, 1], [1, 1], [-2, 1], [2, 1]];
-    const busy = [this.tableTile, ...crackTiles(npc)].filter((t): t is { x: number; y: number } => t !== undefined);
-    const besideBusy = busy.flatMap((t) => [t, { x: t.x + 1, y: t.y }, { x: t.x - 1, y: t.y }, { x: t.x, y: t.y + 1 }, { x: t.x, y: t.y - 1 }]);
-    this.shovelTile = this.pick(shovelSpots, besideBusy) ?? this.pick(shovelSpots, [this.tableTile]);
     if (this.tableTile) {
       this.table = w3.objects.addBillboard(paintTableTexture(this.potsReady()), 0, { groundShadow: { rx: 0.42, rz: 0.2, alpha: 0.28 } })
         .setPosition(this.tableTile.x, this.tableTile.y)

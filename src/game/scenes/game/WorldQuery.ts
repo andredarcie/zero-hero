@@ -1,7 +1,7 @@
 // AS PERGUNTAS AO MAPA: que peça está num tile (fogueira, pedra, porta...), se ele bloqueia quem anda, se é água
 // aberta, árvore viva, chão livre para a natureza ou para rebrotar.
 
-import { CHUNK_COLUMNS, CHUNK_ROWS, TREE_UPPER_FRAMES, SEA_TILE_FRAMES } from '@/game/constants';
+import { CHUNK_COLUMNS, CHUNK_ROWS, SAND_TILE_FRAME, TREE_UPPER_FRAMES, SEA_TILE_FRAMES } from '@/game/constants';
 import type { Surface } from '@/game/audio/materials';
 import { isDecorKind } from '@/game/entities/ItemPickup';
 import { CampfireObject } from '@/game/objects/CampfireObject';
@@ -22,7 +22,7 @@ import { AltarObject } from '@/game/objects/AltarObject';
 import type { WorldProp } from '@/game/objects/WorldProp';
 import { isMushroomKind } from '@/game/fungi/fungi';
 import { getOccupiedTiles } from '@/game/world/WorldData';
-import { isBareTreeAt } from '@/game/world/biomes';
+import { ANCIENT_GROVE, isBareTreeAt } from '@/game/world/biomes';
 import type { GameScene } from '../GameScene';
 
 /** O que WorldQuery usa de GameScene. */
@@ -78,11 +78,15 @@ export class WorldQuery {
     return !this.propTiles.has(`${wx},${wy}`) && !this.isTileTaken(wx, wy) && !this.isOpenWaterAt(wx, wy);
   }
 
-  /** Uma árvore do mapa (tile), viva — a que o bioma veste de árvore morta não conta (world/biomes). */
+  /**
+   * Uma árvore do mapa (tile), viva — a que o bioma veste de árvore morta não conta (world/biomes). As anciãs do jardim
+   * alto contam: delas também caem folhas e entre elas também entra luz (objects/nature).
+   */
   public isLiveTileTree(wx: number, wy: number): boolean {
     const chunks = this.host.chunkManager;
     if (!chunks || !chunks.hasChunkCoordinate(Math.floor(wx / CHUNK_COLUMNS), Math.floor(wy / CHUNK_ROWS))) return false;
     const { upper } = chunks.getTile(wx, wy);
+    if (upper === ANCIENT_GROVE.treeA || upper === ANCIENT_GROVE.treeB) return true;
     return upper !== null && TREE_UPPER_FRAMES.has(upper) && !isBareTreeAt(upper, wx, wy);
   }
 
@@ -166,6 +170,13 @@ export class WorldQuery {
     return SEA_TILE_FRAMES.includes(ground);
   }
 
+  /** O chão deste tile é a AREIA da praia do norte (dentro do mapa). */
+  public isSandAt(wx: number, wy: number): boolean {
+    const chunks = this.host.chunkManager;
+    if (!chunks || !chunks.hasChunkCoordinate(Math.floor(wx / CHUNK_COLUMNS), Math.floor(wy / CHUNK_ROWS))) return false;
+    return chunks.getTile(wx, wy).ground === SAND_TILE_FRAME;
+  }
+
   /**
    * Everything a walking body cannot step onto: authored terrain collision and trees (via
    * ChunkManager.isCellBlocked), every registered prop whose `blocking` says so (see
@@ -186,11 +197,15 @@ export class WorldQuery {
     if (this.host.questSetup.astronomerQuest?.isSolidAt(wx, wy)) return true;
     if (this.host.valley.npcHomes?.isSolidAt(wx, wy)) return true;
     if (this.host.valley.valleyFinds?.at(wx, wy)) return true;
+    if (this.host.valley.cellTower?.at(wx, wy)) return true;
     if (this.host.valley.heroCamp?.at(wx, wy)) return true;
     if (this.host.valley.campPieces?.at(wx, wy)) return true;
     if (this.host.camp.meditation.at(wx, wy)) return true;
     if (this.host.camp.catCare.isBarrelAt(wx, wy)) return true;
     if (this.host.valley.bigTrees?.at(wx, wy)) return true;
+    if (this.host.valley.palms?.at(wx, wy)) return true;
+    if (this.host.valley.beach?.mounds.at(wx, wy)) return true;
+    if (this.host.valley.beachSeat?.at(wx, wy)) return true;
     if (this.host.valley.woodFence?.at(wx, wy)) return true;
     if (this.host.valley.lumberYard?.at(wx, wy)) return true;
     if (this.host.valley.oldForge?.at(wx, wy)) return true;

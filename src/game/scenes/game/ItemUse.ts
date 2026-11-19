@@ -8,7 +8,7 @@ import type { GameScene } from '../GameScene';
 /** O que ItemUse usa de GameScene. */
 export type ItemUseHost = Pick<GameScene,
   'fire' | 'forage' | 'forge' | 'groundItems' | 'hand' | 'heldItem' | 'machines' | 'playerWorld' | 'query'
-  | 'questSetup' | 'sparkle' | 'swing' | 'time' | 'torch' | 'useGround' | 'water'
+  | 'questSetup' | 'sparkle' | 'swing' | 'time' | 'torch' | 'useGround' | 'valley' | 'water'
 >;
 
 export class ItemUse {
@@ -108,6 +108,11 @@ export class ItemUse {
 
   /** O rio e a água do terreno: encher o balde, a ponte de gravetos, o vau de pedra. `undefined` = não é com este degrau (ver useItemAt). */
   private useOnWater(wx: number, wy: number): boolean | undefined {
+    // O MONTINHO DE AREIA DA PRAIA (objects/beach/SandMounds): o balde vazio o recolhe, e ele se desfaz.
+    if (this.host.valley.beach?.mounds.at(wx, wy)) {
+      if (this.host.heldItem === 'bucket') this.host.water.scoopSand(wx, wy);
+      return true;
+    }
     // River — only tiles marked with a `bridgeSpot` are buildable. Two things can span it, and
     // WHICH you choose is a real decision, not a formality:
     //   - two gravetos build a plank deck. It is wood: fire runs across it (and eats it).

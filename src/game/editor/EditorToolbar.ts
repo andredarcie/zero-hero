@@ -4,6 +4,7 @@
 
 import type { EditorDomUi } from './EditorDomUi';
 import type { PaletteTab, ToolId } from './EditorKeys';
+import { openDialogEditor } from './DialogEditor';
 
 /** As ferramentas: o botão, a tecla e a dica de cada uma (a barra de status também lê). */
 export const TOOL_DEFS: ReadonlyArray<{ id: ToolId; label: string; kbd: string; hint: string }> = [
@@ -28,7 +29,7 @@ const TAB_DEFS: ReadonlyArray<{ id: PaletteTab; label: string; kbd: string }> = 
 
 /** O que a barra usa da EditorDomUi. */
 export type EditorToolbarHost = Pick<EditorDomUi,
-  'button' | 'cb' | 'changed' | 'modals' | 'saveTargetPath' | 'sectionLabel' | 'selectTab' | 'state'
+  'button' | 'cb' | 'changed' | 'icon' | 'modalRoot' | 'modals' | 'saveTargetPath' | 'sectionLabel' | 'selectTab' | 'state' | 'store' | 'toast'
 >;
 
 export class EditorToolbar {
@@ -71,12 +72,17 @@ export class EditorToolbar {
     );
     actions.append(
       ui.button('Mundo&#8230;', 'Nome, tamanho e validacao do mundo', () => ui.modals.openWorldModal()),
-      ui.button('Dialogos&#8230;', 'Editor de dialogos dos NPCs', () => ui.modals.openDialogModal()),
-      ui.button('Ajuda (?)', 'Atalhos e controles', () => ui.modals.openHelpModal()),
+      // AS FALAS (editor/DialogEditor): o que os personagens dizem, em português e inglês — grava os arquivos de
+      // src/game/i18n/dialogos, à parte do mundo. A cor e a voz de cada NPC continuam no world.json.
+      ui.button('Falas&#8230;', 'Editor das falas dos personagens (pt e en, com o verso conferido)', () => { openDialogEditor(ui); }),
+      ui.button('Cor e voz&#8230;', 'Cor do nome e voz de cada NPC (no world.json)', () => ui.modals.openDialogModal()),
     );
     this.undoBtn = ui.button('&#8630; Desfazer', 'Ctrl+Z', () => ui.cb.onUndo());
     this.redoBtn = ui.button('&#8631; Refazer', 'Ctrl+Y', () => ui.cb.onRedo());
-    actions.append(this.undoBtn, this.redoBtn, ui.button('Enquadrar', 'Centraliza o mundo na tela (0)', () => ui.cb.onFitView()));
+    actions.append(
+      this.undoBtn, this.redoBtn, ui.button('Enquadrar', 'Centraliza o mundo na tela (0)', () => ui.cb.onFitView()),
+      ui.button('Ajuda (?)', 'Atalhos e controles', () => ui.modals.openHelpModal()),
+    );
 
     // Tools
     const toolSection = document.createElement('div');

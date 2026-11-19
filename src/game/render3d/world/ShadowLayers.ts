@@ -11,7 +11,12 @@ import type { World3D } from '../World3D';
 // The shadow mask's coverage, in tiles around the camera target: wider than the view so
 // a silhouette entering from off-screen is already in the data when its caster shows.
 const MASK_TILES_X = 48;
-const MASK_TILES_Z = 32;
+const MASK_TILES_Z = 40;
+/**
+ * O meio da máscara fica este tanto AO NORTE do alvo (tiles): a câmera HD-2D (2026-11-19, worldParams) olha baixo, e o
+ * alto do quadro alcança ~11 tiles ao norte do herói contra ~5 ao sul. Ver AirLight.MASK_NORTH, o mesmo número.
+ */
+const MASK_NORTH = 6;
 // Scratch for save/restore around the mask render (never reallocated).
 const maskClearScratch = { color: new THREE.Color() };
 
@@ -162,7 +167,7 @@ export class ShadowLayers {
     // Snap the window to the mask's own texel grid, or the sampled shadows swim
     // against the world as the camera pans (the lightRes lesson, applied to the RT).
     const cx = Math.round(this.host.camTarget.x * res) / res;
-    const cz = Math.round(this.host.camTarget.z * res) / res;
+    const cz = Math.round((this.host.camTarget.z - MASK_NORTH) * res) / res;
     cam.position.set(cx, 10, cz);
     cam.lookAt(cx, 0, cz);
     cam.updateMatrixWorld();

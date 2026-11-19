@@ -38,7 +38,6 @@ export class FusedBloomPass extends UnrealBloomPass {
   public get texture(): THREE.Texture {
     return this.renderTargetsHorizontal[0].texture;
   }
-
   public override render(
     renderer: THREE.WebGLRenderer,
     _writeBuffer: THREE.WebGLRenderTarget,

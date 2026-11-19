@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { CLIFF_WALL_FRAMES, SEA_TILE_FRAME } from '@/game/constants';
 import { Billboard3D, type Billboard3DOptions } from '../Billboard3D';
+import { seaSkyFor } from '../SeaSky';
 import { starDomeFor } from '../StarDome';
 import { getWoodTexture } from '../woodTexture';
 import { buildFlatTileGeometry, buildTileCubeGeometry, ROCK_CUBE_SHADE } from '../terrainGeometry';
@@ -13,7 +14,7 @@ import { FX_DOT_TEXTURE } from './worldDefs';
 
 /** O que ShaderPrewarm usa de World3D. */
 export type ShaderPrewarmHost = Pick<World3D,
-  'air' | 'camera' | 'groundLight' | 'mirror' | 'objects' | 'renderer' | 'scene' | 'screen' | 'shadows' | 'tiles'
+  'air' | 'camera' | 'groundLight' | 'lights' | 'mirror' | 'objects' | 'renderer' | 'scene' | 'screen' | 'shadows' | 'tiles'
 >;
 
 export class ShaderPrewarm {
@@ -89,6 +90,17 @@ export class ShaderPrewarm {
     const dome = starDomeFor(this.host.scene);
     dome.show(true);
     this.warmups.push({ setVisible: (v: boolean) => dome.show(v) });
+    // O céu do mar (objects/beach/SeaVista): a cúpula que aparece quando a câmera baixa na praia do norte.
+    const seaSky = seaSkyFor(this.host.scene);
+    seaSky.show(true);
+    this.warmups.push({ setVisible: (v: boolean) => seaSky.show(v) });
+    // O campo das poças de luz (GlowField): nasce escondido e só aparece com o primeiro fogo aceso à vista — o quadro
+    // em que o programa dele travaria. Quem o mostra de novo, depois, é o próprio campo, a cada quadro.
+    const glowField = this.host.lights.glowField;
+    if (glowField) {
+      glowField.mesh.visible = true;
+      this.warmups.push({ setVisible: (v: boolean) => { if (!v) glowField.mesh.visible = false; } });
+    }
 
     // The bridge deck. Its boxes are born when you WALK to a river — the chunk streamer builds the
     // water, and a buildable spot immediately ghosts in its deck — so they are not here to be
@@ -141,6 +153,8 @@ export class ShaderPrewarm {
     // O mapa de luz do chão é um shader próprio, fora da cena: desenhá-lo aqui o compila (e o
     // ANGLE termina o executável) no carregamento, não no primeiro quadro de jogo (845ms).
     this.host.groundLight.update(this.host.renderer, this.host.camera);
+    // A soma das poças por célula (GlowField) também é um shader fora da cena: o mesmo motivo.
+    this.host.lights.glowField?.warm(this.host.renderer);
     this.host.renderer.setRenderTarget(this.host.screen.composer.renderTarget1);
     this.drawEverythingOnce();
     // O ar aceso (AirLight): a máscara de sombras vista de cima é OUTRO alvo de saída para os materiais de sombra, e o

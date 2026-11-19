@@ -386,8 +386,9 @@ export class EditorDomUi {
 
   public navChunk(dx: number, dy: number): void {
     const meta = this.store.world.meta;
+    const top = this.store.originCy;
     this.state.chunkX = Math.max(0, Math.min(meta.worldChunksX - 1, this.state.chunkX + dx));
-    this.state.chunkY = Math.max(0, Math.min(meta.worldChunksY - 1, this.state.chunkY + dy));
+    this.state.chunkY = Math.max(top, Math.min(top + meta.worldChunksY - 1, this.state.chunkY + dy));
     this.changed();
   }
 

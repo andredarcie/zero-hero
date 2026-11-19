@@ -151,7 +151,8 @@
       "npc.painter": {
         "name": "Sisi",
         "lines": [
-          "Eu pinto, e tudo sai cinza;\no mundo não responde, e eu sigo.\nPegue a pá e cave as trincas\naqui na frente, comigo."
+          "Eu pinto, e tudo sai cinza;\no mundo não responde, e eu sigo.\nPegue a pá e cave as trincas\naqui na frente, comigo.",
+          "A pá cava as covas das flores,\nmas não serve só pra plantar:\nonde o chão do vale trinca,\ntem relíquia pra encontrar."
         ]
       },
       "npc.painterDone": {
@@ -166,7 +167,7 @@
           "Ainda {n} pra cavar:\nsó nas trincas, sem errar."
         ],
         "seeds": [
-          "Quatro buracos! A pá\nfica aqui, encostada.\nAgora, uma semente\nem cada buraco, bem plantada."
+          "Quatro buracos! A pá\né sua: leve guardada.\nAgora, uma semente\nem cada buraco, bem plantada."
         ],
         "sow": [
           "Uma semente em cada cova:\nmais {n}, e a cor se renova."
@@ -344,10 +345,10 @@
       "npc.astronautStep": {
         "tripod": [
           "Ferro! Isso vira o tripé.\nFalta a lente, pra eu ver.\nO vidro é areia e cinza:\na cinza ajuda a derreter.",
-          "A cinza está na fogueira;\na areia, no lago do sul.\nLeve as duas juntas ao forno:\no céu espera, lá no azul."
+          "A cinza está na fogueira;\na areia, na praia, ao norte.\nNum balde, um montinho basta:\no vidro nasce do fogo forte."
         ],
         "wait": [
-          "A areia está no lago do sul;\na cinza, na fogueira ao lado.\nJunte as duas no forno:\né assim que o vidro é criado."
+          "A areia, num balde, da praia;\na cinza, da fogueira ao lado.\nJunte as duas no forno:\né assim que o vidro é criado."
         ],
         "polish": [
           "Bom vidro! Agora, ele vira lente:\na pedra áspera dá a curva.\nDepois, a pedra fina tira\na névoa que deixa a lente turva.",

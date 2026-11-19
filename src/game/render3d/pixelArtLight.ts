@@ -7,6 +7,8 @@ import {
   STAND_ACTOR_SLOTS, STAND_FRAGMENT_PARS_GLSL, STAND_FRAGMENT_SHADE_GLSL, STAND_RUSTLE_SLOTS, STAND_VERTEX_GLSL, STAND_WAKE_SLOTS,
   standActorsUniform, standFrontOffUniform, standRustleUniform, standUniform, standWakeUniform,
 } from './decorSway';
+import { SPRING_GLOW_GLSL, SPRING_GLSL, SPRING_LOCALS_GLSL, SPRING_PARS_GLSL, springUniforms } from './springWater';
+import { SURF_GLSL, SURF_PARS_GLSL, surfRefUniform } from './surf';
 import { WATER_RIPPLE_GLSL, WATER_RIPPLE_SLOTS, waterRipplesUniform } from './waterRipples';
 
 // ── The world's light treatment ───────────────────────────────────────────────
@@ -62,6 +64,12 @@ export const flowTimeUniform: THREE.IUniform = { value: 0 };
  * nomear. É a mesma razão de o glint do rio e o do mar dividirem `uFlowTime`.
  */
 export const windUniform: THREE.IUniform = { value: 1 };
+/**
+ * A RAJADA DO VALE agora (0 calmaria, 1 o auge), a mesma que a chuva inclina e as sementes voam (runtime/wind.gustAt,
+ * no relógio do mundo 3D): a mata e o capim passam a obedecer a ela (pedido do autor, 2026-11-18: "quando venta, as
+ * copas balançam juntas"). O FrameRenderer escreve a cada quadro.
+ */
+export const windGustUniform: THREE.IUniform = { value: 0 };
 
 /**
  * A BRISA, em GLSL: uma onda que ATRAVESSA o mundo, e não um relógio que cada tile consulta.
@@ -74,13 +82,22 @@ export const windUniform: THREE.IUniform = { value: 1 };
  *   · o INCHAÇO lento (uma onda de comprimento enorme) faz o vento ter momentos de calmaria e de
  *     rajada, que é o que separa "vento" de "vibração".
  * Amplitude 1 em repouso: quem dá a escala é quem chama.
+ *
+ * A RAJADA (`zhGust`, 2026-11-18): a do vale (`uWindGust`), com uma FRENTE que corre de oeste para leste — o vento
+ * sopra do oeste — a uns cinco tiles por segundo: a rajada atravessa a mata em vez de acender tudo de uma vez. Quem
+ * chama soma a rajada à onda como um EMPURRÃO para leste (tudo se inclina para o mesmo lado, junto) e como amplitude a
+ * mais (a copa sacode mais enquanto ela passa).
  */
 const WIND_WAVE_GLSL = `
   uniform float uWind;
+  uniform float uWindGust;
   float zhWindWave(vec2 centre) {
     float phase = uFlowTime * 1.15 + centre.x * 0.55 + centre.y * 0.38;
     float swell = 0.55 + 0.45 * sin(uFlowTime * 0.21 + centre.x * 0.05 + centre.y * 0.04);
     return (sin(phase) * 0.78 + sin(phase * 2.37 + 1.7) * 0.22) * swell;
+  }
+  float zhGust(vec2 centre) {
+    return uWindGust * (0.62 + 0.38 * sin(uFlowTime * 1.7 - centre.x * 0.35 + centre.y * 0.12));
   }
 `;
 
@@ -88,6 +105,10 @@ const WIND_WAVE_GLSL = `
 // machado, tan(7°) = 0,123): a brisa é um terço disso, porque ela nunca para — o que num golpe é
 // impacto, num loop infinito vira enjoo.
 const WIND_LEAN = '0.042';
+// A RAJADA na mata: quanto a amplitude da onda cresce no auge dela, e o empurrão para leste (em unidades da onda). No
+// auge o topo de uma árvore anda uns dois pixels e meio de arte para o lado, junto com as vizinhas, e volta.
+const GUST_SHAKE = '1.6';
+const GUST_PUSH = '2.0';
 // (A decoração deitada GIRAVA no plano do chão, a opção 'stir'. Ela saiu: toda a decoração fica em pé e
 // a planta se curva de verdade — decorSway.ts.)
 
@@ -557,6 +578,16 @@ export const groundLightRectUniform: THREE.IUniform<THREE.Vector4> = { value: ne
 export const groundLightSizeUniform: THREE.IUniform<THREE.Vector2> = { value: new THREE.Vector2(1, 1) };
 export const groundLightMapOnUniform: THREE.IUniform = { value: 0 };
 export const groundLightTexelYUniform: THREE.IUniform = { value: 0 };
+/**
+ * O ALCANCE DAS LUZES PONTUAIS, em tiles de mundo: (x0, z0, x1, z1), a caixa que contém a esfera de corte (`distance`)
+ * de toda luz pontual acesa, com a folga do tremor (escrita pelo GroundLightMap a cada quadro). Fora dela cada luz
+ * pontual vale EXATAMENTE zero — o corte do three, `pow2(saturate(1 - pow4(d / distance)))`, é zero para d ≥ distance —,
+ * então o fragmento pula o laço inteiro e o tremor que só serve a ele. O padrão é o mundo inteiro: nada é pulado.
+ *
+ * (Pedido do autor, 2026-11-19: "melhore a performance na praia". Sentado na cadeira do guarda-sol a câmera olha o
+ * horizonte, e o mar inteiro até o horizonte rodava o laço de luzes do fogo da lava, a 40 tiles dali.)
+ */
+export const groundLightReachUniform: THREE.IUniform<THREE.Vector4> = { value: new THREE.Vector4(-1e9, -1e9, 1e9, 1e9) };
 
 /**
  * Troca o laço das luzes pontuais por UMA leitura do mapa do chão — só no pixel em que a conta da
@@ -591,10 +622,11 @@ const useGroundLightMap = (chunk: string, masked: boolean): string => {
   const endLen = '#pragma unroll_loop_end'.length;
   const read = `vec3 zhGroundIrr = texture2D( uGroundMap, zhGroundUv ).rgb${masked ? ' * zhMaskLit' : ''};
     reflectedLight.directDiffuse += zhGroundIrr * BRDF_Lambert( material.diffuseColor );`;
+  // Fora do alcance de toda luz pontual (groundLightReachUniform) o laço somaria zero: nem roda.
   return `${chunk.slice(0, blockStart)}${GROUND_LIGHT_MAP_GLSL}
 ${chunk.slice(blockStart, loopStart)}if ( zhGround ) {
     ${read}
-  } else {
+  } else if ( !zhLightsFar ) {
 ${chunk.slice(loopStart, loopEnd + endLen)}
   }${chunk.slice(loopEnd + endLen)}`;
 };
@@ -737,10 +769,16 @@ type PatchOpts = {
    *   · 'seaFlow'    — the glint PLUS a real current: the sampled window drifts inside the
    *                    frame, and the shore breaks (see the SEA_* GLSL above). Needs a per-quad
    *                    `aShore` attribute and `texelAa` — it is the merged sea mesh's material.
+   *   · 'surf'       — a praia do norte (render3d/surf.ts): a areia e o mar numa malha só, com o trem de ondas, a
+   *                    quebra e o espraio. Precisa do atributo por quad `aCoast4` e do `texelAa`. As faíscas e o céu
+   *                    da água caem só onde há água à vista.
+   *   · 'spring'     — a água da fonte termal (render3d/springWater.ts): a poça inteira pintada no shader (a forma,
+   *                    a fundura, as cáusticas, a espuma, os anéis), com as faíscas e o céu da água por cima. Um quad
+   *                    liso com uma textura branca basta; os uniforms são de `springUniforms`.
    * All are anchored in WORLD space, so a river/lava field shimmers as one sheet
    * instead of repeating the same pattern per tile.
    */
-  worldFx?: 'lavaFlow' | 'waterGlint' | 'seaFlow';
+  worldFx?: 'lavaFlow' | 'waterGlint' | 'seaFlow' | 'surf' | 'spring';
   /**
    * A superfície é um ESPELHO D'ÁGUA: mostra o reflexo dos personagens (ver WATER_REFLECT_GLSL).
    * Só vale junto de um `worldFx` de água — é dele que vêm a posição de mundo e o relógio.
@@ -830,6 +868,7 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
       // A MESMA brisa para a mata e a decoração em pé: uma onda só atravessando o vale.
       shader.uniforms.uFlowTime = flowTimeUniform;
       shader.uniforms.uWind = windUniform;
+      shader.uniforms.uWindGust = windGustUniform;
       shader.vertexShader = shader.vertexShader.replace(
         'void main() {',
         `uniform float uFlowTime;\n${WIND_WAVE_GLSL}\nvoid main() {`,
@@ -859,8 +898,8 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
     if (opts.wind === 'lean') {
       shader.vertexShader = shader.vertexShader.replace(
         'void main() {',
-        // x = quanto esta planta obedece ao vento, yz = o CENTRO do tile
-        'attribute vec3 aWind;\nvarying float vZhPlant;\nvoid main() {',
+        // x = quanto esta planta obedece ao vento, yz = o CENTRO do tile, w = a altura do CHÃO dela
+        'attribute vec4 aWind;\nvarying float vZhPlant;\nvoid main() {',
       );
       // A luz das árvores (TREE_LIGHT_GLSL): só a planta a pega, e quem diz o que é planta é a mesma máscara do vento.
       // Ela lê a arte pela janela de cada quad (`vUvBounds`), então só existe nas malhas fundidas com AA de texel.
@@ -873,14 +912,17 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
           .replace('#include <alphamap_fragment>', `${TREE_LIGHT_GLSL}\n#include <alphamap_fragment>`);
       }
       // O PÉ FICA PLANTADO: o peso é a altura ao quadrado, então o tronco quase não anda e a copa faz todo o
-      // movimento. Linear, a árvore inteira deslizava de lado.
+      // movimento. Linear, a árvore inteira deslizava de lado. A altura é medida do CHÃO da árvore (`aWind.w`), não do
+      // zero do mundo: medida do zero, a mata do planalto e da serra (o jardim alto) balançava inteira, o pé deslizando.
+      // A RAJADA (zhGust) inclina toda a mata para leste junto e sacode mais a copa enquanto passa.
       shader.vertexShader = shader.vertexShader.replace(
         '#include <begin_vertex>',
         `#include <begin_vertex>
          vZhPlant = aWind.x;
-         float zhLeanW = clamp(transformed.y, 0.0, 1.0);
-         transformed.x += zhWindWave(aWind.yz) * aWind.x * uWind * ${WIND_LEAN}
-                        * zhLeanW * zhLeanW;`,
+         float zhLeanW = clamp(transformed.y - aWind.w, 0.0, 1.0);
+         float zhG = zhGust(aWind.yz);
+         transformed.x += (zhWindWave(aWind.yz) * (1.0 + ${GUST_SHAKE} * zhG) + ${GUST_PUSH} * zhG)
+                        * aWind.x * uWind * ${WIND_LEAN} * zhLeanW * zhLeanW;`,
       );
     }
 
@@ -913,9 +955,83 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
         // tiles apart would announce that they are two systems.
         shader.uniforms.uGlint = waterGlintUniform;
         shader.uniforms.uSunDir = skyUniforms.uSunDir;
+        // Na praia a malha é areia E mar: a faísca só acende onde há água à vista (`zsWaterMask`, de surf.ts).
+        // (Na fonte termal, idem: `zpWaterMask`, de springWater.ts.)
+        const glintMask = opts.worldFx === 'surf' ? 'zsWaterMask' : opts.worldFx === 'spring' ? 'zpWaterMask' : '';
+        const glint = glintMask
+          ? WATER_GLINT_GLSL.replace('gl_FragColor.rgb += uGlint', `gl_FragColor.rgb += ${glintMask} * uGlint`)
+          : WATER_GLINT_GLSL;
         shader.fragmentShader = shader.fragmentShader
           .replace('void main() {', 'uniform vec3 uGlint;\nuniform vec3 uSunDir;\nvoid main() {')
-          .replace('#include <opaque_fragment>', `#include <opaque_fragment>\n${WATER_GLINT_GLSL}`);
+          .replace('#include <opaque_fragment>', `#include <opaque_fragment>\n${glint}`);
+      }
+      if (opts.worldFx === 'surf') {
+        // A PRAIA (render3d/surf.ts): a costa vai por quad, nos quatro cantos, e a onda inteira é pintada na COR da
+        // superfície, logo depois de a arte da areia ser lida — a luz cai nela como cai no resto do chão.
+        shader.vertexShader = shader.vertexShader
+          .replace('void main() {', 'attribute vec4 aCoast4;\nvarying vec4 vCoast4;\nvoid main() {')
+          .replace('#include <begin_vertex>', '#include <begin_vertex>\n vCoast4 = aCoast4;');
+        shader.fragmentShader = shader.fragmentShader
+          .replace('void main() {', `${SURF_PARS_GLSL}\nvoid main() {\n float zsWaterMask = 0.0;\n float zsSkyMask = 0.0;\n float zsShoreV = 0.0;`)
+          .replace('#include <map_fragment>', `#include <map_fragment>\n${SURF_GLSL}`);
+        shader.uniforms.uSurfRef = surfRefUniform;
+        // Os corpos do mundo (os mesmos que abrem o capim, decorSway): a água do espraio contorna os pés deles.
+        shader.uniforms.uStandActors = standActorsUniform;
+        // O céu na água, como no lago — só na água, e menos no raso, onde se vê a areia.
+        shader.uniforms.uWaterSky = waterSkyUniform;
+        shader.uniforms.uSkyNoise = skyUniforms.uSkyNoise;
+        shader.uniforms.uCloudDrift = skyUniforms.uCloudDrift;
+        shader.uniforms.uCloudCover = skyUniforms.uCloudCover;
+        shader.uniforms.uSkyColor = skyUniforms.uSkyColor;
+        shader.uniforms.uCloudColor = skyUniforms.uCloudColor;
+        shader.uniforms.uStars = skyUniforms.uStars;
+        // (a areia e o raso têm a máscara em zero: ali a conta inteira do céu nem roda — o mix com zero não mudaria nada)
+        const sky = WATER_SKY_GLSL
+          .replace('if (uWaterSky > 0.0) {', 'if (uWaterSky > 0.0 && zsSkyMask > 0.0) {')
+          .replace(/vShore/g, 'zsShoreV')
+          .replace('clamp(uWaterSky * zhFres * zhDeep, 0.0, 1.0)', 'clamp(uWaterSky * zhFres * zhDeep, 0.0, 1.0) * zsSkyMask');
+        shader.fragmentShader = shader.fragmentShader
+          .replace(
+            'void main() {',
+            `uniform float uWaterSky;
+             uniform vec3 uSkyColor;
+             uniform vec3 uCloudColor;
+             uniform float uStars;
+             ${CLOUD_FIELD_GLSL}
+             void main() {`,
+          )
+          .replace('#include <opaque_fragment>', `#include <opaque_fragment>\n${sky}`);
+      }
+      if (opts.worldFx === 'spring') {
+        // A FONTE TERMAL (render3d/springWater.ts): a poça inteira é pintada na COR da superfície, logo depois de a
+        // arte (branca) ser lida, e a luz cai nela como no resto do chão. Depois da luz, o céu na água (o mesmo
+        // espelho do lago, só onde a máscara deixa) e, por cima dele, a luz própria da noite e o dourado da lanterna.
+        Object.assign(shader.uniforms, springUniforms);
+        shader.uniforms.uWaterSky = waterSkyUniform;
+        shader.uniforms.uSkyNoise = skyUniforms.uSkyNoise;
+        shader.uniforms.uCloudDrift = skyUniforms.uCloudDrift;
+        shader.uniforms.uCloudCover = skyUniforms.uCloudCover;
+        shader.uniforms.uSkyColor = skyUniforms.uSkyColor;
+        shader.uniforms.uCloudColor = skyUniforms.uCloudColor;
+        shader.uniforms.uStars = skyUniforms.uStars;
+        const springSky = WATER_SKY_GLSL
+          .replace('if (uWaterSky > 0.0) {', 'if (uWaterSky > 0.0 && zpSkyMask > 0.0) {')
+          .replace(/vShore/g, 'zpShoreV')
+          .replace('clamp(uWaterSky * zhFres * zhDeep, 0.0, 1.0)', 'clamp(uWaterSky * zhFres * zhDeep, 0.0, 1.0) * zpSkyMask');
+        shader.fragmentShader = shader.fragmentShader
+          .replace(
+            'void main() {',
+            `${SPRING_PARS_GLSL}
+             uniform float uWaterSky;
+             uniform vec3 uSkyColor;
+             uniform vec3 uCloudColor;
+             uniform float uStars;
+             ${CLOUD_FIELD_GLSL}
+             void main() {
+             ${SPRING_LOCALS_GLSL}`,
+          )
+          .replace('#include <map_fragment>', `#include <map_fragment>\n${SPRING_GLSL}`)
+          .replace('#include <opaque_fragment>', `#include <opaque_fragment>\n${springSky}\n${SPRING_GLOW_GLSL}`);
       }
       if (opts.worldFx === 'seaFlow') {
         // The shore ramp travels per vertex: one mesh holds the whole ocean, and every quad in
@@ -1036,6 +1152,7 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
       shader.uniforms.uGroundSize = groundLightSizeUniform;
       shader.uniforms.uGroundMapOn = groundLightMapOnUniform;
       shader.uniforms.uGroundTexelY = groundLightTexelYUniform;
+      shader.uniforms.uLightReach = groundLightReachUniform;
       shader.vertexShader = shader.vertexShader
         .replace('void main() {', 'varying vec3 vLightGridPos;\nvoid main() {')
         .replace(
@@ -1053,6 +1170,7 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
          uniform vec2 uGroundSize;
          uniform float uGroundMapOn;
          uniform float uGroundTexelY;
+         uniform vec4 uLightReach;
          ${opts.worldFx ? '' : 'uniform float uFlowTime;'}
          ${FIRE_WOBBLE_GLSL}
          varying vec3 vLightGridPos;
@@ -1098,7 +1216,11 @@ export const patchPixelMaterial = (mat: THREE.Material, opts: PatchOpts): void =
       lightsChunk = lightsChunk.replace(
         'vec3 geometryPosition = - vViewPosition;',
         `vec3 geometryPosition = - vViewPosition;
-         if (uLightRes > 0.0) {
+         // Longe de toda luz pontual acesa (groundLightReachUniform): o laço delas é pulado, e o tremor, que só
+         // serve a elas (a lua e o ambiente não leem a posição), também.
+         bool zhLightsFar = vLightGridPos.x < uLightReach.x || vLightGridPos.z < uLightReach.y
+           || vLightGridPos.x > uLightReach.z || vLightGridPos.z > uLightReach.w;
+         if (uLightRes > 0.0 && !zhLightsFar) {
            vec3 lightTexel = (floor(vLightGridPos * uLightRes) + 0.5) / uLightRes;
            // Imperfect firelight: the texel pretends to sit a little off its true
            // spot, so its distance to every POINT light (fire/torch) warps and the

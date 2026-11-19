@@ -52,6 +52,11 @@ export class PlayerMovementController {
   private lastBumpTime = 0;
   private tileSize = 0;
   public stepMs: number = DEFAULT_STEP_MS;
+  /**
+   * Quanto o passo para o norte e para o sul é mais curto que o de lado (render3d/worldParams.verticalStepSpeedup): a
+   * câmera inclinada encolhe a profundidade na tela, e o passo vertical anda mais depressa para o chão correr igual.
+   */
+  public verticalSpeedup = 1;
   /** > 0 = os pés estão presos pelo golpe em curso (ver `root`). */
   public rootedMs = 0;
   /** Presos SEM prazo: a bolsa aberta com o jogo rodando (ver `hold`). */
@@ -180,9 +185,11 @@ export class PlayerMovementController {
     let wy = worldY;
 
     if (this.stepDir) {
-      const advance = dt / this.stepMs;
-      this.stepProgress += advance;
-      this.hero.walkDist += advance; // the leg cycle turns with the ground, not with a clock
+      // O passo vertical é mais curto (ver verticalSpeedup). As pernas não: elas giram no ritmo do passo de lado em
+      // qualquer rumo, senão subir e descer pareceria o herói apressado — o que acelera é o chão, não a passada.
+      const ms = this.stepDir.dy !== 0 ? this.stepMs / this.verticalSpeedup : this.stepMs;
+      this.stepProgress += dt / ms;
+      this.hero.walkDist += dt / this.stepMs; // the leg cycle turns with the ground, not with a clock
     }
 
     // Each turn of this loop spends one tile boundary crossed on this frame. On a normal frame it

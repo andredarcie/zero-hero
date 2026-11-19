@@ -8,6 +8,7 @@ import type { TreeLook } from '../forest';
 import type { MassHeightGrid, ReliefPoint } from '../terrainGeometry';
 import type { TerrainMaterials } from '../terrainMaterials';
 import type { StandingDecor } from './StandingDecor';
+import type { CoastField } from '../surf';
 import type { WaterRipples } from '../waterRipples';
 
 /**
@@ -135,4 +136,10 @@ export class TerrainData {
   public standing?: StandingDecor;
   /** OS ANÉIS NA ÁGUA de quem anda na beira (waterRipples): nascem no primeiro assado, como a decoração. */
   public ripples?: WaterRipples;
+  /**
+   * A COSTA DA PRAIA (render3d/surf.ts): a distância até a linha d'água em cada canto de tile do retângulo assado
+   * (negativa na areia, positiva mar adentro). Ausente num mundo sem praia. Os bichos da beira e a câmera do mirante
+   * perguntam aqui onde o mar está.
+   */
+  public coast?: { field: CoastField; x0: number; z0: number; x1: number; z1: number };
 }

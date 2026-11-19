@@ -69,4 +69,30 @@ export class WaterIndex {
     }
     return false;
   }
+
+  /**
+   * Os limites (em tiles) da água dentro da área de chão visível, escritos em `out`; false se não há nenhuma. É o que
+   * o espelho precisa para desenhar só onde a água vai lê-lo (WaterMirror: o recorte).
+   */
+  public boundsInView(v: CullView, out: { x0: number; z0: number; x1: number; z1: number }): boolean {
+    if (!Number.isFinite(v.minX) || this.buckets.size === 0) return false;
+    let found = false;
+    const x1 = Math.ceil(v.maxX);
+    const z1 = Math.ceil(v.maxZ);
+    for (let z = Math.floor(v.minZ); z <= z1; z++) {
+      for (let x = Math.floor(v.minX); x <= x1; x++) {
+        if (!this.tiles.has(key(x, z))) continue;
+        if (!found) {
+          out.x0 = x; out.x1 = x; out.z0 = z; out.z1 = z;
+          found = true;
+        } else {
+          if (x < out.x0) out.x0 = x;
+          if (x > out.x1) out.x1 = x;
+          if (z < out.z0) out.z0 = z;
+          if (z > out.z1) out.z1 = z;
+        }
+      }
+    }
+    return found;
+  }
 }

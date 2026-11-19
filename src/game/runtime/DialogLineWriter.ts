@@ -8,7 +8,7 @@ import { planSpeech, type SpokenChar } from '@/game/dialogs/voicePersonas';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { t } from '@/game/i18n/i18n';
 import type { DialogOverlay } from './DialogOverlay';
-import { MIN_VERSE_SCALE, isIndentedVerse, versePauseAfter } from './poemLayout';
+import { EMPHASIS, MIN_VERSE_SCALE, isIndentedVerse, versePauseAfter } from './poemLayout';
 
 const CHAR_DELAY_MS = 28;
 /**
@@ -17,8 +17,6 @@ const CHAR_DELAY_MS = 28;
  * (a Morte mais lenta que a Thea), só que todos mais ligeiros.
  */
 const TYPE_TEMPO = 0.7;
-/** Palavra em maiúsculas é o nome da coisa que importa (BALDE, TOCHA): ela entra com mais peso. */
-const EMPHASIS = /^\p{Lu}{3,}$/u;
 export type DialogOption = {
   label: string;
   /** data-opt — a identidade do botão para o playtest, nunca para lógica. */
@@ -49,6 +47,8 @@ export class DialogLineWriter {
   private verseRow = 0;
   /** O bloco dos versos: a largura do verso mais longo (ver fitVerses). */
   private stanzaEl?: HTMLDivElement;
+  /** As falas desta conversa que o jogador leu até o fim, em ordem: vão para o caderno das conversas (runtime/talkLog). */
+  public readonly heard: DialogLine[] = [];
 
   public constructor(private readonly host: DialogLineWriterHost) {}
 
@@ -211,6 +211,7 @@ export class DialogLineWriter {
   private finishLine(): void {
     this.host.isTyping = false;
     markLineRead(this.currentText); // inteira na tela: da próxima vez ela aparece de uma vez
+    this.heard.push({ speaker: this.currentIsNarrator ? 'narrator' : 'npc', text: this.currentText });
     this.currentOnDone?.();
   }
 

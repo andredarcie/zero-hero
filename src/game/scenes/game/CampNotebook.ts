@@ -11,6 +11,8 @@ import { NotebookOverlay, type NotebookPage, type NotebookView } from '@/game/ru
 import { isTouchDevice } from '@/game/runtime/PauseMenu';
 import type { AnimalKind } from '@/game/runtime/sketches';
 import { spriteDataUrl } from '@/game/runtime/spriteDataUrl';
+import { isRelicKind, type RelicKind } from '@/game/relics/relics';
+import { relicTexture } from '@/game/render3d/relicTextures';
 import type * as Engine from '@/game/engine';
 import type { GameScene } from '../GameScene';
 import type { AnimalSketching } from './AnimalSketching';
@@ -55,7 +57,11 @@ export class CampNotebook {
       title: home ? `${t('notebook.title')} · ${home}` : t('notebook.title'),
       close: t('notebook.close'),
       count: t('notebook.count').replace('{n}', String(known)).replace('{total}', String(entries.length)),
-      pages: entries.map((e) => (e.section === 'animals' ? this.animalPage(e) : this.page(e.kind as HeldItemKind, t(`notebook.sections.${e.section}`), e.known))),
+      pages: entries.map((e) => {
+        if (e.section === 'animals') return this.animalPage(e);
+        if (isRelicKind(e.kind)) return this.relicPage(e.kind, e.known);
+        return this.page(e.kind as HeldItemKind, t(`notebook.sections.${e.section}`), e.known);
+      }),
       foot: t(touch ? 'notebook.keysTouch' : 'notebook.keys'),
       unknownName: t('notebook.unknownName'),
       unknownText: t('notebook.unknownText'),
@@ -72,6 +78,20 @@ export class CampNotebook {
     return {
       kind, section: t('notebook.sections.animals'), known: e.known, partial: drawn && !e.known,
       icon: art, art, name: t(`${name}.name`), latin: t(`${name}.latin`), text: [t(`${name}.fact`)],
+    };
+  }
+
+  /**
+   * A RELÍQUIA: o desenho dela, o nome, o que ela é (a "fita de Mega Drive · 2011", no lugar do nome científico), o que
+   * a obra é, e a nota, quando tem (`relics.<kind>.notes`, uma lista; sem ela, a página não tem a linha "~").
+   */
+  private relicPage(kind: RelicKind, known: boolean): NotebookPage {
+    const key = `relics.${kind}`;
+    const texture = relicTexture(kind);
+    return {
+      kind, section: t('notebook.sections.relics'), known, name: t(`${key}.name`),
+      icon: spriteDataUrl(this.host, texture, 0, 1), art: spriteDataUrl(this.host, texture, 0, 3),
+      latin: t(`${key}.what`), text: [t(`${key}.text`)], notes: tWords(`${key}.notes`),
     };
   }
 

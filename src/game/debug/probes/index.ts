@@ -17,12 +17,14 @@ import { campProbe } from './campProbe';
 import { dialogProbe, npcProbe } from './dialogProbe';
 import { fireProbe } from './fireProbe';
 import { forageProbe } from './forageProbe';
+import { beachProbe } from './beachProbe';
 import { heroProbe } from './heroProbe';
 import { itemProbe } from './itemProbe';
 import { minigameProbe } from './minigameProbe';
 import { propProbe } from './propProbe';
 import { questProbe } from './questProbe';
 import { referenceProbe } from './referenceProbe';
+import { relicProbe } from './relicProbe';
 import { renderProbe } from './renderProbe';
 import { sceneProbe } from './sceneProbe';
 import { shadowProbe } from './shadowProbe';
@@ -50,6 +52,8 @@ export const buildProbes = (s: GameScene) => ({
   render: renderProbe(s),
   shadows: shadowProbe(s),
   reference: referenceProbe(s),
+  relics: relicProbe(s),
+  beach: beachProbe(s),
 });
 
 export type GameProbes = ReturnType<typeof buildProbes>;

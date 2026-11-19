@@ -264,7 +264,7 @@ describe('as ferramentas ficam com ele', () => {
 });
 
 describe('a pá, o pousar e o arbusto seco', () => {
-  it('a pá só cava nas quatro covas rachadas da Sisi, e em mais lugar nenhum', () => {
+  it('perto da Sisi, a pá só cava nas quatro covas rachadas (fora delas, só nas trincas das relíquias)', () => {
     const s = scene();
     s.inventory.clear();
     items().hold('shovel');

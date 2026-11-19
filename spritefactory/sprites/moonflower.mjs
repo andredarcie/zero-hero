@@ -48,13 +48,13 @@ const PAL = {
 const PETALS = 6;
 const PX = 16; // pixels por tile: 1px de arte = 1px de mundo
 
-// Como a PROFUNDIDADE do mundo aparece como ALTURA na tela, na camera do jogo: a RAZAO
-// camHeight/camBack (hoje 6.72/6.08 em World3D). E a razao, e nunca os dois numeros: o zoom da
-// camera escala os dois pelo mesmo fator justamente pra este 1.105 nao se mexer — se ele se
-// mexesse, a arte assada aqui plantaria a flor torta e nada acusaria o erro. E a mesma conversao
-// que o braco robotico faz em runtime (depthToScreen); aqui ela tem de estar assada na arte,
-// porque um sheet nao le os parametros da camera.
-const DEPTH_UP = 1.105;
+// Como a PROFUNDIDADE do mundo aparece como ALTURA na tela, num quadro em pe, na camera do jogo: a
+// tangente da inclinacao dela (o chao encolhe por sen, o que esta em pe por cos). O zoom da camera
+// escala altura e recuo pelo mesmo fator justamente pra este numero nao se mexer — se ele se
+// mexesse, a arte assada aqui plantaria a flor torta e nada acusaria o erro; aqui ela tem de estar
+// assada na arte, porque um sheet nao le os parametros da camera.
+// Era 1.105 (a camera de 47,9°). A CAMERA HD-2D (2026-11-19, worldParams) olha 27° para baixo: tg 27°.
+const DEPTH_UP = 0.5095;
 
 const L_PETAL = 0.37; // comprimento da petala em tiles — a roseta aberta enche o tile
 const W_PETAL = 0.11; // meia-largura maxima

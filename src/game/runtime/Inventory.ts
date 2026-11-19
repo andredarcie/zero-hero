@@ -7,7 +7,7 @@ import type { HeldItemKind } from '@/game/entities/ItemPickup';
  * (ActionVerbs.toolFor, ToolSwing.equipToolFor). O balde é uma ferramenta só, vazio ou cheio.
  */
 export const TOOL_KINDS: ReadonlySet<HeldItemKind> = new Set<HeldItemKind>([
-  'knife', 'axe', 'pickaxe', 'scythe', 'shovel', 'bucket', 'bucketFull', 'brush', 'key',
+  'knife', 'axe', 'pickaxe', 'scythe', 'shovel', 'bucket', 'bucketFull', 'bucketSand', 'brush', 'key',
 ]);
 export const isToolKind = (kind: HeldItemKind | 'none' | null | undefined): kind is HeldItemKind =>
   kind != null && kind !== 'none' && TOOL_KINDS.has(kind);

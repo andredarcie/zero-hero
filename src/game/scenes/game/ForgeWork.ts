@@ -239,9 +239,12 @@ export class ForgeWork {
     }
     const from: [number, number] = [this.host.playerWorld.worldX, this.host.playerWorld.worldY];
     if (this.host.torch.heldOnFire) this.host.torch.extinguishTorch();
-    this.host.inventory.remove(held, 1);
+    // O BALDE DE AREIA se despeja: a areia entra pela boca, o balde vazio fica na mão.
+    const pours = held === 'bucketSand';
+    if (pours) this.host.inventory.replace('bucketSand', 'bucket');
+    else this.host.inventory.remove(held, 1);
     this.host.carry.updateBackItem();
-    furnace.swallow(held, from);
+    furnace.swallow(pours ? 'sand' : held, from);
     getSoundManager().ui.playItemStash();
     const result = quest.feedFurnace(held);
     if (result.done) this.host.time.delayedCall(420, () => furnace.startHandSmelt(result.product, 1, [], from));

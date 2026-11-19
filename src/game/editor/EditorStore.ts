@@ -39,14 +39,11 @@ export class EditorStore {
     const startIsValid = rawStart
       && Number.isInteger(rawStart.worldX)
       && Number.isInteger(rawStart.worldY)
-      && Number(rawStart.worldX) >= 0
-      && Number(rawStart.worldY) >= 0
-      && Number(rawStart.worldX) < this.world.meta.worldChunksX * CHUNK_COLUMNS
-      && Number(rawStart.worldY) < this.world.meta.worldChunksY * CHUNK_ROWS;
+      && this.isInside(Number(rawStart.worldX), Number(rawStart.worldY));
     if (!startIsValid) {
       this.world.meta.playerStart = {
-        worldX: Math.floor((this.world.meta.worldChunksX * CHUNK_COLUMNS) / 2),
-        worldY: Math.floor((this.world.meta.worldChunksY * CHUNK_ROWS) / 2),
+        worldX: Math.floor(this.tilesX / 2),
+        worldY: this.minY + Math.floor(this.tilesY / 2),
       };
       this.dirty = true;
     }
@@ -86,8 +83,20 @@ export class EditorStore {
     return this.world.meta.worldChunksY * CHUNK_ROWS;
   }
 
+  /**
+   * A linha de chunk mais ao norte (`meta.originCy`, ver worldSchema): 0 no mapa de sempre, negativa quando o mundo
+   * cresceu para o norte. As linhas de tile do mapa vão de `minY` a `minY + tilesY - 1`.
+   */
+  public get originCy(): number {
+    return Math.trunc(this.world.meta.originCy ?? 0);
+  }
+
+  public get minY(): number {
+    return this.originCy * CHUNK_ROWS;
+  }
+
   public isInside(wx: number, wy: number): boolean {
-    return wx >= 0 && wy >= 0 && wx < this.tilesX && wy < this.tilesY;
+    return wx >= 0 && wy >= this.minY && wx < this.tilesX && wy < this.minY + this.tilesY;
   }
 
   public chunkAt(wx: number, wy: number): WorldChunk | undefined {

@@ -49,12 +49,12 @@ export const questProbe = (s: GameScene) => {
       return q ? { stage: q.save.stage, plots: q.save.plots.map((p) => p.level) } : null;
     },
 
-    /** A astrônoma: a etapa, se foi embora, se fechou, o que o forno pede, e onde ficam a areia e as cinzas. */
+    /** A astrônoma: a etapa, se foi embora, se fechou, o que o forno pede, e onde fica a cinza (a areia é da praia). */
     astronomer: () => {
       const q = sky();
       return q ? {
         stage: q.save.stage, departed: q.save.departed, done: q.isDone, furnaceNeed: q.furnaceNeed(),
-        sandTile: q['sandTile'] ?? null, ashTile: q['ashTile'] ?? null, overlayOpen: Boolean(q.overlay),
+        ashTile: q['ashTile'] ?? null, overlayOpen: Boolean(q.overlay),
       } : null;
     },
     /** O mini-game aberto da astrônoma: o polimento (fase, o que falta) ou a ocular (a mira, a ficha lida, a caixa). */

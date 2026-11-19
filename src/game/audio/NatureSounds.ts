@@ -140,6 +140,57 @@ export class NatureSounds {
     this.host.synth.osc('sine', 70, 52, 0.04, 3, 0.2);
   }
 
+  /**
+   * A ONDA NA PRAIA (objects/beach/SurfSound): a quebra, um ronco grave e curto, e a lâmina subindo a areia — o chiado
+   * que abre, passa e fecha, em faixas que se sobrepõem. Tudo abaixo de ~1 kHz e baixo: ela toca a cada onda, enquanto
+   * se está na praia, e som que se repete tanto tem de ser fundo, nunca um evento. `strength` (0..1) é a força da onda
+   * vezes o quão perto do mar se está.
+   */
+  public playSurfWash(strength = 1): void {
+    const v = Math.min(1, Math.max(0, strength));
+    if (v < 0.03) return;
+    this.host.synth.noise('lowpass', 230, 0.8, 0.06 * v, 1.2);
+    const bands: ReadonlyArray<readonly [number, number, number]> = [
+      [480, 0.03, 0.15], [700, 0.045, 0.5], [960, 0.045, 0.95], [780, 0.038, 1.5], [580, 0.028, 2.1], [420, 0.018, 2.8],
+    ];
+    for (const [freq, vol, at] of bands) this.host.synth.noise('bandpass', freq, 0.8, vol * v, 1.5, at);
+  }
+
+  /**
+   * UMA BOLHA NA FONTE TERMAL (objects/spring/HotSpring): sobe do fundo e estoura — um "blup" grave, curto e baixo, com
+   * um sopro abafado por baixo. Toca de tempos em tempos enquanto se está perto: é fundo, nunca evento.
+   */
+  public playSpringBubble(strength = 1): void {
+    const v = Math.min(1, Math.max(0, strength));
+    if (v < 0.05) return;
+    const f = 150 + Math.random() * 90;
+    this.host.synth.osc('sine', f, f * 1.7, 0.03 * v, 0.07);
+    this.host.synth.noise('lowpass', 420, 0.7, 0.012 * v, 0.06, 0.02);
+  }
+
+  /**
+   * O MURMÚRIO DA CASCATA DA FONTE: água caindo na água, de pouca altura. Um sopro de ruído em duas faixas graves, baixo
+   * e comprido; toca emendado (um a cada segundo, cada um com segundo e meio), então o ouvido ouve um fio contínuo.
+   */
+  public playSpringPour(strength = 1): void {
+    const v = Math.min(1, Math.max(0, strength));
+    if (v < 0.05) return;
+    this.host.synth.noise('bandpass', 520, 0.7, 0.016 * v, 1.5);
+    this.host.synth.noise('lowpass', 300, 0.7, 0.012 * v, 1.5, 0.05);
+  }
+
+  /** Entrar devagar na água quente: ela abre em volta do corpo — um "chuá" baixo e comprido. */
+  public playSpringSlip(): void {
+    this.host.synth.noise('lowpass', 520, 0.8, 0.07, 0.6);
+    this.host.synth.noise('bandpass', 700, 0.9, 0.03, 0.5, 0.1);
+  }
+
+  /** O pé na lâmina d'água do espraio (objects/beach/BeachSteps): um "chap" curto e baixo. */
+  public playShallowStep(): void {
+    if (this.host.synth.playSample('splash', 1.5, 0.16, 1.7)) return;
+    this.host.synth.noise('lowpass', 1500, 0.6, 0.05, 0.05);
+  }
+
   /** A flor abrindo: ar entrando devagar e um sino distante subindo uma quinta. */
   public playMoonflowerBloom(): void {
     // O sopro: passa-banda subindo devagar. E ele que da a duracao — a flor abre em ~1,4s, e um

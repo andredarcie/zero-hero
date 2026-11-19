@@ -173,6 +173,8 @@ export class ActionInput {
     // O Z e a MAO: diante de um cogumelo, colher e o gesto dela tambem (com a faca na mochila).
     if (this.host.forage.harvestMushroomAt(front.x, front.y)) return;
     if (this.host.camp.useFindAt(front.x, front.y)) return;
+    if (this.host.camp.seaWatch.sitAt(front.x, front.y)) return;
+    if (this.host.camp.seaWatch.soakAt(front.x, front.y)) return;
     if (this.host.camp.useCampAt(front.x, front.y)) return;
     if (this.host.camp.meditation.useAt(front.x, front.y)) return;
     if (this.host.camp.catCare.useBarrelAt(front.x, front.y)) return;

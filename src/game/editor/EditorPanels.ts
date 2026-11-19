@@ -2,11 +2,13 @@
 // com o ícone e a dica de cada célula. Refeitos a cada mudança de estado.
 
 import { bosqueIconKey } from '@/game/objects/BigTrees';
+import { palmIconKey } from '@/game/objects/CoconutPalms';
 import { fenceIconKey } from '@/game/objects/WoodFence';
 import { yardIconKey } from '@/game/objects/LumberYard';
 import { forgeIconKey } from '@/game/objects/OldForge';
 import { crashIconKey } from '@/game/objects/CrashSite';
-import { ASSET_KEYS, KEY_FRAMES, MOONFLOWER_FRAMES, NPC_VISUALS, SEA_TILE_FRAME, SOLID_GROUND_FRAMES, SOLID_UPPER_FRAMES, TOOLBOX_FRAMES } from '@/game/constants';
+import { ASSET_KEYS, KEY_FRAMES, MOONFLOWER_FRAMES, NPC_VISUALS, SAND_TILE_FRAME, SEA_TILE_FRAME, SOLID_GROUND_FRAMES, SOLID_UPPER_FRAMES, TOOLBOX_FRAMES } from '@/game/constants';
+import { BEACH_DECOR } from '@/game/world/biomes';
 import type { TileLayerId } from '@/game/editor/EditorStore';
 import { fungusTextureKey } from '@/game/fungi/fungi';
 import type { PickupKind } from '@/game/world/ScreenContent';
@@ -93,6 +95,8 @@ export const PROP_DEFS: ReadonlyArray<{ type: PropKind; label: string; key: stri
   { type: 'shipHull', label: 'Chapa do casco da nave', key: crashIconKey('shipHull') },
   { type: 'shipThruster', label: 'Propulsor da nave (solta fumaca)', key: crashIconKey('shipThruster') },
   { type: 'shipFin', label: 'Aleta da nave', key: crashIconKey('shipFin') },
+  // A praia do norte (objects/CoconutPalms): bloqueia pelo proprio prop; o porte (alto, torto, jovem) sai do lugar.
+  { type: 'coconutPalm', label: 'Coqueiro (praia)', key: palmIconKey() },
 ];
 // The tiles palette used to be an anonymous grid of "Tile 23" cells, so a whole cemetery sitting
 // in the bottom rows of forest_tile_set.png was invisible to whoever was building the map. Tiles
@@ -118,6 +122,23 @@ const TILE_GROUPS: ReadonlyArray<{
       // O mar bloqueia por si so (SOLID_GROUND_FRAMES), sem colisao pintada — e a fronteira
       // do mundo, e nenhum item do jogo abre agua. Fica no chao porque E chao, nao um prop.
       { frame: SEA_TILE_FRAME, label: 'Mar', layer: 'ground' },
+      // A areia da praia: o mapa guarda esta, e o jogo veste uma das quatro pinturas pelo lugar (constants.groundFrameAt).
+      // Onde ela encosta no mar, o jogo desenha as ondas e a faixa molhada sozinho (render3d/surf.ts).
+      { frame: SAND_TILE_FRAME, label: 'Areia (praia)', layer: 'ground' },
+    ],
+  },
+  {
+    title: 'Praia',
+    tiles: [
+      { frame: BEACH_DECOR.grass, label: 'Capim-da-praia', layer: 'upper' },
+      { frame: BEACH_DECOR.seaOats, label: 'Aveia-do-mar', layer: 'upper' },
+      { frame: BEACH_DECOR.vine, label: 'Salsa-da-praia', layer: 'upper' },
+      { frame: BEACH_DECOR.shells, label: 'Conchas', layer: 'upper' },
+      { frame: BEACH_DECOR.starfish, label: 'Estrela-do-mar', layer: 'upper' },
+      { frame: BEACH_DECOR.driftwood, label: 'Madeira do mar', layer: 'upper' },
+      { frame: BEACH_DECOR.coconuts, label: 'Cocos', layer: 'upper' },
+      { frame: BEACH_DECOR.stones, label: 'Pedras da mare', layer: 'upper' },
+      { frame: BEACH_DECOR.seaweed, label: 'Sargaco', layer: 'upper' },
     ],
   },
   {

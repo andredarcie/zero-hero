@@ -67,6 +67,9 @@ export type HeldItemKind =
   // pre-empts fuel). Empty vs full shows as the art the hero carries; there is no HUD.
   | 'bucket'
   | 'bucketFull'
+  // O balde de AREIA (2026-11-19): o mesmo balde, cheio num montinho da praia do norte. É a ÚNICA areia do jogo: o
+  // forno da Thea a toma pela boca e devolve o balde vazio na mão (ForgeWork.feedFurnaceAt).
+  | 'bucketSand'
   // A lump of CHARCOAL, made in the furnace from two sticks: the reagent of the iron chain. It is
   // also torch food: stepping on it while holding the LIT graveto consumes it and refills the
   // flame. Runtime-only, like bucketFull — never authored in a world.
@@ -123,6 +126,7 @@ const GROUND_VISUAL: Record<HeldItemKind, { texture: string; frame: number }> = 
   // The bucket art is generated at boot (bucketTexture.ts) into both pipelines.
   bucket: { texture: 'bucket-icon', frame: 0 },
   bucketFull: { texture: 'bucket-full-icon', frame: 0 },
+  bucketSand: { texture: 'bucket-sand-icon', frame: 0 },
   // Generated at boot too (charcoalTexture.ts) — the same procedural-pixel-art path.
   charcoal: { texture: 'charcoal-item', frame: 0 },
   furnace: { texture: 'furnace', frame: 0 },

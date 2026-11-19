@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CLOTH_DYES } from './homeState';
 import { DyeCard } from './DyeCard';
@@ -17,6 +17,12 @@ describe('DyeCard', () => {
   let clock = 0;
   const now = (): number => clock;
   const opened: DyeCard[] = [];
+  // O PRIMEIRO cartão paga sozinho o papel da interface (desenhado em canvas, uma vez por arquivo): com a máquina
+  // ocupada isso passava dos 5 s e o 1º teste caía por tempo, de vez em quando (o mesmo do NameCard.test). Pago aqui.
+  beforeAll(() => {
+    new DyeCard({ dyes: CLOTH_DYES, worn: { cape: 'natural', blanket: 'natural' }, touch: false },
+      { onDye: () => {}, onClose: () => {} }, () => 0).destroy();
+  }, 30000);
   beforeEach(() => {
     document.body.innerHTML = '';
     clock = 0;

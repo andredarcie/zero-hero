@@ -263,7 +263,8 @@ export const playThea = async ({ driver, shot, assert, skipOpening = false }) =>
 
   // O FORNO GUIA: com o que ele pede na mão, o Z entrega; ele nunca abre catálogo.
   const ovenAsks = () => page.evaluate(() => window.gameDebug.quest.astronomer()?.furnaceNeed ?? null);
-  const feed = async (kind, label) => {
+  /** `left`: o que fica na mão depois (o balde de areia se despeja e o balde vazio fica). */
+  const feed = async (kind, label, left = 'none') => {
     await approachSolid(FURNACE, `o forno (${label})`);
     await sleep(300);
     const icon = await page.evaluate(() => window.gameDebug.scene.furnaceAsk());
@@ -271,7 +272,7 @@ export const playThea = async ({ driver, shot, assert, skipOpening = false }) =>
     await press('z', 60, 500);
     await sleep(500);
     const s2 = await free();
-    assert(`Entregou ${label} ao forno`, s2.heldItem === 'none', `heldItem=${s2.heldItem}`);
+    assert(`Entregou ${label} ao forno`, s2.heldItem === left, `heldItem=${s2.heldItem}`);
   };
 
   // ── 2. O FORNO PEDE CARVÃO: com a picareta na mão ele recusa ───────────────────────────
@@ -361,21 +362,24 @@ export const playThea = async ({ driver, shot, assert, skipOpening = false }) =>
   await shot('06-tripe', { note: 'O tripe e a cinza ao lado da Thea' });
   mark('tripe');
 
-  // ── 5. O VIDRO: areia só no lago grande do sul, cinza ao lado dela ─────────────────────
-  const camp = await page.evaluate(() => {
-    const q = window.gameDebug.quest.astronomer();
-    return { sand: q.sandTile, ash: q.ashTile };
-  });
-  assert('A areia está na beira do lago grande do sul', camp.sand && camp.sand.y >= 48, JSON.stringify(camp.sand));
-  assert('O forno pede areia', (await ovenAsks()) === 'sand', String(await ovenAsks()));
-  await approachSolid(camp.sand, 'a areia');
-  await shot('07-areia', { note: 'O monte de areia na beira do lago grande' });
-  await press('z', 60, 400);
-  await drain('a areia');
+  // ── 5. O VIDRO: a areia vem num BALDE, dos montinhos da praia do norte (2026-11-19); a cinza, ao lado dela ─────
+  const camp = await page.evaluate(() => ({ ash: window.gameDebug.quest.astronomer().ashTile }));
+  assert('O forno pede o balde de areia', (await ovenAsks()) === 'bucketSand', String(await ovenAsks()));
+  // A praia fica do outro lado da serra: o cenário vai e volta de teleporte (a subida é do cenário `praia`).
+  const back = await page.evaluate(() => window.gameDebug.hero.at());
+  await page.evaluate(() => window.gameDebug.items.take('bucket'));
+  const mound = (await page.evaluate(() => window.gameDebug.beach.mounds())).list.find((m) => m.standing);
+  await page.evaluate(([x, y]) => window.gameDebug.hero.teleport(x, y + 1, 0, -1), [mound.x, mound.y]);
+  await sleep(900);
+  await shot('07-areia', { note: 'Um montinho de areia na praia do norte, com o balde' });
+  await press('x', 60, 900);
   st = await free();
-  assert('Areia na mao', st.heldItem === 'sand', `heldItem=${st.heldItem}`);
+  assert('Balde de areia na mão (o montinho se desfez)', st.heldItem === 'bucketSand', `heldItem=${st.heldItem}`);
   mark('areia');
-  await feed('sand', 'a areia');
+  await page.evaluate(([x, y]) => window.gameDebug.hero.teleport(x, y), [back.x, back.y]);
+  await sleep(800);
+  await feed('bucketSand', 'a areia', 'bucket');
+  await page.evaluate(() => window.gameDebug.items.clear());
   assert('Depois da areia, ele pede a cinza', (await ovenAsks()) === 'ash', String(await ovenAsks()));
   await approachSolid(camp.ash, 'a cinza');
   await press('z', 60, 400);

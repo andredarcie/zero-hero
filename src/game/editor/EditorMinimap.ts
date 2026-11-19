@@ -63,22 +63,25 @@ export class EditorMinimap {
     const texture = this.host.scene.textures.get(ASSET_KEYS.forestTileset);
     const source = texture.getSourceImage() as CanvasImageSource;
 
-    for (let wy = 0; wy < tilesY; wy += 1) {
+    // O mapa pode começar acima da linha 0 (`store.minY`): a linha do desenho é a do mundo menos ela.
+    const minY = this.host.store.minY;
+    for (let wy = minY; wy < minY + tilesY; wy += 1) {
+      const py = (wy - minY) * scale;
       for (let wx = 0; wx < tilesX; wx += 1) {
         const ground = this.host.store.readCell('ground', wx, wy) as number;
         const groundFrame = texture.get(ground);
-        ctx.drawImage(source, groundFrame.cutX, groundFrame.cutY, groundFrame.width, groundFrame.height, wx * scale, wy * scale, scale, scale);
+        ctx.drawImage(source, groundFrame.cutX, groundFrame.cutY, groundFrame.width, groundFrame.height, wx * scale, py, scale, scale);
         const upper = this.host.store.readCell('upper', wx, wy) as number | null;
         if (upper !== null) {
           const upperFrame = texture.get(decorFrameAt(upper, wx, wy));
-          ctx.drawImage(source, upperFrame.cutX, upperFrame.cutY, upperFrame.width, upperFrame.height, wx * scale, wy * scale, scale, scale);
+          ctx.drawImage(source, upperFrame.cutX, upperFrame.cutY, upperFrame.width, upperFrame.height, wx * scale, py, scale, scale);
         }
         // a cor do bioma por cima (multiplicar), como o tabuleiro e o jogo mostram (world/biomes.ts)
         const [r, g, b] = biomeWashAt(wx, wy);
         const k = 255 / Math.max(r, g, b, 1);
         ctx.globalCompositeOperation = 'multiply';
         ctx.fillStyle = `rgb(${Math.round(r * k)}, ${Math.round(g * k)}, ${Math.round(b * k)})`;
-        ctx.fillRect(wx * scale, wy * scale, scale, scale);
+        ctx.fillRect(wx * scale, py, scale, scale);
         ctx.globalCompositeOperation = 'source-over';
       }
     }
@@ -102,11 +105,11 @@ export class EditorMinimap {
     const dot = Math.max(2, scale);
     this.host.store.entities.allEntities().forEach((entity) => {
       ctx.fillStyle = ENTITY_DOT_COLOR[entity.list];
-      ctx.fillRect(entity.worldX * scale, entity.worldY * scale, dot, dot);
+      ctx.fillRect(entity.worldX * scale, (entity.worldY - minY) * scale, dot, dot);
     });
     const spawn = this.host.store.spawn;
     ctx.fillStyle = '#00e0ff';
-    ctx.fillRect(spawn.worldX * scale - 1, spawn.worldY * scale - 1, dot + 2, dot + 2);
+    ctx.fillRect(spawn.worldX * scale - 1, (spawn.worldY - minY) * scale - 1, dot + 2, dot + 2);
   }
 
   private compositeMinimap(): void {
@@ -122,7 +125,7 @@ export class EditorMinimap {
       ctx.lineWidth = 2;
       ctx.strokeRect(
         this.viewportRect.x * scale + 1,
-        this.viewportRect.y * scale + 1,
+        (this.viewportRect.y - this.host.store.minY) * scale + 1,
         this.viewportRect.w * scale - 2,
         this.viewportRect.h * scale - 2,
       );
@@ -136,7 +139,7 @@ export class EditorMinimap {
       const scaleX = this.host.minimapCanvas.width / bounds.width;
       const scaleY = this.host.minimapCanvas.height / bounds.height;
       const tileX = Math.floor(((event.clientX - bounds.left) * scaleX) / this.minimapScale);
-      const tileY = Math.floor(((event.clientY - bounds.top) * scaleY) / this.minimapScale);
+      const tileY = Math.floor(((event.clientY - bounds.top) * scaleY) / this.minimapScale) + this.host.store.minY;
       this.host.cb.onNavigate(tileX, tileY);
     };
     this.host.minimapCanvas.addEventListener('mousedown', (event) => {

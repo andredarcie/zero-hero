@@ -2,6 +2,7 @@ import type { HeldItemKind } from '@/game/entities/ItemPickup';
 import type { DyeKind } from '@/game/quests/dyePlants';
 import { localStore } from '@/game/platform/platform';
 import { cleanHomeName, isClothDye, type ClothDye } from '@/game/runtime/homeState';
+import { cleanTalks, type TalkEntry } from '@/game/runtime/talkLog';
 import { BENCH_MATERIALS, homeBuild, isHomePiece, refund, type BenchMaterial, type HomePieceKind } from '@/game/objects/homeBuilds';
 
 /**
@@ -162,6 +163,12 @@ export interface AdventureSnapshot {
    * autorados: o buraco é ESTRUTURA que o jogador fez.
    */
   dugSpots: Set<string>;
+  /**
+   * "x,y" de cada tile de MATO DA TRILHA DA PRAIA que a foice já abriu (objects/TrailGrass). O mato do vale volta
+   * quando a partida recomeça (é recurso); este é PASSAGEM: se voltasse, quem recarregasse o jogo na areia sem a foice
+   * na mão ficaria preso do outro lado da serra.
+   */
+  trailCut: Set<string>;
   /** Estações manuais construídas pelo jogador por mundo. Diff, nunca foto: ver AdventureMachine. */
   machines: Map<string, AdventureMachine[]>;
   /**
@@ -173,6 +180,8 @@ export interface AdventureSnapshot {
   visitedChunks: Set<string>;
   /** As falas que o jogador já leu inteiras (resumo de cada texto): aparecem de uma vez (runtime/readLines). */
   readLines: Set<string>;
+  /** O caderno das conversas: o que cada um disse, para reler no menu de pausa (runtime/talkLog). */
+  talks: TalkEntry[];
   /**
    * O CADERNO DE MISSOES: um contador por tarefa, chaveado `<roteiro>/<tarefa>` (ver
    * runtime/QuestLog). O numero so SOBE, e "cumprida" e lido dele: nao ha um segundo booleano de
@@ -208,10 +217,12 @@ const defaultSnapshot = (): AdventureSnapshot => ({
   meditationFacts: 0,
   giftsGiven: new Set(),
   dugSpots: new Set(),
+  trailCut: new Set(),
   machines: new Map(),
   groundItems: new Map(),
   visitedChunks: new Set(),
   readLines: new Set(),
+  talks: [],
   questProgress: new Map(),
   paintQuest: { stage: 'start', plots: [] },
   lumberQuest: {
@@ -247,10 +258,12 @@ type StoredSnapshot = {
   meditationFacts?: number;
   giftsGiven?: string[];
   dugSpots?: string[];
+  trailCut?: string[];
   machines?: Record<string, AdventureMachine[]>;
   groundItems?: Record<string, AdventureGroundItem[]>;
   visitedChunks?: string[];
   readLines?: string[];
+  talks?: unknown;
   questProgress?: Record<string, number>;
   paintQuest?: PaintQuestSave;
   lumberQuest?: Partial<LumberQuestSave>;
@@ -393,10 +406,12 @@ const load = (): AdventureSnapshot => {
       meditationFacts: num(p.meditationFacts, 0),
       giftsGiven: new Set(p.giftsGiven ?? []),
       dugSpots: new Set(p.dugSpots ?? []),
+      trailCut: new Set(Array.isArray(p.trailCut) ? p.trailCut.filter((k) => typeof k === 'string') : []),
       machines: cleanMachines(p.machines),
       groundItems: migrateGround(p.groundItems),
       visitedChunks: new Set(p.visitedChunks ?? []),
       readLines: new Set(p.readLines ?? []),
+      talks: cleanTalks(p.talks),
       questProgress: new Map(
         // A Shui pedia que se ENCONTRASSE cada espécie (`gather`); hoje ela pede que se ENTREGUE
         // (`deliver`, uma de cada vez). O que já foi achado num save antigo vale como entregue.
@@ -455,10 +470,12 @@ export const saveAdventure = (): void => {
     meditationFacts: s.meditationFacts,
     giftsGiven: [...s.giftsGiven],
     dugSpots: [...s.dugSpots],
+    trailCut: [...s.trailCut],
     machines: Object.fromEntries(s.machines),
     groundItems: Object.fromEntries(s.groundItems),
     visitedChunks: [...s.visitedChunks],
     readLines: [...s.readLines],
+    talks: s.talks,
     questProgress: Object.fromEntries(s.questProgress),
     paintQuest: s.paintQuest,
     lumberQuest: s.lumberQuest,

@@ -53,8 +53,9 @@ export class EditorView {
   private clampChunkSelection(): void {
     const meta = this.host.store?.world.meta;
     if (!meta) return;
+    const top = Math.trunc(meta.originCy ?? 0);
     this.host.uiState.chunkX = Math.max(0, Math.min(meta.worldChunksX - 1, this.host.uiState.chunkX));
-    this.host.uiState.chunkY = Math.max(0, Math.min(meta.worldChunksY - 1, this.host.uiState.chunkY));
+    this.host.uiState.chunkY = Math.max(top, Math.min(top + meta.worldChunksY - 1, this.host.uiState.chunkY));
   }
 
   /** Applies viewMode/chunk selection when they changed since the last application. */
@@ -90,7 +91,7 @@ export class EditorView {
     } else {
       const worldW = store.tilesX * WORLD_TILE;
       const worldH = store.tilesY * WORLD_TILE;
-      cam.setBounds(-CAMERA_PAD, -CAMERA_PAD, worldW + CAMERA_PAD * 2, worldH + CAMERA_PAD * 2);
+      cam.setBounds(-CAMERA_PAD, store.minY * WORLD_TILE - CAMERA_PAD, worldW + CAMERA_PAD * 2, worldH + CAMERA_PAD * 2);
       this.host.chunkMaskGfx?.clear();
     }
     this.host.session.persistUi();
@@ -111,9 +112,9 @@ export class EditorView {
     if (!store || !gfx) return;
     const rect = this.chunkRect();
     const minX = -CAMERA_PAD * 2;
-    const minY = -CAMERA_PAD * 2;
+    const minY = store.minY * WORLD_TILE - CAMERA_PAD * 2;
     const maxX = store.tilesX * WORLD_TILE + CAMERA_PAD * 2;
-    const maxY = store.tilesY * WORLD_TILE + CAMERA_PAD * 2;
+    const maxY = (store.minY + store.tilesY) * WORLD_TILE + CAMERA_PAD * 2;
 
     gfx.clear();
     gfx.fillStyle(0x05090b, 0.78);

@@ -25,7 +25,7 @@ const buildEmptyChunk = (cx: number, cy: number): WorldChunk => ({
 
 /** O que EditorWorldMeta usa de EditorStore. */
 export type EditorWorldMetaHost = Pick<EditorStore,
-  'chunkIndex' | 'emit' | 'history' | 'isInside' | 'markDirty' | 'rebuildIndex' | 'tilesX' | 'tilesY' | 'world'
+  'chunkIndex' | 'emit' | 'history' | 'isInside' | 'markDirty' | 'minY' | 'originCy' | 'rebuildIndex' | 'tilesX' | 'tilesY' | 'world'
 >;
 
 export class EditorWorldMeta {
@@ -78,8 +78,10 @@ export class EditorWorldMeta {
     const ny = Math.max(1, Math.min(MAX_WORLD_CHUNKS, Math.floor(chunksY)));
     if (nx === this.host.world.meta.worldChunksX && ny === this.host.world.meta.worldChunksY) return;
 
+    // A grade cresce e encolhe pelo SUL e pelo leste: a linha do norte (`originCy`) fica onde está.
+    const top = this.host.originCy;
     const chunks: WorldChunk[] = [];
-    for (let cy = 0; cy < ny; cy += 1) {
+    for (let cy = top; cy < top + ny; cy += 1) {
       for (let cx = 0; cx < nx; cx += 1) {
         chunks.push(this.host.chunkIndex.get(chunkKey(cx, cy)) ?? buildEmptyChunk(cx, cy));
       }
@@ -93,7 +95,7 @@ export class EditorWorldMeta {
     const start = this.host.world.meta.playerStart;
     this.host.world.meta.playerStart = {
       worldX: Math.max(0, Math.min(this.host.tilesX - 1, start.worldX)),
-      worldY: Math.max(0, Math.min(this.host.tilesY - 1, start.worldY)),
+      worldY: Math.max(this.host.minY, Math.min(this.host.minY + this.host.tilesY - 1, start.worldY)),
     };
 
     this.host.history.undoStack = [];

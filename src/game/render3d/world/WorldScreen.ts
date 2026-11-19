@@ -17,8 +17,10 @@ import type { World3D } from '../World3D';
 // ~5,5 tiles de largura na profundidade do herói (o desktop 16:10 vê ~9); e o teto do FOV vertical
 // que a tela em pé pode pedir para alcançá-lo.
 // 0,34 ÷ 1,285 (2026-11-10): a câmera recuou pelo dolly zoom (worldParams.camHeight), e a mesma tangente veria 7 tiles.
-const PORTRAIT_MIN_HALF_TAN_X = 0.2646;
-const PORTRAIT_FOV_CAP = 74;
+// × 0,591 (2026-11-19): a câmera HD-2D recuou de novo (worldParams), e a tangente acompanha para os mesmos 5,5 tiles; o
+// teto acompanha também (tg 37° × 0,591 = tg 24°): a mesma abertura de antes, medida na câmera nova.
+const PORTRAIT_MIN_HALF_TAN_X = 0.1564;
+const PORTRAIT_FOV_CAP = 48;
 // Ambient particle counts (additive Points — brasas rising off the fire, dust in the air,
 // fireflies drifting in lit clearings, low mist wisps veiling the dark ground).
 /**
@@ -53,7 +55,7 @@ export type WorldScreenHost = Pick<World3D, 'air' | 'camera' | 'canvas' | 'mirro
 export class WorldScreen {
   private bloomPass!: FusedBloomPass;
   /** A escala com que o buffer foi assado — o `uBlur` se mede nela (ver syncFinishUniforms). */
-  private appliedRenderScale = 1;
+  public appliedRenderScale = 1;
 
   // ── HD-2D post chain ──
   public composer!: EffectComposer;
@@ -76,6 +78,11 @@ export class WorldScreen {
    * borravam as estrelas e acinzentavam o alto da tela: com 1 elas saem.
    */
   public calm = 0;
+  /**
+   * A BRUMA DO HORIZONTE da câmera do mar (objects/beach/SeaVista): a cor para onde o fundo e o fog vão, e o quanto
+   * (0 = a cor de sempre). Quem a liga a devolve a 0.
+   */
+  public readonly horizon = { color: new THREE.Color(), amount: 0 };
   /** O passo do chá da Shui, depois do acabamento (ver TripPass); desligado fora dele. */
   public trip!: TripPass;
 
@@ -213,6 +220,12 @@ export class WorldScreen {
     // escolheu. (E a preferência de acessibilidade do jogador segue por cima: 0 = diorama nítido.)
     u.uBlur.value = this.host.params.dofBlur * getDofIntensity() * this.appliedRenderScale;
     u.uNear.value = this.host.params.dofNear;
+    u.uDofDepth.value = this.host.params.dofDepth;
+    u.uDofBand.value = Math.max(0, this.host.params.dofBand);
+    u.uDofRamp.value = Math.max(0.5, this.host.params.dofRamp);
+    u.uBokeh.value = Math.max(0, this.host.params.bokeh);
+    u.uAberr.value = Math.max(0, this.host.params.aberration) * this.appliedRenderScale;
+    (u.uNearFar.value as THREE.Vector2).set(this.host.camera.near, this.host.camera.far);
     u.uVignette.value = this.host.params.vignette;
     u.uLift.value = Math.max(0.05, this.host.params.lift);
     u.uShoulder.value = Math.min(0.98, Math.max(0, this.host.params.shoulder));

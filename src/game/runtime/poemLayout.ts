@@ -14,6 +14,8 @@
  * Aqui moram as regras; quem desenha é DialogLineWriter (os versos) e DialogOverlay (a caixa).
  */
 
+/** Palavra em maiúsculas é o nome da coisa que importa (BALDE, TOCHA): a caixa e o caderno das conversas a destacam. */
+export const EMPHASIS = /^\p{Lu}{3,}$/u;
 /** Os versos de uma quadra. */
 export const QUATRAIN = 4;
 /** Os que rimam (o 2º e o 4º), em índice de 0. */

@@ -28,15 +28,39 @@ export const FOREST_FIRST_FRAME = 78;
 const ATLAS_COLUMNS = 3;
 const SINGLE_SHAPES = ['spruce', 'young', 'saplings', 'round', 'wide', 'old'] as const;
 const TALL_SHAPES = ['giant', 'tallSpruce', 'tallRound'] as const;
-export type TreeShape = 'classic' | (typeof SINGLE_SHAPES)[number] | (typeof TALL_SHAPES)[number];
+/**
+ * AS ANCIÃS DO JARDIM ALTO (pedido do autor, 2026-11-18: a sebe do jardim eram "as mesmas duas árvores anciãs, do
+ * mesmo tamanho, cada uma no centro do seu tile e em fileiras certinhas"). O mapa continua guardando as duas anciãs
+ * (73/74); o que se vê sai desta família (spritefactory/sprites/ancient-grove-2.mjs, 135..140): as duas de sempre, a
+ * larga, a jovem, a torta, a gêmea e a ALTA de dois tiles — cada uma por um lado (espelhada) ou pelo outro.
+ */
+const ANCIENT_SHAPES = ['ancientA', 'ancientB', 'ancientWide', 'ancientYoung', 'ancientLean', 'ancientTwin', 'ancientTall'] as const;
+type AncientShape = (typeof ANCIENT_SHAPES)[number];
+export type TreeShape = 'classic' | (typeof SINGLE_SHAPES)[number] | (typeof TALL_SHAPES)[number] | AncientShape;
+/** Os quadros de cada anciã no atlas (a alta: o pé em 140, o topo em 137, na mesma coluna). */
+const ANCIENT_FRAMES: Readonly<Record<AncientShape, { frame: number; topFrame: number }>> = {
+  ancientA: { frame: 73, topFrame: 73 },
+  ancientB: { frame: 74, topFrame: 74 },
+  ancientWide: { frame: 135, topFrame: 135 },
+  ancientYoung: { frame: 136, topFrame: 136 },
+  ancientLean: { frame: 138, topFrame: 138 },
+  ancientTwin: { frame: 139, topFrame: 139 },
+  ancientTall: { frame: 140, topFrame: 137 },
+};
+/** Os quadros que o mapa guarda para as anciãs (o resto da família é só desenho). */
+const ANCIENT_DATA: ReadonlySet<number> = new Set([73, 74]);
+/** A mistura da mata antiga: as de sempre e a larga mais comuns, a alta onde cabe (e muito, na mata velha). */
+const ANCIENT_WEIGHTS: Readonly<Record<AncientShape, number>> = {
+  ancientA: 16, ancientB: 16, ancientWide: 16, ancientYoung: 12, ancientLean: 11, ancientTwin: 9, ancientTall: 20,
+};
 const ALL_SHAPES: readonly TreeShape[] = ['classic', ...SINGLE_SHAPES, ...TALL_SHAPES];
 /** Todos os quadros da família (para o vento: frame novo de árvore balança). */
 export const FOREST_FRAMES: readonly number[] = Array.from({ length: 42 }, (_, i) => FOREST_FIRST_FRAME + i);
 
 /** Os pinheiros do mapa e a ROUPA de cada um: 0 liso, 1 fruta laranja, 2 flor lilás, 3 tronco escuro. */
 const PINE_DRESS: Readonly<Record<number, number>> = { 4: 0, 14: 0, 18: 0, 15: 1, 16: 2, 17: 3 };
-/** As outras árvores em pé do tileset (a seca, os tocos, as anciãs do jardim): saem do centro, mas não trocam de forma. */
-const OTHER_TREES: ReadonlySet<number> = new Set([3, 21, 36, 37, 73, 74]);
+/** As outras árvores em pé do tileset (a seca e os tocos): saem do centro, mas não trocam de forma. */
+const OTHER_TREES: ReadonlySet<number> = new Set([3, 21, 36, 37]);
 
 /** O que uma árvore do mapa VESTE na tela. */
 export interface TreeLook {
@@ -81,6 +105,8 @@ const BIOME_FOREST: Readonly<Record<BiomeId, Weights>> = {
   garden: { classic: 30, round: 18, wide: 12, spruce: 10, young: 8, old: 6, saplings: 4, giant: 6, tallRound: 4, tallSpruce: 2 },
   // os campos: o pomar de outono, folha e agulha
   fields: { classic: 26, round: 22, wide: 14, young: 8, old: 8, spruce: 6, saplings: 4, giant: 6, tallRound: 6 },
+  // a praia: a mata que desce a serra até a duna é de copa redonda e larga (a restinga), sem gigantes
+  shore: { round: 34, wide: 28, classic: 12, young: 12, saplings: 8, old: 4, tallRound: 2 },
 };
 const LEAFY: ReadonlySet<TreeShape> = new Set(['round', 'wide', 'tallRound']);
 const NEEDLE: ReadonlySet<TreeShape> = new Set(['spruce', 'old', 'tallSpruce']);
@@ -162,12 +188,22 @@ const shapeAt = (x: number, z: number, edge: boolean, canTall: boolean, outside:
  */
 export const treeLookAt = (frame: number, x: number, z: number, ctx: ForestContext): TreeLook | null => {
   const dress = PINE_DRESS[frame];
-  if (dress === undefined && !OTHER_TREES.has(frame)) return null;
+  const ancient = ANCIENT_DATA.has(frame);
+  if (dress === undefined && !ancient && !OTHER_TREES.has(frame)) return null;
   const edge = !ctx.solid(x - 1, z) || !ctx.solid(x + 1, z) || !ctx.solid(x, z - 1) || !ctx.solid(x, z + 1);
   const outside = ctx.outside(x, z);
   const canTall = !outside && ctx.solid(x, z - 1) && ctx.solid(x, z - 2);
+  if (ancient) return ancientLookAt(x, z, ctx, edge, canTall);
   const shape = dress === undefined ? 'classic' : shapeAt(x, z, edge, canTall, outside);
-  // O pé, em pixels de arte: na beira ele fica bem dentro do tile que barra; no miolo anda mais.
+  const { dx, dz, tone } = footAt(x, z, edge, outside);
+  return { shape, ...frameOf(shape, frame, dress ?? 0), tall: TALL.has(shape), dx, dz, tone };
+};
+
+/**
+ * O pé, em pixels de arte (na beira ele fica bem dentro do tile que barra; no miolo anda mais), e o tom: cada árvore um
+ * pouco mais clara ou mais escura que a vizinha, e o miolo da mata mais fundo que a beira.
+ */
+const footAt = (x: number, z: number, edge: boolean, outside: boolean): { dx: number; dz: number; tone: number } => {
   const side = edge ? 3 : 5;
   const back = edge ? 2 : 5;
   const front = edge ? 1 : 4;
@@ -176,7 +212,37 @@ export const treeLookAt = (frame: number, x: number, z: number, ctx: ForestConte
   // Fora do mundo a cortina de névoa fica no plano do tile: a árvore nunca vem para a frente dela.
   if (outside) dz = Math.min(dz, 0);
   const tone = (0.9 + 0.18 * hash(x, z, 307)) * (edge ? 1 : 0.94) * (0.96 + 0.08 * patch(x, z, 4, 83));
-  return { shape, ...frameOf(shape, frame, dress ?? 0), tall: TALL.has(shape), dx, dz, tone };
+  return { dx, dz, tone };
+};
+
+/**
+ * A ANCIÃ DESTE TILE: a forma sorteada pela coordenada entre os pesos da mata antiga — a jovem nas manchas de mata nova,
+ * a alta nas de mata velha (e só com mata atrás dela, como toda alta) — e o lado. A TORTA se inclina para onde há luz:
+ * na beira, para o lado aberto; as outras se espelham pela coordenada, e a mesma forma não se repete ao lado.
+ */
+const ancientLookAt = (x: number, z: number, ctx: ForestContext, edge: boolean, canTall: boolean): TreeLook => {
+  const young = patch(x, z, 5, 57);
+  let total = 0;
+  const weights = ANCIENT_SHAPES.map((shape) => {
+    let w = ANCIENT_WEIGHTS[shape];
+    if (shape === 'ancientTall') w = canTall ? w * (0.4 + 1.5 * (1 - young)) : 0;
+    if (shape === 'ancientYoung') w *= (0.3 + 1.8 * young) * (edge ? 1.3 : 0.8);
+    if (shape === 'ancientLean' && !edge) w *= 0.4;
+    total += w;
+    return w;
+  });
+  let pick = hash(x, z, 7) * total;
+  let shape: AncientShape = 'ancientA';
+  for (let i = 0; i < ANCIENT_SHAPES.length; i++) {
+    pick -= weights[i];
+    if (pick <= 0) { shape = ANCIENT_SHAPES[i]; break; }
+  }
+  // A torta é desenhada pendendo para a direita (o leste).
+  const openEast = !ctx.solid(x + 1, z);
+  const openWest = !ctx.solid(x - 1, z);
+  const flip = shape === 'ancientLean' && openEast !== openWest ? openWest : hash(x, z, 401) < 0.5;
+  const { dx, dz, tone } = footAt(x, z, edge, false);
+  return { shape, ...ANCIENT_FRAMES[shape], tall: shape === 'ancientTall', dx, dz, tone, flip };
 };
 
 // ── O SUB-BOSQUE (2026-11-11) ──────────────────────────────────────────────────────────────────────────────────────
@@ -206,6 +272,7 @@ const BIOME_UNDERSTORY: Readonly<Record<BiomeId, Partial<Record<Plant, number>>>
   moss: { bushWide: 30, bushRound: 25, saplings: 20, young: 15, bushSpruce: 10 },
   garden: { bushRound: 35, bushWide: 20, saplings: 25, young: 20 },
   fields: { bushRound: 30, bushWide: 25, young: 25, saplings: 20 },
+  shore: { bushRound: 40, bushWide: 35, saplings: 15, young: 10 },
 };
 
 /** Uma planta do sub-bosque, sorteada pela coordenada entre os pesos do bioma (sem a que já está no tile). */

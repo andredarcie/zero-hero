@@ -32,6 +32,10 @@ import { OldRoad } from '@/game/objects/OldRoad';
 import { Trails } from '@/game/objects/Trails';
 import { GardenMist } from '@/game/objects/GardenMist';
 import { BigTrees } from '@/game/objects/BigTrees';
+import { CoconutPalms } from '@/game/objects/CoconutPalms';
+import { bindTrailGrass, inBeachTrail } from '@/game/objects/TrailGrass';
+import { buildBeach } from '@/game/objects/beach/buildBeach';
+import { BeachSeat } from '@/game/objects/beach/BeachSeat';
 import { WoodFence } from '@/game/objects/WoodFence';
 import { LumberYard } from '@/game/objects/LumberYard';
 import { OldForge } from '@/game/objects/OldForge';
@@ -49,6 +53,7 @@ import { allQuestsDone, isQuestDone } from '@/game/runtime/QuestLog';
 import { NPC_QUESTS } from '@/game/dialogs/NpcQuests';
 import { NpcHomes } from '@/game/objects/NpcHomes';
 import { ValleyFinds } from '@/game/objects/ValleyFinds';
+import { CellTower } from '@/game/objects/CellTower';
 import { applyHeroCape } from '@/game/render3d/heroDye';
 import { inCampZone } from '@/game/runtime/homeGrid';
 import type { GameScene } from '../GameScene';
@@ -58,7 +63,7 @@ import { INTRO_WALK_TILES } from './sceneDefs';
 export type WorldBootHost = Engine.Scene & Pick<GameScene,
   'actions' | 'adventure' | 'arc' | 'bumps' | 'camp' | 'chunkManager' | 'cinema' | 'cutsceneActive' | 'debug'
   | 'events' | 'fire' | 'forage' | 'forge' | 'game' | 'gardenUnlock' | 'groundItems' | 'input' | 'intro'
-  | 'machines' | 'marks' | 'morning' | 'pause' | 'playerWorld' | 'props' | 'query' | 'questSetup' | 'registry' | 'save' | 'sparkle'
+  | 'machines' | 'marks' | 'morning' | 'pause' | 'playerWorld' | 'props' | 'query' | 'questSetup' | 'registry' | 'relics' | 'save' | 'sparkle'
   | 'streamChunks' | 'swordPlanting' | 'time' | 'valley' | 'verbs' | 'view' | 'world3d'
 >;
 
@@ -108,8 +113,12 @@ export class WorldBoot {
       ...getIronRocks().map((r) => new RockObject(this.host, r.worldX, r.worldY, 'ore')),
       ...getCoalRocks().map((r) => new RockObject(this.host, r.worldX, r.worldY, 'coal')),
     ];
-    // O mato da zona do acampamento é VERDE: não pega fogo, só a foice corta (runtime/homeGrid, CampHome).
-    this.host.props.tallGrasses = getTallGrass().map((g) => new TallGrassObject(this.host, g.worldX, g.worldY, inCampZone(g.worldX, g.worldY)));
+    // O mato da zona do acampamento é VERDE: não pega fogo, só a foice corta (runtime/homeGrid, CampHome). O da trilha
+    // da praia também, e o corte dele fica no save (objects/TrailGrass).
+    this.host.props.tallGrasses = getTallGrass().map((g) => new TallGrassObject(
+      this.host, g.worldX, g.worldY, inCampZone(g.worldX, g.worldY) || inBeachTrail(g.worldX, g.worldY),
+    ));
+    if (this.host.adventure) bindTrailGrass(this.host.props.tallGrasses, () => this.host.save.persistAdventure());
     this.host.props.moonflowers = getMoonflowers().map((m) => new MoonflowerObject(this.host, m.worldX, m.worldY));
     this.host.props.plantSpots = getPlantSpots().map((s) => new PlantSpotObject(this.host, s.worldX, s.worldY));
     // Os buracos que a PÁ cavou voltam do save (diff sobre os autorados).
@@ -196,6 +205,8 @@ export class WorldBoot {
       this.host.valley.waterfall = new Waterfall(this.host);
       this.host.valley.koiPond = new KoiPond(this.host, () => ({ x: this.host.playerWorld.worldX, y: this.host.playerWorld.worldY }));
       this.host.valley.bigTrees = new BigTrees(this.host);
+      // A praia do norte: os coqueiros (props do mapa, como as árvores do bosque).
+      this.host.valley.palms = new CoconutPalms(this.host);
       this.host.valley.woodFence = new WoodFence();
       this.host.valley.lumberYard = new LumberYard();
       this.host.valley.oldForge = new OldForge();
@@ -214,6 +225,16 @@ export class WorldBoot {
         rain: () => this.host.valley.weather?.rain ?? 0,
         busy: () => this.host.cutsceneActive,
       });
+      // A praia do norte: os bichos, a câmera do mirante, o céu do mar e o som da arrebentação (objects/beach).
+      this.host.valley.beach = buildBeach(this.host, {
+        hero: () => this.host.verbs.heroVisualTile(),
+        isFree: (x, y) => this.host.query.isNatureFree(x, y),
+        isSand: (x, y) => this.host.query.isSandAt(x, y),
+        rain: () => this.host.valley.weather?.rain ?? 0,
+        busy: () => this.host.cutsceneActive,
+      });
+      // O guarda-sol da praia, de sentar e olhar o mar (scenes/game/SeaWatch).
+      this.host.valley.beachSeat = new BeachSeat();
       // Um jogo fechado entre o último pedido e a entrega da chave: ela chega agora.
       if (allQuestsDone() && !this.host.arc.has('gardenKey')) this.host.time.delayedCall(900, () => this.host.gardenUnlock.giveGardenKey(undefined));
       this.host.valley.oldRoad = new OldRoad();
@@ -224,6 +245,14 @@ export class WorldBoot {
         const heroAt = (): { x: number; y: number } => ({ x: this.host.playerWorld.worldX, y: this.host.playerWorld.worldY });
         this.host.valley.gardenMist = new GardenMist(this.host, { x: garden.worldX, y: garden.worldY }, heroAt);
       }
+      // A torre na ponta do cume: a flor que estava no tile dela sai do chão.
+      if (garden) {
+        const tower = new CellTower(this.host, { x: garden.worldX, y: garden.worldY });
+        this.host.valley.cellTower = tower;
+        this.clearDecor(tower.x, tower.y);
+      }
+      // As relíquias enterradas: as trincas e a terra revirada das que já saíram (RelicDig).
+      this.host.relics.build();
       this.host.forage.mushroomKin = this.host.forage.makeMushroomKin();
       this.host.forage.mushroomGlow = this.host.forage.makeMushroomGlow();
       this.host.groundItems.enforceNpcFrontRule();
@@ -240,6 +269,16 @@ export class WorldBoot {
     this.host.marks.buildQuestMarks();
     this.host.streamChunks(true);
 
+  }
+
+  /** Tira a decoração do chão de um tile (a grama baixa, a flor) que uma peça nova vai ocupar. */
+  private clearDecor(x: number, y: number): void {
+    const chunk = this.host.chunkManager?.getChunk(Math.floor(x / CHUNK_COLUMNS), Math.floor(y / CHUNK_ROWS));
+    const lx = ((x % CHUNK_COLUMNS) + CHUNK_COLUMNS) % CHUNK_COLUMNS;
+    const ly = ((y % CHUNK_ROWS) + CHUNK_ROWS) % CHUNK_ROWS;
+    if (!chunk || chunk.upper[ly][lx] === null) return;
+    chunk.upper[ly][lx] = null;
+    this.host.world3d?.terrain.removeDecorTile(x, y);
   }
 
   /** O fecho: shaders aquecidos, o profiler, a pausa ou a volta ao editor, os balões, e a abertura. */

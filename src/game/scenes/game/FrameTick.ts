@@ -93,14 +93,13 @@ export class FrameTick {
     if (stepDx !== 0 || stepDy !== 0) {
       this.lastStepTime = this.host.time.now;
       this.host.steps.stopBreathing();
-      this.host.steps.spawnFootprint(prevWorldX, prevWorldY, stepDx, stepDy);
+      this.host.steps.onStep(prevWorldX, prevWorldY);
     } else if (!this.host.dialog.dialogOpen && !this.host.dialogCam.camShifting && this.host.time.now - this.lastStepTime > 180) {
       this.host.steps.startBreathing();
     }
     profiler.begin('update.chunks');
     this.host.streamChunks();
     profiler.end('update.chunks');
-    this.host.steps.updateFootprints();
     // A marca de um pedido que fechou com o herói em cima do tile dela nasce quando ele sai (QuestMarks).
     this.host.marks.tickPending();
     this.host.forage.tickShuiWave();

@@ -11,6 +11,7 @@ import { loadWorld, type WorldFileId } from '@/game/worldApi';
 
 import { ensureFixtureTexture, type FixtureSprite } from '@/game/editor/EditorFixtures';
 import { bosqueIconKey, registerBosqueTextures } from '@/game/objects/BigTrees';
+import { palmIconKey, registerPalmTextures } from '@/game/objects/CoconutPalms';
 import { fenceIconKey, registerFenceTextures } from '@/game/objects/WoodFence';
 import { YARD_KINDS, registerYardTextures, yardIconKey } from '@/game/objects/LumberYard';
 import { FORGE_KINDS, forgeIconKey, registerForgeTextures } from '@/game/objects/OldForge';
@@ -110,6 +111,9 @@ export class EditorScene extends Engine.Scene {
     // As árvores do bosque são props: a paleta e os chips mostram o desenho delas, então ele entra no motor 2D já.
     registerBosqueTextures();
     for (const kind of ['oak', 'birch', 'sapling', 'log'] as const) ensureFixtureTexture(this, bosqueIconKey(kind));
+    // …e o coqueiro da praia do norte, pelo mesmo caminho.
+    registerPalmTextures();
+    ensureFixtureTexture(this, palmIconKey());
     registerFenceTextures();
     ensureFixtureTexture(this, fenceIconKey);
     registerYardTextures();

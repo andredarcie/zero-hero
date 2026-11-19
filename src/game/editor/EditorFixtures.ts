@@ -1,6 +1,7 @@
 import * as Engine from '@/game/engine';
 
 import { BigTrees } from '@/game/objects/BigTrees';
+import { CoconutPalms } from '@/game/objects/CoconutPalms';
 import { WoodFence } from '@/game/objects/WoodFence';
 import { LumberYard } from '@/game/objects/LumberYard';
 import { OldForge } from '@/game/objects/OldForge';
@@ -127,6 +128,7 @@ export const recordFixtures = (scene: Engine.Scene): FixtureSprite[] => {
   make('cachoeira', () => new Waterfall(scene));
   make('lago das carpas', () => new KoiPond(scene, far));
   make('bosque', () => new BigTrees(scene));
+  make('coqueiros', () => new CoconutPalms(scene));
   make('cerca de madeira', () => new WoodFence());
   make('quintal do lenhador', () => new LumberYard());
   make('forja velha', () => new OldForge());

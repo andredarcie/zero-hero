@@ -24,6 +24,7 @@ import { BuildMode } from './BuildMode';
 import { CampHome } from './CampHome';
 import { CampNotebook } from './CampNotebook';
 import { Meditation } from './Meditation';
+import { SeaWatch } from './SeaWatch';
 import { ShuiTea } from './ShuiTea';
 import { StoneSkipping } from './StoneSkipping';
 import { Resting } from '@/game/systems/Resting';
@@ -55,6 +56,8 @@ export class CampLife {
   public readonly meditation: Meditation;
   // O CHÁ DA SHUI, quando o pedido dos cogumelos fecha: o cogumelo que veio na cesta, a viagem, a volta.
   public readonly tea: ShuiTea;
+  // OLHAR O MAR: a cadeira do guarda-sol da praia do norte (SeaWatch).
+  public readonly seaWatch: SeaWatch;
   // O LAR: a bancada que guarda o material, as peças postas, o mato cortado, o nome na chegada (CampHome), e o modo de
   // construção da bancada, com o jogo parado e a grade no chão (BuildMode).
   public readonly home: CampHome;
@@ -105,6 +108,7 @@ export class CampLife {
         if (was.sleeping) this.host.carry.updateBackItem();
         if (was.atFind) {
           this.host.cameraLook = undefined;
+          this.seaWatch.stoodUp();
           // do assento baixo (o tronco) o corpo desce para o chão
           if (this.host.hero.lift > 0) this.host.tweens.add({ targets: this.host.hero, lift: 0, duration: 220, ease: 'Quad.easeIn' });
         }
@@ -153,6 +157,7 @@ export class CampLife {
       },
       leaveScythe: (at) => this.host.camp.dropDeathScythe(at),
     });
+    this.seaWatch = new SeaWatch(host, this.rest);
     this.catCare = new CatCare({
       scene: this.host,
       ready: () => this.host.adventure && Boolean(this.host.world3d),

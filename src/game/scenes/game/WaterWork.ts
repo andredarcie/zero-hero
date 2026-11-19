@@ -7,6 +7,7 @@ import { CampfireObject } from '@/game/objects/CampfireObject';
 import { WaterObject } from '@/game/objects/WaterObject';
 import { FX_DOT_TEXTURE, FX_PUFF_TEXTURE } from '@/game/render3d/World3D';
 import { getSoundManager } from '@/game/audio/SoundManager';
+import { noteFound } from '@/game/runtime/notebook';
 import type { GameScene } from '../GameScene';
 import { FX_BILLBOARD } from './sceneDefs';
 
@@ -17,7 +18,7 @@ const TIMBER_MAX_SPAN = 3;
 /** O que WaterWork usa de GameScene. */
 export type WaterWorkHost = Pick<GameScene,
   'add' | 'camera' | 'carry' | 'debris' | 'heldItem' | 'inventory' | 'playerWorld' | 'query' | 'sparkle'
-  | 'swing' | 'tileSize' | 'time' | 'tweens' | 'world3d'
+  | 'swing' | 'tileSize' | 'time' | 'tweens' | 'valley' | 'world3d'
 >;
 
 export class WaterWork {
@@ -30,6 +31,22 @@ export class WaterWork {
     this.host.swing.swingHeld(wx, wy); // the bucket arcs down into the water
     this.host.inventory.replace('bucket', 'bucketFull'); // o mesmo slot, cheio — ver Inventory.replace
     getSoundManager().nature.playSplash();
+    this.host.carry.updateBackItem();
+  }
+
+  /**
+   * A AREIA DA PRAIA no balde (pedido do autor, 2026-11-19): o balde vazio desce no montinho e sobe cheio de areia, e o
+   * montinho se desfaz (objects/beach/SandMounds). É a única areia do jogo; o forno da Thea a toma e devolve o balde.
+   */
+  public scoopSand(wx: number, wy: number): void {
+    if (this.host.heldItem !== 'bucket') return;
+    const mounds = this.host.valley.beach?.mounds;
+    if (!mounds?.take(wx, wy)) return;
+    this.host.swing.swingHeld(wx, wy);
+    this.host.inventory.replace('bucket', 'bucketSand'); // o mesmo slot, de areia — ver Inventory.replace
+    noteFound('bucketSand'); // a areia entra no caderno (o replace não passa pela entrada da mochila)
+    getSoundManager().work.playSandTrickle();
+    this.host.debris.spawnDirtBurst(wx, wy, 5);
     this.host.carry.updateBackItem();
   }
 

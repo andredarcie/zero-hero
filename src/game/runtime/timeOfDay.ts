@@ -45,6 +45,8 @@ export const setTimeOfDay = (value: number): void => {
  */
 let restScale = 1;
 export const setTimeScale = (scale: number): void => { restScale = Math.max(0, scale); };
+/** Quantas vezes o relógio do jogo corre agora (1 andando; 24 sentado; 48 dormindo): as nuvens do céu do mar andam junto. */
+export const getTimeScale = (): number => restScale;
 
 export const advanceTimeOfDay = (ms: number): void => {
   // Meio mostrador (0.5) por DAY_MS de dia e por NIGHT_MS de noite.

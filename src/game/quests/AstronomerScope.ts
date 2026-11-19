@@ -17,7 +17,7 @@ const SHIP_LANDING = { x: 29.3, y: 20 };
 
 /** O que AstronomerScope usa de AstronomerQuest. */
 export type AstronomerScopeHost = Pick<AstronomerQuest,
-  'ash' | 'dialogBase' | 'host' | 'isDone' | 'mark' | 'npc' | 'overlay' | 'sand' | 'save' | 'showMark'
+  'ash' | 'dialogBase' | 'host' | 'isDone' | 'mark' | 'npc' | 'overlay' | 'save' | 'showMark'
   | 'showTelescope' | 'tripod' | 'tripodTile'
 >;
 
@@ -72,8 +72,6 @@ export class AstronomerScope {
     const hero = this.host.host.hero();
     this.host.tripod?.destroy();
     this.host.tripod = undefined;
-    this.host.sand?.destroy();
-    this.host.sand = undefined;
     this.host.ash?.destroy();
     this.host.ash = undefined;
     if (tile) this.host.host.fling('telescope', tile.x, tile.y, hero.x, hero.y);

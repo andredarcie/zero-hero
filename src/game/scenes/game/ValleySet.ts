@@ -20,6 +20,10 @@ import { HeroCamp } from '@/game/objects/HeroCamp';
 import { CampPieces } from '@/game/objects/CampPieces';
 import { NpcHomes } from '@/game/objects/NpcHomes';
 import { ValleyFinds } from '@/game/objects/ValleyFinds';
+import type { CellTower } from '@/game/objects/CellTower';
+import type { CoconutPalms } from '@/game/objects/CoconutPalms';
+import type { Beach } from '@/game/objects/beach/buildBeach';
+import type { BeachSeat } from '@/game/objects/beach/BeachSeat';
 
 export class ValleySet {
   /** A estrada antiga da espada ao jardim do fim (objects/OldRoad). */
@@ -28,6 +32,8 @@ export class ValleySet {
   public trails?: Trails;
   /** A névoa do jardim alto, até o vento levá-la (objects/GardenMist, playMistClearing). */
   public gardenMist?: GardenMist;
+  /** A torre de telefonia na ponta do cume do jardim alto (objects/CellTower): só enfeite, com a luz piscando. */
+  public cellTower?: CellTower;
   /** A casa de cada vizinho, ao lado de onde ele fica. */
   public npcHomes?: NpcHomes;
   public valleyFinds?: ValleyFinds;
@@ -41,6 +47,12 @@ export class ValleySet {
   public koiPond?: KoiPond;
   /** As árvores grandes do bosque (objects/BigTrees) e os passarinhos de dia (objects/BirdLife). */
   public bigTrees?: BigTrees;
+  /** Os coqueiros da praia do norte (objects/CoconutPalms). */
+  public palms?: CoconutPalms;
+  /** A praia do norte: os bichos, as pegadas, os montinhos de areia, a câmera do horizonte e o som do mar (objects/beach/buildBeach). */
+  public beach?: Beach;
+  /** O guarda-sol e a cadeira da praia, de olhar o mar (objects/beach/BeachSeat). */
+  public beachSeat?: BeachSeat;
   /** A cerca de madeira (objects/WoodFence): o quintal do lenhador. */
   public woodFence?: WoodFence;
   /** As coisas do quintal do lenhador (objects/LumberYard). */

@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { CLIFF_WALL_FRAMES, DUNGEON_WALL_FRAMES, GROUND_TILE_FRAME, MASS_TILE_FRAMES, terrainVariant } from '@/game/constants';
 import { RELIEF_HEIGHT } from '@/game/world/relief';
-import { ANCIENT_GROVE, BIOME_DECOR, biomeTintAt } from '@/game/world/biomes';
+import { ANCIENT_GROVE, BEACH_DECOR, BIOME_DECOR, biomeTintAt } from '@/game/world/biomes';
 import { VINE_VARIANTS, type VineQuad } from './vineTexture';
 import { tilesetFrameUv } from './textures3d';
 import { FOREST_FRAMES, type TreeLook } from './forest';
@@ -45,6 +45,8 @@ export const WIND_STIR_FRAMES: ReadonlySet<number> = new Set([
   // a flora dos biomas que balança; cristal, brasa e folha caída ficam parados
   BIOME_DECOR.fern, BIOME_DECOR.mossBloom, BIOME_DECOR.wheat, BIOME_DECOR.daisies, BIOME_DECOR.poppies,
   BIOME_DECOR.bluebells, BIOME_DECOR.clover, ANCIENT_GROVE.bush, ANCIENT_GROVE.grass,
+  // a praia: os dois capins e a salsa; concha, estrela, madeira, coco, seixo e sargaço ficam parados
+  BEACH_DECOR.grass, BEACH_DECOR.seaOats, BEACH_DECOR.vine,
 ]);
 // ── merged tile geometry builders ─────────────────────────────────────────────
 
@@ -1686,8 +1688,10 @@ export const buildUprightTileGeometry = (
     nrm.push(0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1);
     // Quem obedece ao VENTO, e o centro do tile de onde a onda é lida (ver WIND_WAVE_GLSL). É
     // por vértice porque é UMA malha: a árvore que balança e o túmulo que não estão nela juntos.
+    // E o CHÃO dela: a copa balança medida dali (a mata do planalto não desliza com o pé junto).
     const sway = WIND_SWAY_FRAMES.has(frame) ? 1 : 0;
-    for (let k = 0; k < 4; k++) wind.push(sway, x, z);
+    const ground = liftAt(x, z);
+    for (let k = 0; k < 4; k++) wind.push(sway, x, z, ground);
     const t = tintAt ? tintAt(x, z) : [1, 1, 1];
     const tone = look?.tone ?? 1;
     for (let k = 0; k < 4; k++) col.push(t[0] * tone, t[1] * tone, t[2] * tone);
@@ -1699,7 +1703,7 @@ export const buildUprightTileGeometry = (
   geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
   geo.setAttribute('aUvBounds', new THREE.Float32BufferAttribute(bounds, 4));
   geo.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
-  geo.setAttribute('aWind', new THREE.Float32BufferAttribute(wind, 3));
+  geo.setAttribute('aWind', new THREE.Float32BufferAttribute(wind, 4));
   geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   geo.setIndex(idx);
   return geo;

@@ -11,7 +11,7 @@ export type Surface = 'grass' | 'dirt' | 'stone' | 'wood';
 const BY_ITEM: Partial<Record<HeldItemKind, Material>> = {
   wood: 'wood', stool: 'wood', windChime: 'wood', altar: 'stone',
   stone: 'stone', ore: 'stone', bloom: 'stone', charcoal: 'stone', furnace: 'stone', flowerPot: 'stone', sundial: 'stone', cairn: 'stone', sand: 'stone', ash: 'soft',
-  iron: 'metal', axe: 'metal', pickaxe: 'metal', scythe: 'metal', knife: 'metal', sword: 'metal', key: 'metal', shovel: 'metal', lantern: 'metal', bucket: 'metal', bucketFull: 'metal',
+  iron: 'metal', axe: 'metal', pickaxe: 'metal', scythe: 'metal', knife: 'metal', sword: 'metal', key: 'metal', shovel: 'metal', lantern: 'metal', bucket: 'metal', bucketFull: 'metal', bucketSand: 'metal',
   glass: 'glass',
 };
 

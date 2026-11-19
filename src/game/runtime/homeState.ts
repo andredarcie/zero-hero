@@ -7,7 +7,7 @@ import { DYE_COLORS, type DyeKind } from '@/game/quests/dyePlants';
  * cores, o tom de cada uma no pano, a troca de paleta e o nome limpo. O estado vive no save (`adventureState().home`).
  */
 
-/** A cor de um pano: a NATURAL (sem tinta: a capa verde e a manta listrada de sempre) ou uma tinta do vale. */
+/** A cor de um pano: a NATURAL (sem tinta: a capa índigo e a manta listrada de sempre) ou uma tinta do vale. */
 export type ClothDye = 'natural' | DyeKind | 'violeta';
 
 /**
@@ -20,8 +20,13 @@ export const CLOTH_DYES: readonly ClothDye[] = ['natural', 'urucum', 'anil', 'cu
 /** O que a tina tinge: a capa que o herói veste e a manta do colchão do acampamento. */
 export type ClothTarget = 'cape' | 'blanket';
 
-/** A capa do Zero: os três verdes do `hero.png`, do claro ao escuro (o mesmo pano aparece na viseira e nas costas). */
-export const CAPE_GREENS: readonly [string, string, string] = ['#3f8f55', '#33784a', '#28613f'];
+/**
+ * A CAPA do Zero: os três tons dela no `hero.png`, do claro ao escuro (só a capa usa esses três, então tingir troca a
+ * capa e nada mais). O herói de 2026-11-19 (docs/heroi-cozy): o cavaleiro sem rosto de elmo redondo com viseira em T,
+ * armadura e braços de aço, broche dourado e a capa ÍNDIGO — a cor do herói de antes (o "roxo" dele, #223467), que o
+ * autor quis de volta na capa. Antes, a capa era verde e brigava com o mato.
+ */
+export const CAPE_COLORS: readonly [string, string, string] = ['#2c4287', '#223467', '#1b284f'];
 
 /** A cor de cada tinta como ela sai no pano (a amostra da tina). */
 export const DYE_SWATCH: Readonly<Record<Exclude<ClothDye, 'natural'>, string>> = {
@@ -72,18 +77,19 @@ const fromHsl = (h: number, s: number, l: number): string => {
 
 /**
  * O CLARO DO PANO NÃO PASSA DESTE PONTO (lightness do HSL): a luz do mundo estoura os claros (a lição da revisão da
- * arte), e a capa verde original já mora em 0,40. A cúrcuma pura, a 0,57, viraria uma mancha branca no sol.
+ * arte; a capa verde de antes morava em 0,40, a índigo de hoje em 0,35). A cúrcuma pura, a 0,57, viraria uma mancha
+ * branca no sol.
  */
 const CLOTH_LIGHT_CAP = 0.48;
-/** O meio e o escuro seguem a mesma queda dos três verdes do herói (0,40 → 0,33 → 0,27). */
+/** O meio e o escuro seguem a queda do pano do herói (a capa de antes: 0,40 → 0,33 → 0,27; a índigo cai parecido). */
 const CLOTH_STEPS: readonly [number, number, number] = [1, 0.82, 0.67];
 
 /**
- * Os três tons de um pano tingido, do claro ao escuro, para trocar os três verdes do herói. A matiz e a saturação são
- * as da tinta; a luz segue a do pano original, para a capa nova pegar a mesma luz que a antiga pegava.
+ * Os três tons de um pano tingido, do claro ao escuro, para trocar os três tons da capa. A matiz e a saturação
+ * são as da tinta; a luz segue a do pano original, para o pano tingido pegar a mesma luz que o natural pegava.
  */
 export const clothRamp = (dye: ClothDye): readonly [string, string, string] => {
-  if (dye === 'natural') return CAPE_GREENS;
+  if (dye === 'natural') return CAPE_COLORS;
   const [h, s, l] = toHsl(toRgb(DYE_SWATCH[dye]));
   const top = Math.min(l, CLOTH_LIGHT_CAP);
   return [fromHsl(h, s, top * CLOTH_STEPS[0]), fromHsl(h, s, top * CLOTH_STEPS[1]), fromHsl(h, s, top * CLOTH_STEPS[2])];

@@ -6,7 +6,8 @@ import { cullFarChildren } from '../sceneCull';
 import { profiler } from '@/game/debug/Profiler';
 import { shroudDayUniform } from '../ChunkShroud3D';
 import { getPixelScale } from '@/game/runtime/graphicsSettings';
-import { flowTimeUniform, lightCapUniform, lightResUniform, lightStepsUniform, lightWobbleUniform, reflectionStrengthUniform, seaFlowUniform, texelAaUniform, waterGlintUniform, waterSkyUniform, windUniform } from '../pixelArtLight';
+import { flowTimeUniform, lightCapUniform, lightResUniform, lightStepsUniform, lightWobbleUniform, reflectionStrengthUniform, seaFlowUniform, texelAaUniform, waterGlintUniform, waterSkyUniform, windGustUniform, windUniform } from '../pixelArtLight';
+import { gustAt } from '@/game/runtime/wind';
 import { platform } from '@/game/platform/platform';
 import { biomeRampUniform } from '../biomeRamp';
 import { shadowTint } from '../CastShadow3D';
@@ -32,6 +33,10 @@ export class FrameRenderer {
   private readonly renderChildren: THREE.Object3D[] = [];
   // Scratch for the per-frame light assignment (never reallocated).
   private readonly lightCandidates: FireEntry[] = [];
+
+  /** A cor do ar da hora (`params.skyColor`), antes de a câmera do mar a puxar para a bruma do horizonte. */
+  private readonly skyBase = new THREE.Color();
+  private readonly focusScratch = new THREE.Vector3();
 
   public constructor(private readonly host: FrameRendererHost) {}
 
@@ -78,6 +83,9 @@ export class FrameRenderer {
       (this.host.tiles.terrainMats.voidMist.userData.mist as MistUniforms).depth.value = Math.max(0, this.host.params.voidMist);
     }
     windUniform.value = Math.max(0, this.host.params.wind);
+    // A rajada do vale, no mesmo relógio que a natureza lê (objects/nature/NatureLife): a mata, o capim, a chuva e as
+    // folhas que caem obedecem ao mesmo vento no mesmo instante.
+    windGustUniform.value = gustAt(this.host.elapsed * 1000);
     // A mortalha do explorador tem duas paletas, e a escolha é a mesma do céu: de noite ela é mais
     // funda que o escuro, de dia é um banco de neblina batido de sol (ver ChunkShroud3D).
     shroudDayUniform.value = this.host.params.daylight;
@@ -88,15 +96,26 @@ export class FrameRenderer {
     this.host.moonLight.intensity = this.host.params.moon;
     this.host.look.applyColor('moon', this.host.moonLight.color, this.host.params.moonColor);
     this.host.look.applyColor('glint', waterGlintUniform.value, this.host.params.glintColor);
+    // O fundo e o fog são a cor do ar da hora (`skyColor`). A câmera do mar (WorldScreen.horizon) a puxa para a bruma do
+    // horizonte e afina o fog, para o mar ir mais longe: a poeira dourada do vale, num horizonte de mar, lia como
+    // tempestade de areia. Com `amount` 0 é a cor de sempre, sem conta nenhuma a mais.
+    this.host.look.applyColor('skyBase', this.skyBase, this.host.params.skyColor);
+    const horizon = this.host.screen.horizon;
     if (this.host.scene.background instanceof THREE.Color) {
-      this.host.look.applyColor('sky', this.host.scene.background, this.host.params.skyColor);
+      this.host.scene.background.copy(this.skyBase);
+      if (horizon.amount > 0) this.host.scene.background.lerp(horizon.color, horizon.amount);
     }
     if (this.host.scene.fog instanceof THREE.FogExp2) {
-      this.host.look.applyColor('fog', this.host.scene.fog.color, this.host.params.skyColor);
-      this.host.scene.fog.density = this.host.params.fogDensity;
+      this.host.scene.fog.color.copy(this.skyBase);
+      if (horizon.amount > 0) this.host.scene.fog.color.lerp(horizon.color, horizon.amount);
+      this.host.scene.fog.density = this.host.params.fogDensity * (1 - 0.35 * horizon.amount);
     }
-    // A cor do AR da perspectiva atmosférica é a do fog (duas horas do dia: ela já mora no skyPreset).
-    this.host.look.applyColor('haze', this.host.screen.finishPass.uniforms.uHazeColor.value as THREE.Color, this.host.params.skyColor);
+    // A cor do AR da perspectiva atmosférica é a do fog (duas horas do dia: ela já mora no skyPreset), e puxa para a
+    // bruma do mar junto com ele (a praia, SeaVista: sobre o mar a poeira dourada lia como lama).
+    const haze = this.host.screen.finishPass.uniforms.uHazeColor.value as THREE.Color;
+    haze.copy(this.skyBase);
+    if (horizon.amount > 0) haze.lerp(horizon.color, horizon.amount);
+    this.host.screen.finishPass.uniforms.uHazeGrey.value = 0.5 * (1 - 0.75 * horizon.amount);
     const fov = this.host.screen.effectiveFov(this.host.camera.aspect);
     if (fov !== this.host.appliedFov) {
       this.host.camera.fov = fov;
@@ -112,6 +131,17 @@ export class FrameRenderer {
     const heroScreen = this.host.projection.focusAtCentre ? this.host.projection.projectTile(this.host.camTarget.x, this.host.camTarget.z, 0.5) : this.host.projection.projectTile(heroX, heroZ, 0.5);
     const trackedFocusY = 1 - heroScreen.y / Math.max(1, platform().display.height);
     this.host.screen.finishPass.uniforms.uFocusY.value = trackedFocusY + (this.host.params.focusY - 0.52);
+    // A lente (finishShader "A LENTE") foca na PROFUNDIDADE do herói: o ponto dele, levado ao espaço da câmera.
+    const focus = this.focusScratch.set(
+      this.host.projection.focusAtCentre ? this.host.camTarget.x : heroX,
+      this.host.camTarget.y + 0.4,
+      this.host.projection.focusAtCentre ? this.host.camTarget.z : heroZ,
+    ).applyMatrix4(this.host.camera.matrixWorldInverse);
+    this.host.screen.finishPass.uniforms.uFocusDist.value = Math.max(0.5, -focus.z);
+    // O pulso de cor de um golpe (finishShader "A COR SEPARA"): um baque de 0,1 tile (um golpe firme) separa 3 px.
+    this.host.screen.finishPass.uniforms.uAberrKick.value = this.host.params.aberration > 0
+      ? Math.min(1, this.host.cam.impact / 0.1) * 3 * this.host.screen.appliedRenderScale
+      : 0;
     // A NITIDEZ do menu de pausa entra por aqui, como a hora do dia: quem MEXEU desde o último
     // frame manda. Assim o botão pega no instante em que o jogo volta a andar, e `hd3d.pixelScale`
     // continua funcionando pelo console (ele vence enquanto o menu não é tocado).
@@ -257,6 +287,8 @@ export class FrameRenderer {
     profiler.begin('groundLight');
     this.host.groundLight.update(this.host.renderer, this.host.camera);
     profiler.end('groundLight');
+    // As poças no chão, todas num desenho só (GlowField): os fogos já dançaram, e a área visível é a deste quadro.
+    this.host.lights.updateGlowField(this.host.groundLight.view);
     profiler.begin('reflection');
     this.host.mirror.render(this.host.params.reflection);
     profiler.end('reflection');

@@ -2,6 +2,7 @@ import type { HeldItemKind } from '@/game/entities/ItemPickup';
 import { MUSHROOM_KINDS } from '@/game/fungi/fungi';
 import { adventureState } from '@/game/runtime/adventureState';
 import { ANIMALS } from '@/game/runtime/sketches';
+import { RELIC_KINDS } from '@/game/relics/relics';
 
 /**
  * O CADERNO DE CAMPO DO ACAMPAMENTO (pedido do autor, 2026-11-11): em cima do colchão, um caderninho que guarda tudo
@@ -16,8 +17,11 @@ import { ANIMALS } from '@/game/runtime/sketches';
  *
  * A CASA (2026-11-17): os enfeites do lar, que a bancada do acampamento faz (objects/toolboxRecipes). Entram quando o
  * herói apanha o que a bancada fez, como todo o resto.
+ *
+ * AS RELÍQUIAS (2026-11-18): as coisas enterradas nas trincas do vale (relics/relics.ts). Entram quando a pá as tira da
+ * terra (scenes/game/RelicDig), pelo mesmo registro (`found`).
  */
-export type NotebookSection = 'tools' | 'materials' | 'home' | 'neighbours' | 'mushrooms' | 'animals';
+export type NotebookSection = 'tools' | 'materials' | 'home' | 'neighbours' | 'mushrooms' | 'animals' | 'relics';
 
 export const NOTEBOOK: ReadonlyArray<{ section: NotebookSection; kinds: readonly string[] }> = [
   { section: 'tools', kinds: ['knife', 'axe', 'shovel', 'bucket', 'pickaxe', 'scythe', 'key'] },
@@ -26,10 +30,12 @@ export const NOTEBOOK: ReadonlyArray<{ section: NotebookSection; kinds: readonly
   { section: 'neighbours', kinds: ['dyeSeeds', 'dyeBundle', 'brush', 'telescope'] },
   { section: 'mushrooms', kinds: MUSHROOM_KINDS },
   { section: 'animals', kinds: ANIMALS },
+  { section: 'relics', kinds: RELIC_KINDS },
 ];
 
 /** Os estados de uma coisa que é a mesma no caderno. */
-const SAME_AS: Readonly<Record<string, string>> = { bucketFull: 'bucket' };
+// (o balde de areia é a AREIA no caderno: é a única areia do jogo, a da praia do norte)
+const SAME_AS: Readonly<Record<string, string>> = { bucketFull: 'bucket', bucketSand: 'sand' };
 
 /**
  * PASSOU PELAS MÃOS. A entrada é uma só, a mochila (`Inventory.add`): tudo que o herói pega entra por ela, venha do

@@ -64,7 +64,8 @@ const withDialogs = (locale: unknown, dialogs: unknown): unknown => {
 
 // The catalogs are looked up dynamically by dot-path, so their literal types don't matter here —
 // treat them as opaque trees.
-const CATALOGS: Readonly<Record<Lang, unknown>> = { en: withDialogs(en, dialogosEn), 'pt-br': withDialogs(ptBr, dialogosPtBr) };
+let dialogs: Readonly<Record<Lang, unknown>> = { en: dialogosEn, 'pt-br': dialogosPtBr };
+let CATALOGS: Readonly<Record<Lang, unknown>> = { en: withDialogs(en, dialogs.en), 'pt-br': withDialogs(ptBr, dialogs['pt-br']) };
 
 const LANG_KEY = 'zh.lang';
 
@@ -100,8 +101,22 @@ const resolveLang = (): Lang => {
 };
 
 const LANG: Lang = resolveLang();
-const CATALOG: unknown = CATALOGS[LANG];
-const FALLBACK: unknown = CATALOGS.en;
+let CATALOG: unknown = CATALOGS[LANG];
+let FALLBACK: unknown = CATALOGS.en;
+
+// O EDITOR DE FALAS (editor/DialogEditor) grava os dialogos/*.json pelo dev server: o jogo aberto (e o "Testar" do
+// editor) pega o texto novo na hora, sem recarregar a página — e sem perder o mundo que está sendo editado.
+if (import.meta.hot) {
+  import.meta.hot.accept(['./dialogos/en.json', './dialogos/pt-br.json'], ([nextEn, nextPt]) => {
+    dialogs = {
+      en: (nextEn as { default?: unknown } | undefined)?.default ?? dialogs.en,
+      'pt-br': (nextPt as { default?: unknown } | undefined)?.default ?? dialogs['pt-br'],
+    };
+    CATALOGS = { en: withDialogs(en, dialogs.en), 'pt-br': withDialogs(ptBr, dialogs['pt-br']) };
+    CATALOG = CATALOGS[LANG];
+    FALLBACK = CATALOGS.en;
+  });
+}
 
 /** A lingua desta sessao. */
 export const getLang = (): Lang => LANG;

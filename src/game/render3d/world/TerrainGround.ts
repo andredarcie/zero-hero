@@ -2,8 +2,13 @@
 // orgânica, e a beira mordida do calçamento.
 
 import * as THREE from 'three';
-import { CHUNK_COLUMNS, CHUNK_ROWS, GROUND_DETAIL_FRAMES, GROUND_TILE_FRAME, SEA_TILE_FRAMES, terrainVariant, STONE_FLOOR_FRAMES } from '@/game/constants';
+import {
+  CHUNK_COLUMNS, CHUNK_ROWS, GROUND_DETAIL_FRAMES, GROUND_TILE_FRAME, groundFrameAt, SAND_TILE_FRAME, SEA_TILE_FRAMES, terrainVariant,
+  STONE_FLOOR_FRAMES,
+} from '@/game/constants';
 import { RELIEF_HEIGHT, reliefLevelAt } from '@/game/world/relief';
+import { isVoidSea } from '@/game/world/WorldData';
+import { addCoastAttribute, buildCoastField, COAST_SEA_MAX, farOceanQuads, surfRefUniform } from '../surf';
 import { buildVineGeometry } from '../vineTexture';
 import { buildFlatTileGeometry, buildReliefContourGeometry, buildShoreGeometry, CLIFF_WALL_SET, DUNGEON_WALL_SET, groundShadeAt, groundTintAt, makeReliefField, STONE_EDGE_MIN, STONE_EDGE_VAR, STONE_EDGE_WOBBLE, STONE_LIP_Y, tileKey, tileShoreCorners } from '../terrainGeometry';
 import type { TerrainMaterials } from '../terrainMaterials';
@@ -27,13 +32,13 @@ export class TerrainGround {
   public constructor(private readonly host: TerrainGroundHost) {}
 
   public bakeRelief(t: TerrainSort, mats: TerrainMaterials): void {
-    const { bedTiles, seaTiles, lavaBedTiles, pitTiles, reliefNear, highGroundTiles, groundTiles, solidSet, treeSet } = t;
+    const { bedTiles, seaTiles, oceanTiles, lavaBedTiles, pitTiles, springTiles, reliefNear, highGroundTiles, groundTiles, solidSet, treeSet } = t;
     // A SERRA COM A CURVA DA MARGEM (ver makeReliefField). Antes do chão: um tile alto com a quina
     // mordida precisa do chão de baixo por inteiro.
     if (reliefNear.length > 0) {
       const stairKeys = new Set(this.host.tiles.stairTiles.map((t) => tileKey(t.x, t.z)));
       const wetKeysForRelief = new Set<number>();
-      for (const list of [bedTiles, seaTiles, lavaBedTiles, pitTiles]) {
+      for (const list of [bedTiles, seaTiles, oceanTiles, lavaBedTiles, pitTiles, springTiles]) {
         for (const t of list) wetKeysForRelief.add(tileKey(t.x, t.z));
       }
       // O cubo de pedra tem teto na altura do planalto: um beiço entrando nele brigaria pelo mesmo plano.
@@ -146,6 +151,88 @@ export class TerrainGround {
     }
 
     return wetTiles;
+  }
+
+  /**
+   * A PRAIA DO NORTE (render3d/surf.ts): a areia e o oceano numa malha só, no nível do chão, com a distância até a
+   * linha d'água em cada quad — é dela que o shader tira o trem de ondas, a quebra, o espraio e a faixa molhada. O
+   * tile de mar veste a arte da areia (é o fundo raso que aparece por baixo da água); o azul é do shader.
+   */
+  public bakeSurf(t: TerrainSort, mats: TerrainMaterials): void {
+    const { oceanTiles, sandTiles, solidSet } = t;
+    if (oceanTiles.length === 0 && sandTiles.length === 0) return;
+    // A água aberta: o oceano menos o que tem pedra em cima (a pedra no mar é costa: a onda quebra em volta dela).
+    const water = new Set<number>();
+    for (const o of oceanTiles) if (!solidSet.has(tileKey(o.x, o.z))) water.add(tileKey(o.x, o.z));
+    const tiles = [
+      ...sandTiles,
+      ...oceanTiles.map((o) => ({ x: o.x, z: o.z, frame: groundFrameAt(SAND_TILE_FRAME, o.x, o.z) })),
+    ];
+    let x0 = Infinity; let z0 = Infinity; let x1 = -Infinity; let z1 = -Infinity;
+    for (const { x, z } of tiles) {
+      x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z);
+    }
+    // Além do que foi varrido o mar de fora continua (isVoidSea): sem isto, a beira da malha contaria como costa, e a
+    // onda quebraria no fim do mundo.
+    const inScan = new Set<number>(tiles.map((s) => tileKey(s.x, s.z)));
+    const isWater = (x: number, z: number): boolean => {
+      const k = tileKey(x, z);
+      return water.has(k) || (!inScan.has(k) && isVoidSea(x, z));
+    };
+    const field = buildCoastField(isWater, x0, z0, x1, z1);
+    const geo = buildFlatTileGeometry(tiles, 0, solidSet);
+    addCoastAttribute(geo, tiles, field);
+    const mesh = new THREE.Mesh(geo, mats.surf);
+    mesh.name = 'terrain-surf';
+    mesh.userData.flatTop = true; // é chão: no espelho do lago ele seria verso
+    this.host.terrain.addTerrainMesh(mesh);
+    this.host.tiles.coast = { field, x0, z0, x1, z1 };
+    // A linha média da água: a borda sul do mar, coluna a coluna, na média (surf.surfRefUniform).
+    // (só nas colunas que têm areia: nas de fora do mapa o mar acaba noutra linha, e a média sairia torta)
+    const beachColumns = new Set(sandTiles.map((s) => s.x));
+    const south = new Map<number, number>();
+    for (const o of oceanTiles) {
+      if (beachColumns.has(o.x) && water.has(tileKey(o.x, o.z))) south.set(o.x, Math.max(south.get(o.x) ?? -Infinity, o.z));
+    }
+    let sum = 0;
+    for (const z of south.values()) sum += z + 0.5;
+    surfRefUniform.value = south.size > 0 ? sum / south.size : 0;
+
+    // O MAR ATÉ O HORIZONTE (surf.farOceanQuads): a câmera do mirante baixa até lá. O MESMO material — a cor e a luz
+    // emendam sem risco.
+    for (const [xa, xb, za, zb] of farOceanQuads(x0, z0, x1, z1, isVoidSea)) {
+      const far = buildFlatTileGeometry([{ x: 0, z: 0, frame: groundFrameAt(SAND_TILE_FRAME, 0, 0) }], 0);
+      far.setAttribute('position', new THREE.Float32BufferAttribute([xa, 0, za, xb, 0, za, xb, 0, zb, xa, 0, zb], 3));
+      far.setAttribute('aCoast4', new THREE.Float32BufferAttribute(new Array<number>(16).fill(COAST_SEA_MAX), 4));
+      far.computeBoundingSphere();
+      const farMesh = new THREE.Mesh(far, mats.surf);
+      farMesh.name = 'terrain-surf-far';
+      farMesh.userData.flatTop = true;
+      this.host.terrain.addTerrainMesh(farMesh);
+    }
+  }
+
+  /**
+   * A AREIA NÃO ACABA EM ESCADINHA: onde ela encontra o capim (a duna), o capim MORDE a beira dela por um contorno
+   * orgânico — o mesmo caminho da terra nua e do calçamento (`buildShoreGeometry` deitado, só o beiço).
+   */
+  public bakeSandEdges(t: TerrainSort, mats: TerrainMaterials, groundFrame: ReadonlyMap<number, number>): void {
+    const { sandTiles, solidSet, treeSet } = t;
+    if (sandTiles.length === 0) return;
+    const field = this.host.tiles.reliefField;
+    const lip = buildShoreGeometry(
+      new Set(sandTiles.map((s) => tileKey(s.x, s.z))), sandTiles,
+      (x, z) => {
+        const frame = groundFrame.get(tileKey(x, z));
+        return frame !== undefined && reliefLevelAt(x, z) === 0 && !STONE_FLOOR_FRAMES.has(frame) ? frame : null;
+      }, 0,
+      {
+        min: 0.06, variance: 0.42, round: 0.22, wobble: 2.1, y: STONE_LIP_Y, flatOnly: true, sourceOnly: true,
+        keep: (px, pz) => !field || field(px, pz) === 0, shadeAt: groundShadeAt(solidSet, treeSet),
+      },
+    );
+    lip.walls.dispose();
+    this.host.terrain.addTerrainMesh(new THREE.Mesh(lip.lip, mats.ground));
   }
 
   public bakeStoneEdges(t: TerrainSort, mats: TerrainMaterials): void {

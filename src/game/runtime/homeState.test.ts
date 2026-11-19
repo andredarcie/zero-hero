@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { DYE_COLORS } from '@/game/quests/dyePlants';
 import {
-  CAPE_GREENS, CLOTH_DYES, DYE_SWATCH, HOME_NAME_MAX, cleanHomeName, clothRamp, isClothDye, swapPalette, unlockedDyes,
+  CAPE_COLORS, CLOTH_DYES, DYE_SWATCH, HOME_NAME_MAX, cleanHomeName, clothRamp, isClothDye, swapPalette, unlockedDyes,
 } from './homeState';
 
 // O LAR, a regra pura: as cores da tina, o tom de cada uma no pano, a troca de paleta da capa e o nome da placa.
@@ -36,8 +36,8 @@ describe('as cores da tina', () => {
     expect(isClothDye(3)).toBe(false);
   });
 
-  it('o pano natural é a capa verde do herói, sem um pixel de diferença', () => {
-    expect(clothRamp('natural')).toEqual(CAPE_GREENS);
+  it('o pano natural é a capa índigo do herói, sem um pixel de diferença', () => {
+    expect(clothRamp('natural')).toEqual(CAPE_COLORS);
   });
 
   it('cada tinta vira três tons, do claro ao escuro, na matiz dela e sem estourar na luz do mundo', () => {
@@ -60,19 +60,19 @@ describe('as cores da tina', () => {
 describe('a troca de paleta da capa', () => {
   it('troca só as cores exatas do pano, e deixa o resto e a transparência como estavam', () => {
     const pixels = new Uint8ClampedArray([
-      ...rgb(CAPE_GREENS[0]), 255,
-      ...rgb(CAPE_GREENS[2]), 128,
-      ...rgb('#1d2b53'), 255, // a armadura azul-marinho fica
-      ...rgb(CAPE_GREENS[1]), 0, // pixel vazio: nem olha
+      ...rgb(CAPE_COLORS[0]), 255,
+      ...rgb(CAPE_COLORS[2]), 128,
+      ...rgb('#1d2b53'), 255, // o contorno de tinta fica (é vizinho do índigo da capa, mas não é ele)
+      ...rgb(CAPE_COLORS[1]), 0, // pixel vazio: nem olha
     ]);
     const to = clothRamp('garanca');
-    const out = swapPalette(pixels, CAPE_GREENS, to);
+    const out = swapPalette(pixels, CAPE_COLORS, to);
     expect([...out.slice(0, 4)]).toEqual([...rgb(to[0]), 255]);
     expect([...out.slice(4, 8)]).toEqual([...rgb(to[2]), 128]);
     expect([...out.slice(8, 12)]).toEqual([...rgb('#1d2b53'), 255]);
-    expect([...out.slice(12, 16)]).toEqual([...rgb(CAPE_GREENS[1]), 0]);
+    expect([...out.slice(12, 16)]).toEqual([...rgb(CAPE_COLORS[1]), 0]);
     // A original não muda: toda tinta parte dela.
-    expect([...pixels.slice(0, 3)]).toEqual(rgb(CAPE_GREENS[0]));
+    expect([...pixels.slice(0, 3)]).toEqual(rgb(CAPE_COLORS[0]));
   });
 });
 

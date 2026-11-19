@@ -75,10 +75,10 @@ export default {
     const visible = await driver.page.evaluate(() => Array.from(
       document.querySelectorAll('#zh-pause-root .zh-main .zh-pause-btn'), (b) => b.textContent,
     ));
-    // Quatro saidas: retornar, opcoes, as musicas (a vitrola, que entrou depois deste cenario) e sair. Nenhuma delas
-    // e idioma nem lista de levels.
-    assert('A pausa tem quatro saidas e mais nada', visible.length === 4, JSON.stringify(visible));
+    // Cinco saidas: retornar, as conversas (reler o que cada um disse, 2026-11-18), opcoes, as musicas (a vitrola) e
+    // sair. Nenhuma delas e idioma nem lista de levels.
+    assert('A pausa tem cinco saidas e mais nada', visible.length === 5 && /Conversas|Conversations/.test(visible[1]), JSON.stringify(visible));
     assert('E nenhuma delas e idioma nem levels', !visible.some((t) => /idioma|language|level/i.test(t)), JSON.stringify(visible));
-    await shot('pause-adventure', { note: 'A pausa: retornar, opcoes, musicas, sair', state: {} });
+    await shot('pause-adventure', { note: 'A pausa: retornar, conversas, opcoes, musicas, sair', state: {} });
   },
 };

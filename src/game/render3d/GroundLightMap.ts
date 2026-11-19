@@ -6,6 +6,7 @@ import {
   flowTimeUniform,
   groundLightMapOnUniform,
   groundLightMapUniform,
+  groundLightReachUniform,
   groundLightRectUniform,
   groundLightSizeUniform,
   groundLightTexelYUniform,
@@ -110,6 +111,8 @@ export class GroundLightMap {
   private readonly origin = new THREE.Vector3();
   private readonly hit = new THREE.Vector3();
   private readonly lightPos = new THREE.Vector3();
+  /** O alcance das luzes acesas neste quadro (ver measureReach; reaproveitado: nada aloca por quadro). */
+  private readonly reach = { x0: 0, z0: 0, x1: 0, z1: 0 };
   /**
    * O retângulo do chão que a câmera enxergou no último quadro, em tiles e já com a folga — o que
    * está fora dele não aparece na tela. Quem anima coisas pelo mundo pergunta aqui antes de
@@ -183,15 +186,32 @@ export class GroundLightMap {
     const v = this.view;
     v.minX = minX - PAD_TILES; v.maxX = maxX + PAD_TILES;
     v.minZ = minZ - PAD_TILES; v.maxZ = maxZ + PAD_TILES;
+
+    // O ALCANCE das luzes acesas (groundLightReachUniform): a caixa das esferas de corte, com a folga do tremor.
+    const lights = this.lights();
+    const count = Math.min(MAX_LIGHTS, lights.length);
+    const reach = this.measureReach(lights, count);
     if (!this.supported || !(res > 0)) {
       groundLightMapOnUniform.value = 0;
       return;
     }
+    // Sem nenhuma luz acesa o mapa seria todo zero, e o laço que ele substitui é pulado inteiro: nem desenha.
+    if (reach.x0 > reach.x1) {
+      groundLightMapOnUniform.value = 0;
+      return;
+    }
 
-    const x0 = Math.floor((minX - PAD_TILES) * res);
-    const z0 = Math.floor((minZ - PAD_TILES) * res);
-    const w = Math.min(MAX_TEXELS, Math.ceil((maxX + PAD_TILES) * res) - x0);
-    const h = Math.min(MAX_TEXELS, Math.ceil((maxZ + PAD_TILES) * res) - z0);
+    // O mapa cobre o chão visível DENTRO do alcance: fora dele a luz é zero e o shader nem pergunta. Com a câmera do
+    // guarda-sol olhando o horizonte, a área visível é o mar até o fim do mundo, e o mapa chegava ao teto (2048²
+    // células, mais que os pixels da tela) para guardar zeros.
+    const ax0 = Math.max(minX - PAD_TILES, reach.x0);
+    const az0 = Math.max(minZ - PAD_TILES, reach.z0);
+    const ax1 = Math.min(maxX + PAD_TILES, reach.x1);
+    const az1 = Math.min(maxZ + PAD_TILES, reach.z1);
+    const x0 = Math.floor(ax0 * res);
+    const z0 = Math.floor(az0 * res);
+    const w = Math.min(MAX_TEXELS, Math.ceil(ax1 * res) - x0);
+    const h = Math.min(MAX_TEXELS, Math.ceil(az1 * res) - z0);
     if (!(w > 0 && h > 0)) {
       groundLightMapOnUniform.value = 0;
       return;
@@ -212,8 +232,6 @@ export class GroundLightMap {
     const col = u.uCol.value as Float32Array;
     const dist = u.uDist.value as Float32Array;
     const decay = u.uDecay.value as Float32Array;
-    const lights = this.lights();
-    const count = Math.min(MAX_LIGHTS, lights.length);
     u.uCount.value = count;
     for (let i = 0; i < count; i++) {
       const l = lights[i];
@@ -238,11 +256,38 @@ export class GroundLightMap {
     groundLightMapOnUniform.value = 1;
   }
 
+  /**
+   * A caixa (em tiles de mundo) fora da qual toda luz pontual acesa vale exatamente zero, escrita no uniform que os
+   * materiais leem. Uma luz conta se a cor × intensidade não é preta (as apagadas o shader já pula); a esfera dela é o
+   * `distance` (0 = sem corte: o mundo inteiro). A folga cobre o tremor da célula (até ~0,85 tile com o padrão) e o
+   * meio texel do encaixe na grade. Nenhuma luz acesa: a caixa sai vazia (x0 > x1), e todo fragmento é "longe".
+   */
+  private measureReach(lights: readonly THREE.PointLight[], count: number): { x0: number; z0: number; x1: number; z1: number } {
+    const r = this.reach;
+    r.x0 = Infinity; r.z0 = Infinity; r.x1 = -Infinity; r.z1 = -Infinity;
+    for (let i = 0; i < count; i++) {
+      const l = lights[i];
+      if (!l.visible || !(l.intensity > 0) || l.color.r + l.color.g + l.color.b <= 0) continue;
+      const p = (l.parent as THREE.Scene | null)?.isScene ? l.position : l.getWorldPosition(this.lightPos);
+      const d = l.distance > 0 ? l.distance : Infinity;
+      r.x0 = Math.min(r.x0, p.x - d); r.x1 = Math.max(r.x1, p.x + d);
+      r.z0 = Math.min(r.z0, p.z - d); r.z1 = Math.max(r.z1, p.z + d);
+    }
+    const slack = Math.abs(lightWobbleUniform.value as number) * 0.75 + 0.25;
+    r.x0 -= slack; r.z0 -= slack; r.x1 += slack; r.z1 += slack;
+    // (vazia: o uniform fica com a caixa do avesso, e o teste "fora" do shader vale para todo ponto)
+    const u = groundLightReachUniform.value;
+    if (r.x0 > r.x1) u.set(1e9, 1e9, -1e9, -1e9);
+    else u.set(Math.max(-1e9, r.x0), Math.max(-1e9, r.z0), Math.min(1e9, r.x1), Math.min(1e9, r.z1));
+    return r;
+  }
+
   public dispose(): void {
     for (const t of this.targets) t.dispose();
     this.quad.material.dispose();
     this.quad.dispose();
     groundLightMapOnUniform.value = 0;
     groundLightMapUniform.value = null;
+    groundLightReachUniform.value.set(-1e9, -1e9, 1e9, 1e9);
   }
 }

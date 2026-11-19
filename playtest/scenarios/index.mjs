@@ -8,6 +8,7 @@ import heroView from './hero-view.mjs';
 import movementFeel from './movement-feel.mjs';
 import perfBurn from './perf-burn.mjs';
 import perfProfile from './perf-profile.mjs';
+import perfLugares from './perf-lugares.mjs';
 import visualRef from './visual-ref.mjs';
 import aaTruth from './aa-truth.mjs';
 import tour from './tour.mjs';
@@ -57,6 +58,15 @@ import construirTelas from './construir-telas.mjs';
 import painelTestes from './painel-testes.mjs';
 import matoVolta from './mato-volta.mjs';
 import troncoBancada from './tronco-bancada.mjs';
+import conversas from './conversas.mjs';
+import editorFalas from './editor-falas.mjs';
+import reliquias from './reliquias.mjs';
+import mataViva from './mata-viva.mjs';
+import praia from './praia.mjs';
+import fonte from './fonte.mjs';
+import praiaEditor from './praia-editor.mjs';
+import cameraHd2d from './camera-hd2d.mjs';
+import pegadas from './pegadas.mjs';
 
 export const scenarios = {
   smoke,
@@ -69,6 +79,7 @@ export const scenarios = {
   'movement-feel': movementFeel,
   'perf-burn': perfBurn,
   'perf-profile': perfProfile,
+  'perf-lugares': perfLugares,
   'visual-ref': visualRef,
   'aa-truth': aaTruth,
   tour,
@@ -118,6 +129,15 @@ export const scenarios = {
   'painel-testes': painelTestes,
   'mato-volta': matoVolta,
   'tronco-bancada': troncoBancada,
+  conversas,
+  'editor-falas': editorFalas,
+  reliquias,
+  'mata-viva': mataViva,
+  praia,
+  'praia-editor': praiaEditor,
+  fonte,
+  'camera-hd2d': cameraHd2d,
+  pegadas,
 };
 
 // What `npm run playtest` runs when no scenario is named.

@@ -213,6 +213,15 @@ export default {
       kb.cv < 0.2,
       `speed varies by cv=${kb.cv.toFixed(2)} — mean ${kb.tilesPerSec.toFixed(1)} tiles/s`,
     );
+    // O PASSO VERTICAL (worldParams.verticalStepSpeedup, 2026-11-19): a câmera HD-2D encolhe a profundidade na tela, e
+    // subir ou descer parecia câmera lenta; o passo para o norte e o sul é ~1,6× o de lado, e o chão corre na tela como
+    // corria na câmera antiga.
+    const vRatio = down.tilesPerSec / kb.tilesPerSec;
+    assert(
+      'Subir e descer andam mais tiles por segundo que o passo de lado (a câmera encolhe a profundidade)',
+      vRatio > 1.35 && vRatio < 1.85,
+      `para baixo ${down.tilesPerSec.toFixed(1)} vs de lado ${kb.tilesPerSec.toFixed(1)} tiles/s (×${vRatio.toFixed(2)})`,
+    );
     assert(
       'No frame is spent standing still mid-walk',
       kb.stalledPct < 0.03,

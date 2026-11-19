@@ -15,6 +15,8 @@ export interface TerrainMaterials {
   trees: THREE.MeshLambertMaterial;
   /** O MAR: o mesmo atlas do chão, com a corrente e a arrebentação (worldFx 'seaFlow'). */
   sea: THREE.MeshLambertMaterial;
+  /** A PRAIA DO NORTE: a areia e o mar aberto numa malha só, com as ondas (worldFx 'surf', render3d/surf.ts). */
+  surf: THREE.MeshLambertMaterial;
   bank: THREE.MeshLambertMaterial;
   /** Sem luz: o barranco da lava é iluminado por ela, e isso vem pintado no vértice. */
   lavaBank: THREE.MeshBasicMaterial;
@@ -55,6 +57,12 @@ export const makeTerrainMaterials = (tileset: THREE.Texture): TerrainMaterials =
   const sea = new THREE.MeshLambertMaterial({ map: tileset, vertexColors: true });
   patchPixelMaterial(sea, { quantize: true, texelAa: tileAa, worldFx: 'seaFlow', mirrorSurface: true });
   sea.name = 'terrain-sea'; // o playtest acha o material do mar por aqui, sem adivinhar índice
+  // A PRAIA (render3d/surf.ts): a areia e o mar aberto são UMA superfície — a onda sobe a areia, e a faixa molhada é
+  // este material escurecendo a arte da areia. Sem a rampa do bioma (areia não é folha, e o verde-água passaria por
+  // folha e sairia capim) e sem espelho (o plano dele é o do lago, afundado; a praia fica ao nível do chão).
+  const surf = new THREE.MeshLambertMaterial({ map: tileset, vertexColors: true });
+  patchPixelMaterial(surf, { quantize: true, texelAa: tileAa, worldFx: 'surf' });
+  surf.name = 'terrain-surf';
   // A margem é PINTADA por vértice (as faixas de buildBankGeometry): friso de capim, terra,
   // terra molhada. Era uma cor só, quase preta — o lago lia como um buraco de parede reta.
   const bank = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
@@ -133,7 +141,7 @@ export const makeTerrainMaterials = (tileset: THREE.Texture): TerrainMaterials =
   patchPixelMaterial(vines, { quantize: true, normalUp: true });
   vines.name = 'terrain-vines';
   return {
-    ground, sea, bank, lavaBank, lava, pit, pitFloor, standing, standingFront, solid, trees, rock, stair, wallTop, vines,
+    ground, sea, surf, bank, lavaBank, lava, pit, pitFloor, standing, standingFront, solid, trees, rock, stair, wallTop, vines,
     voidMist: makeVoidMistMaterial(),
     blob: makeShadowBlobMaterial(0.34),
   };

@@ -193,7 +193,35 @@ describe('ponto inicial, falas e mundo', () => {
     world.meta.playerStart = { worldX: -5, worldY: 999 };
     const fresh = new EditorStore(world);
     expect(fresh.dirty).toBe(true);
-    expect(fresh.spawn).toEqual({ worldX: 30, worldY: 30 });
+    // o meio do mapa, contado da linha mais ao norte (a praia fica acima da linha 0)
+    expect(fresh.spawn).toEqual({ worldX: 30, worldY: fresh.minY + Math.floor(fresh.tilesY / 2) });
+  });
+
+  it('o mapa começa acima da linha 0: as linhas da praia existem, e o armazém lê e escreve nelas', () => {
+    expect(store.originCy).toBe(-2);
+    expect(store.minY).toBe(-24);
+    expect(store.isInside(0, -24)).toBe(true);
+    expect(store.isInside(59, -1)).toBe(true);
+    expect(store.isInside(0, -25)).toBe(false);
+    expect(store.isInside(0, 60)).toBe(false);
+    // a borda norte é mar; pintar um tile de lá e desfazer devolve o que havia
+    const before = store.readCell('ground', 30, -24);
+    expect(before).toBe(33);
+    store.setCell('ground', 30, -24, 141);
+    expect(store.readCell('ground', 30, -24)).toBe(141);
+    store.history.undo();
+    expect(store.readCell('ground', 30, -24)).toBe(before);
+  });
+
+  it('mudar o tamanho cresce e encolhe pelo sul: a linha do norte fica', () => {
+    const world = loadWorld();
+    const fresh = new EditorStore(world);
+    fresh.meta.resizeWorld(5, 3);
+    expect(fresh.world.chunks.map((c) => c.cy).sort((a, b) => a - b)[0]).toBe(-2);
+    expect(Math.max(...fresh.world.chunks.map((c) => c.cy))).toBe(0);
+    expect(fresh.isInside(30, -24)).toBe(true);
+    expect(fresh.isInside(30, 12)).toBe(false);
+    expect(fresh.readCell('ground', 30, -24)).toBe(33);
   });
 
   it('a fala do NPC: a do mundo, ou a do código como modelo; trocar desfaz', () => {

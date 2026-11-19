@@ -3,6 +3,8 @@
 
 import * as THREE from 'three';
 import { makeFireGlowMaterial, setFireGlow } from '../glowMaterials';
+import type { CullView } from '../sceneCull';
+import { GlowField } from './GlowField';
 import type { FireEntry } from './TerrainData';
 import type { World3D } from '../World3D';
 import { FIRE_COLOR } from './worldDefs';
@@ -55,7 +57,7 @@ export interface FireLight3D {
 }
 
 /** O que WorldLights usa de World3D. */
-export type WorldLightsHost = Pick<World3D, 'hero' | 'params' | 'probe' | 'scene' | 'shadowLight'>;
+export type WorldLightsHost = Pick<World3D, 'hero' | 'params' | 'probe' | 'renderer' | 'scene' | 'shadowLight'>;
 
 export class WorldLights {
   private readonly pointLightList: THREE.PointLight[] = [];
@@ -68,6 +70,10 @@ export class WorldLights {
   // Glow quads are meshes, not lights: they can come and go freely (no recompile), so they
   // are pooled only to avoid churning geometry/materials as bushes burn.
   public readonly freeGlows: THREE.Mesh[] = [];
+  /** As poças em uso (as dos fogos e as paradas): o campo lê delas a cada quadro. */
+  private readonly liveGlows = new Set<THREE.Mesh>();
+  /** Quem desenha todas as poças num quadro só (GlowField). */
+  public glowField?: GlowField;
   // Rebuilt once per frame so the cast-shadow pass doesn't re-scan every fire (lit or
   // not, near or not) for every single caster.
   public readonly litFires: FireEntry[] = [];
@@ -87,6 +93,7 @@ export class WorldLights {
       this.host.scene.add(light);
       this.fireLights.push(light);
     }
+    this.glowField = new GlowField(this.host.scene, this.host.renderer.extensions.has('EXT_color_buffer_float'));
   }
 
   /**
@@ -99,19 +106,34 @@ export class WorldLights {
     const free = this.freeGlows.pop();
     if (free) {
       free.visible = true;
+      this.liveGlows.add(free);
       return free;
     }
     const geo = new THREE.PlaneGeometry(1, 1);
     geo.rotateX(-Math.PI / 2);
-    const glow = new THREE.Mesh(geo, makeFireGlowMaterial());
+    const material = makeFireGlowMaterial();
+    // A malha guarda o lugar, o tamanho e a força da poça (setFireGlow); quem DESENHA é o campo (GlowField), que soma
+    // todas num quadro só. Ela continua na cena, apagada, para quem a lê.
+    material.visible = false;
+    const glow = new THREE.Mesh(geo, material);
     glow.renderOrder = 2;
     this.host.scene.add(glow);
+    this.liveGlows.add(glow);
     return glow;
   }
 
   private releaseGlow(glow: THREE.Mesh): void {
     glow.visible = false;
+    this.liveGlows.delete(glow);
     this.freeGlows.push(glow);
+  }
+
+  /**
+   * O campo das poças (GlowField): nasce com as luzes do pool (createFireLights) e, a cada quadro, depois de os fogos
+   * dançarem, lê as poças em uso e desenha todas de uma vez.
+   */
+  public updateGlowField(view: CullView): void {
+    this.glowField?.update(this.liveGlows, view, this.host.renderer);
   }
 
   /**

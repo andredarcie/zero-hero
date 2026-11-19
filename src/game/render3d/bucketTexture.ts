@@ -19,6 +19,11 @@ const PALETTE: Record<string, readonly [number, number, number, number]> = {
   m: [0x9a, 0xa0, 0xa8, 255], // iron band / handle
   a: [0x4f, 0x74, 0xa8, 255], // water (the river's slate-navy)
   b: [0xa9, 0xc2, 0xe6, 255], // water glint
+  // a areia da praia (os cinzas quentes e o ocre da areia do atlas, beach-sand.mjs): um montinho acima da borda
+  s: [0x7b, 0x77, 0x6d, 255],
+  t: [0x8e, 0x89, 0x7d, 255],
+  u: [0xa2, 0x89, 0x5b, 255],
+  c: [0xcc, 0xbd, 0x99, 255],
 };
 
 // Authored top-down (row 0 = the handle arc above the rim). 14 wide × 15 tall.
@@ -44,7 +49,13 @@ const EMPTY = [
 const FULL = EMPTY.map((row, i) =>
   (i === 5 ? '.kbbbbbbbbbbk.' : i === 6 ? '.kaaaaaaaaaak.' : row));
 
-const BUCKET_KEY = { empty: 'bucket-icon', full: 'bucket-full-icon' } as const;
+// O balde de AREIA (a areia da praia do norte, que a Thea pede para o vidro — 2026-11-19): a areia não fica rasa como
+// a água, ela faz um montinho acima da borda, claro em cima e com o ocre do grão.
+const SAND = EMPTY.map((row, i) =>
+  (i === 3 ? '..m..ctc...m..' : i === 4 ? '.kkcutttcukkk.' : i === 5 ? '.kttuttttuttk.' : i === 6 ? '.kssssusssssk.' : row));
+
+const BUCKET_KEY = { empty: 'bucket-icon', full: 'bucket-full-icon', sand: 'bucket-sand-icon' } as const;
+const BUCKET_ART = { empty: EMPTY, full: FULL, sand: SAND } as const;
 
 const makeCanvas = (rows: readonly string[]): HTMLCanvasElement => {
   const h = rows.length;
@@ -78,12 +89,12 @@ let threeRegistered = false;
  * (GameScene.create). Idempotent per pipeline — safe across scene restarts.
  */
 export const registerBucketTextures = (scene: Engine.Scene): void => {
-  for (const state of ['empty', 'full'] as const) {
+  for (const state of ['empty', 'full', 'sand'] as const) {
     const key = BUCKET_KEY[state];
     const needThree = !threeRegistered;
     const need2d = !scene.textures.exists(key);
     if (!needThree && !need2d) continue;
-    const canvas = makeCanvas(state === 'empty' ? EMPTY : FULL);
+    const canvas = makeCanvas(BUCKET_ART[state]);
     if (needThree) {
       const tex = new THREE.CanvasTexture(canvas);
       tex.magFilter = THREE.NearestFilter;

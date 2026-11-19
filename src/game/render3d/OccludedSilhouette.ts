@@ -114,6 +114,14 @@ export class OccludedSilhouette {
     (uniforms.uSize.value as THREE.Vector2).set(image.width, image.height);
   }
 
+  /**
+   * Liga ou desliga o contorno. Com o corpo AFUNDADO no chão de propósito (dentro da fonte termal: SeaWatch.SOAK_DEPTH),
+   * o pedaço escondido é o que está debaixo d'água, e acendê-lo desenharia as pernas através da pedra.
+   */
+  public setEnabled(on: boolean): void {
+    this.mesh.visible = on;
+  }
+
   public destroy(): void {
     this.mesh.removeFromParent();
     this.material.dispose();

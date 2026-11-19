@@ -1,0 +1,770 @@
+{
+ "mata": {
+  "antiga": {
+   "pixels": 52041,
+   "camuflagem": 15.8,
+   "destaque": 64.0,
+   "contraste_borda": 6.8,
+   "borda_que_some": 78.8,
+   "L_heroi": 39.0,
+   "L_fundo": 23.9
+  },
+  "nova": {
+   "pixels": 42689,
+   "camuflagem": 12.4,
+   "destaque": 85.1,
+   "contraste_borda": 10.5,
+   "borda_que_some": 66.4,
+   "L_heroi": 45.9,
+   "L_fundo": 25.0
+  },
+  "fechado": {
+   "pixels": 40387,
+   "camuflagem": 8.4,
+   "destaque": 78.1,
+   "contraste_borda": 11.2,
+   "borda_que_some": 63.0,
+   "L_heroi": 42.6,
+   "L_fundo": 25.8
+  },
+  "hero-cozy-fechado": {
+   "pixels": 44309,
+   "camuflagem": 15.2,
+   "destaque": 78.6,
+   "contraste_borda": 10.2,
+   "borda_que_some": 68.2,
+   "L_heroi": 40.4,
+   "L_fundo": 24.6
+  },
+  "hero-v3-roxo": {
+   "pixels": 42625,
+   "camuflagem": 10.6,
+   "destaque": 83.6,
+   "contraste_borda": 11.0,
+   "borda_que_some": 64.5,
+   "L_heroi": 43.3,
+   "L_fundo": 25.1
+  },
+  "hero-v3-azul": {
+   "pixels": 40426,
+   "camuflagem": 7.6,
+   "destaque": 77.6,
+   "contraste_borda": 12.8,
+   "borda_que_some": 58.6,
+   "L_heroi": 43.8,
+   "L_fundo": 26.1
+  },
+  "hero-v4": {
+   "pixels": 41075,
+   "camuflagem": 11.1,
+   "destaque": 79.0,
+   "contraste_borda": 11.4,
+   "borda_que_some": 62.7,
+   "L_heroi": 42.1,
+   "L_fundo": 24.9
+  },
+  "hero-antigo": {
+   "pixels": 45061,
+   "camuflagem": 13.0,
+   "destaque": 66.9,
+   "contraste_borda": 9.4,
+   "borda_que_some": 71.9,
+   "L_heroi": 29.7,
+   "L_fundo": 24.9
+  },
+  "hero-v5-aco": {
+   "pixels": 45607,
+   "camuflagem": 10.6,
+   "destaque": 78.1,
+   "contraste_borda": 11.2,
+   "borda_que_some": 63.0,
+   "L_heroi": 42.5,
+   "L_fundo": 25.0
+  },
+  "hero-v5-couro": {
+   "pixels": 43861,
+   "camuflagem": 7.1,
+   "destaque": 78.0,
+   "contraste_borda": 11.7,
+   "borda_que_some": 58.5,
+   "L_heroi": 41.4,
+   "L_fundo": 26.2
+  },
+  "hero-v6": {
+   "pixels": 44704,
+   "camuflagem": 10.0,
+   "destaque": 78.2,
+   "contraste_borda": 10.5,
+   "borda_que_some": 64.5,
+   "L_heroi": 41.3,
+   "L_fundo": 25.3
+  },
+  "hero-v7-indigo": {
+   "pixels": 46251,
+   "camuflagem": 10.8,
+   "destaque": 65.1,
+   "contraste_borda": 9.9,
+   "borda_que_some": 65.9,
+   "L_heroi": 40.7,
+   "L_fundo": 25.3
+  },
+  "hero-v7-violeta": {
+   "pixels": 44188,
+   "camuflagem": 7.0,
+   "destaque": 66.3,
+   "contraste_borda": 10.7,
+   "borda_que_some": 61.4,
+   "L_heroi": 42.2,
+   "L_fundo": 26.3
+  },
+  "hero-v8": {
+   "pixels": 44545,
+   "camuflagem": 7.6,
+   "destaque": 65.2,
+   "contraste_borda": 10.2,
+   "borda_que_some": 63.5,
+   "L_heroi": 41.2,
+   "L_fundo": 26.2
+  }
+ },
+ "prado": {
+  "antiga": {
+   "pixels": 51794,
+   "camuflagem": 1.7,
+   "destaque": 86.0,
+   "contraste_borda": 22.3,
+   "borda_que_some": 44.1,
+   "L_heroi": 34.0,
+   "L_fundo": 47.4
+  },
+  "nova": {
+   "pixels": 47282,
+   "camuflagem": 1.3,
+   "destaque": 85.9,
+   "contraste_borda": 27.2,
+   "borda_que_some": 29.9,
+   "L_heroi": 39.9,
+   "L_fundo": 47.5
+  },
+  "fechado": {
+   "pixels": 46634,
+   "camuflagem": 1.2,
+   "destaque": 85.9,
+   "contraste_borda": 30.1,
+   "borda_que_some": 22.0,
+   "L_heroi": 34.8,
+   "L_fundo": 47.6
+  },
+  "hero-cozy-fechado": {
+   "pixels": 46898,
+   "camuflagem": 1.5,
+   "destaque": 85.8,
+   "contraste_borda": 26.3,
+   "borda_que_some": 31.8,
+   "L_heroi": 34.4,
+   "L_fundo": 47.4
+  },
+  "hero-v3-roxo": {
+   "pixels": 46283,
+   "camuflagem": 1.3,
+   "destaque": 99.4,
+   "contraste_borda": 28.1,
+   "borda_que_some": 25.2,
+   "L_heroi": 37.2,
+   "L_fundo": 47.4
+  },
+  "hero-v3-azul": {
+   "pixels": 46641,
+   "camuflagem": 1.2,
+   "destaque": 85.8,
+   "contraste_borda": 31.1,
+   "borda_que_some": 16.3,
+   "L_heroi": 36.2,
+   "L_fundo": 47.4
+  },
+  "hero-v4": {
+   "pixels": 46886,
+   "camuflagem": 1.1,
+   "destaque": 90.3,
+   "contraste_borda": 28.5,
+   "borda_que_some": 24.9,
+   "L_heroi": 36.1,
+   "L_fundo": 47.9
+  },
+  "hero-antigo": {
+   "pixels": 46406,
+   "camuflagem": 1.5,
+   "destaque": 87.9,
+   "contraste_borda": 24.8,
+   "borda_que_some": 36.1,
+   "L_heroi": 22.1,
+   "L_fundo": 47.5
+  },
+  "hero-v5-aco": {
+   "pixels": 49716,
+   "camuflagem": 1.2,
+   "destaque": 86.9,
+   "contraste_borda": 28.3,
+   "borda_que_some": 26.0,
+   "L_heroi": 37.0,
+   "L_fundo": 48.4
+  },
+  "hero-v5-couro": {
+   "pixels": 50183,
+   "camuflagem": 1.1,
+   "destaque": 86.0,
+   "contraste_borda": 31.1,
+   "borda_que_some": 16.8,
+   "L_heroi": 33.3,
+   "L_fundo": 47.1
+  },
+  "hero-v6": {
+   "pixels": 50499,
+   "camuflagem": 1.4,
+   "destaque": 86.5,
+   "contraste_borda": 29.3,
+   "borda_que_some": 23.6,
+   "L_heroi": 34.6,
+   "L_fundo": 48.1
+  },
+  "hero-v7-indigo": {
+   "pixels": 50551,
+   "camuflagem": 1.3,
+   "destaque": 86.2,
+   "contraste_borda": 28.8,
+   "borda_que_some": 23.9,
+   "L_heroi": 33.8,
+   "L_fundo": 47.7
+  },
+  "hero-v7-violeta": {
+   "pixels": 51043,
+   "camuflagem": 1.1,
+   "destaque": 87.0,
+   "contraste_borda": 31.5,
+   "borda_que_some": 16.5,
+   "L_heroi": 35.0,
+   "L_fundo": 47.9
+  },
+  "hero-v8": {
+   "pixels": 51010,
+   "camuflagem": 1.1,
+   "destaque": 85.7,
+   "contraste_borda": 31.0,
+   "borda_que_some": 16.6,
+   "L_heroi": 33.2,
+   "L_fundo": 46.9
+  }
+ },
+ "praia": {
+  "antiga": {
+   "pixels": 72377,
+   "camuflagem": 1.3,
+   "destaque": 92.9,
+   "contraste_borda": 11.9,
+   "borda_que_some": 60.1,
+   "L_heroi": 51.3,
+   "L_fundo": 71.0
+  },
+  "nova": {
+   "pixels": 56250,
+   "camuflagem": 3.0,
+   "destaque": 86.5,
+   "contraste_borda": 14.1,
+   "borda_que_some": 58.1,
+   "L_heroi": 50.0,
+   "L_fundo": 74.3
+  },
+  "fechado": {
+   "pixels": 54294,
+   "camuflagem": 2.0,
+   "destaque": 88.3,
+   "contraste_borda": 18.2,
+   "borda_que_some": 51.2,
+   "L_heroi": 43.0,
+   "L_fundo": 74.6
+  },
+  "hero-cozy-fechado": {
+   "pixels": 67836,
+   "camuflagem": 3.4,
+   "destaque": 84.2,
+   "contraste_borda": 13.2,
+   "borda_que_some": 58.1,
+   "L_heroi": 52.4,
+   "L_fundo": 70.7
+  },
+  "hero-v3-roxo": {
+   "pixels": 66720,
+   "camuflagem": 4.5,
+   "destaque": 92.3,
+   "contraste_borda": 13.8,
+   "borda_que_some": 60.2,
+   "L_heroi": 53.4,
+   "L_fundo": 71.8
+  },
+  "hero-v3-azul": {
+   "pixels": 62506,
+   "camuflagem": 2.9,
+   "destaque": 83.6,
+   "contraste_borda": 16.7,
+   "borda_que_some": 53.5,
+   "L_heroi": 48.7,
+   "L_fundo": 72.6
+  },
+  "hero-v4": {
+   "pixels": 65042,
+   "camuflagem": 4.7,
+   "destaque": 90.8,
+   "contraste_borda": 15.9,
+   "borda_que_some": 56.8,
+   "L_heroi": 48.8,
+   "L_fundo": 73.5
+  },
+  "hero-antigo": {
+   "pixels": 67357,
+   "camuflagem": 4.0,
+   "destaque": 93.5,
+   "contraste_borda": 12.2,
+   "borda_que_some": 61.6,
+   "L_heroi": 43.3,
+   "L_fundo": 71.5
+  },
+  "hero-v5-aco": {
+   "pixels": 69684,
+   "camuflagem": 4.2,
+   "destaque": 84.2,
+   "contraste_borda": 14.8,
+   "borda_que_some": 57.2,
+   "L_heroi": 51.6,
+   "L_fundo": 71.4
+  },
+  "hero-v5-couro": {
+   "pixels": 64866,
+   "camuflagem": 2.4,
+   "destaque": 90.9,
+   "contraste_borda": 18.2,
+   "borda_que_some": 49.6,
+   "L_heroi": 45.3,
+   "L_fundo": 72.2
+  },
+  "hero-v6": {
+   "pixels": 57712,
+   "camuflagem": 2.8,
+   "destaque": 95.0,
+   "contraste_borda": 19.4,
+   "borda_que_some": 46.5,
+   "L_heroi": 45.1,
+   "L_fundo": 74.5
+  },
+  "hero-v7-indigo": {
+   "pixels": 68372,
+   "camuflagem": 3.6,
+   "destaque": 91.9,
+   "contraste_borda": 14.7,
+   "borda_que_some": 56.5,
+   "L_heroi": 49.6,
+   "L_fundo": 72.1
+  },
+  "hero-v7-violeta": {
+   "pixels": 64142,
+   "camuflagem": 2.7,
+   "destaque": 91.2,
+   "contraste_borda": 17.7,
+   "borda_que_some": 53.2,
+   "L_heroi": 44.9,
+   "L_fundo": 71.7
+  },
+  "hero-v8": {
+   "pixels": 65648,
+   "camuflagem": 2.9,
+   "destaque": 92.0,
+   "contraste_borda": 17.8,
+   "borda_que_some": 52.4,
+   "L_heroi": 44.4,
+   "L_fundo": 72.7
+  }
+ },
+ "cachoeira": {
+  "antiga": {
+   "pixels": 56736,
+   "camuflagem": 17.6,
+   "destaque": 51.8,
+   "contraste_borda": 10.6,
+   "borda_que_some": 68.7,
+   "L_heroi": 33.4,
+   "L_fundo": 28.5
+  },
+  "nova": {
+   "pixels": 51694,
+   "camuflagem": 17.5,
+   "destaque": 72.6,
+   "contraste_borda": 11.1,
+   "borda_que_some": 67.7,
+   "L_heroi": 39.4,
+   "L_fundo": 28.9
+  },
+  "fechado": {
+   "pixels": 49522,
+   "camuflagem": 17.2,
+   "destaque": 69.3,
+   "contraste_borda": 11.5,
+   "borda_que_some": 64.8,
+   "L_heroi": 34.4,
+   "L_fundo": 29.2
+  },
+  "hero-cozy-fechado": {
+   "pixels": 53419,
+   "camuflagem": 16.9,
+   "destaque": 69.3,
+   "contraste_borda": 11.0,
+   "borda_que_some": 67.1,
+   "L_heroi": 34.6,
+   "L_fundo": 28.9
+  },
+  "hero-v3-roxo": {
+   "pixels": 52123,
+   "camuflagem": 17.5,
+   "destaque": 90.4,
+   "contraste_borda": 10.7,
+   "borda_que_some": 67.5,
+   "L_heroi": 37.0,
+   "L_fundo": 30.0
+  },
+  "hero-v3-azul": {
+   "pixels": 50053,
+   "camuflagem": 16.9,
+   "destaque": 67.5,
+   "contraste_borda": 11.7,
+   "borda_que_some": 62.9,
+   "L_heroi": 36.4,
+   "L_fundo": 30.8
+  },
+  "hero-v4": {
+   "pixels": 50342,
+   "camuflagem": 17.1,
+   "destaque": 68.8,
+   "contraste_borda": 12.8,
+   "borda_que_some": 59.2,
+   "L_heroi": 34.7,
+   "L_fundo": 29.2
+  },
+  "hero-antigo": {
+   "pixels": 51025,
+   "camuflagem": 15.3,
+   "destaque": 61.8,
+   "contraste_borda": 12.6,
+   "borda_que_some": 64.1,
+   "L_heroi": 22.8,
+   "L_fundo": 29.8
+  },
+  "hero-v5-aco": {
+   "pixels": 54140,
+   "camuflagem": 18.3,
+   "destaque": 68.7,
+   "contraste_borda": 11.0,
+   "borda_que_some": 66.5,
+   "L_heroi": 35.3,
+   "L_fundo": 29.5
+  },
+  "hero-v5-couro": {
+   "pixels": 52312,
+   "camuflagem": 17.9,
+   "destaque": 68.3,
+   "contraste_borda": 12.4,
+   "borda_que_some": 62.3,
+   "L_heroi": 33.6,
+   "L_fundo": 30.2
+  },
+  "hero-v6": {
+   "pixels": 51895,
+   "camuflagem": 17.6,
+   "destaque": 67.9,
+   "contraste_borda": 12.4,
+   "borda_que_some": 60.0,
+   "L_heroi": 33.6,
+   "L_fundo": 30.4
+  },
+  "hero-v7-indigo": {
+   "pixels": 53290,
+   "camuflagem": 18.0,
+   "destaque": 52.7,
+   "contraste_borda": 11.7,
+   "borda_que_some": 63.8,
+   "L_heroi": 33.5,
+   "L_fundo": 29.5
+  },
+  "hero-v7-violeta": {
+   "pixels": 54544,
+   "camuflagem": 16.7,
+   "destaque": 58.0,
+   "contraste_borda": 12.1,
+   "borda_que_some": 61.1,
+   "L_heroi": 34.3,
+   "L_fundo": 29.8
+  },
+  "hero-v8": {
+   "pixels": 54533,
+   "camuflagem": 16.8,
+   "destaque": 53.3,
+   "contraste_borda": 12.2,
+   "borda_que_some": 60.4,
+   "L_heroi": 33.8,
+   "L_fundo": 29.9
+  }
+ },
+ "lago": {
+  "antiga": {
+   "pixels": 55831,
+   "camuflagem": 16.9,
+   "destaque": 70.2,
+   "contraste_borda": 16.2,
+   "borda_que_some": 61.7,
+   "L_heroi": 42.0,
+   "L_fundo": 39.4
+  },
+  "nova": {
+   "pixels": 56996,
+   "camuflagem": 16.8,
+   "destaque": 67.5,
+   "contraste_borda": 17.4,
+   "borda_que_some": 54.8,
+   "L_heroi": 46.5,
+   "L_fundo": 38.6
+  },
+  "fechado": {
+   "pixels": 54123,
+   "camuflagem": 14.9,
+   "destaque": 69.8,
+   "contraste_borda": 19.4,
+   "borda_que_some": 53.3,
+   "L_heroi": 42.6,
+   "L_fundo": 38.3
+  },
+  "hero-cozy-fechado": {
+   "pixels": 58094,
+   "camuflagem": 17.0,
+   "destaque": 68.6,
+   "contraste_borda": 15.6,
+   "borda_que_some": 61.1,
+   "L_heroi": 42.8,
+   "L_fundo": 37.9
+  },
+  "hero-v3-roxo": {
+   "pixels": 50609,
+   "camuflagem": 16.2,
+   "destaque": 73.2,
+   "contraste_borda": 18.0,
+   "borda_que_some": 57.9,
+   "L_heroi": 42.8,
+   "L_fundo": 40.0
+  },
+  "hero-v3-azul": {
+   "pixels": 48703,
+   "camuflagem": 16.0,
+   "destaque": 72.1,
+   "contraste_borda": 21.5,
+   "borda_que_some": 51.6,
+   "L_heroi": 42.6,
+   "L_fundo": 40.5
+  },
+  "hero-v4": {
+   "pixels": 52648,
+   "camuflagem": 14.4,
+   "destaque": 70.5,
+   "contraste_borda": 17.6,
+   "borda_que_some": 58.0,
+   "L_heroi": 41.9,
+   "L_fundo": 38.4
+  },
+  "hero-antigo": {
+   "pixels": 55348,
+   "camuflagem": 17.4,
+   "destaque": 75.4,
+   "contraste_borda": 15.8,
+   "borda_que_some": 61.7,
+   "L_heroi": 33.0,
+   "L_fundo": 39.1
+  },
+  "hero-v5-aco": {
+   "pixels": 51874,
+   "camuflagem": 16.0,
+   "destaque": 71.5,
+   "contraste_borda": 18.8,
+   "borda_que_some": 56.8,
+   "L_heroi": 42.8,
+   "L_fundo": 40.1
+  },
+  "hero-v5-couro": {
+   "pixels": 47856,
+   "camuflagem": 14.7,
+   "destaque": 71.8,
+   "contraste_borda": 23.4,
+   "borda_que_some": 49.5,
+   "L_heroi": 41.7,
+   "L_fundo": 40.1
+  },
+  "hero-v6": {
+   "pixels": 49359,
+   "camuflagem": 14.0,
+   "destaque": 72.7,
+   "contraste_borda": 18.3,
+   "borda_que_some": 56.3,
+   "L_heroi": 40.5,
+   "L_fundo": 41.3
+  },
+  "hero-v7-indigo": {
+   "pixels": 54138,
+   "camuflagem": 15.8,
+   "destaque": 70.6,
+   "contraste_borda": 19.9,
+   "borda_que_some": 55.4,
+   "L_heroi": 41.9,
+   "L_fundo": 39.3
+  },
+  "hero-v7-violeta": {
+   "pixels": 49122,
+   "camuflagem": 14.3,
+   "destaque": 72.2,
+   "contraste_borda": 23.9,
+   "borda_que_some": 48.6,
+   "L_heroi": 41.4,
+   "L_fundo": 40.1
+  },
+  "hero-v8": {
+   "pixels": 49459,
+   "camuflagem": 14.2,
+   "destaque": 72.0,
+   "contraste_borda": 23.7,
+   "borda_que_some": 48.4,
+   "L_heroi": 41.7,
+   "L_fundo": 40.3
+  }
+ },
+ "fonte-noite": {
+  "antiga": {
+   "pixels": 48826,
+   "camuflagem": 8.8,
+   "destaque": 42.3,
+   "contraste_borda": 6.2,
+   "borda_que_some": 82.8,
+   "L_heroi": 27.0,
+   "L_fundo": 23.3
+  },
+  "nova": {
+   "pixels": 51648,
+   "camuflagem": 22.5,
+   "destaque": 77.9,
+   "contraste_borda": 6.4,
+   "borda_que_some": 81.2,
+   "L_heroi": 30.0,
+   "L_fundo": 25.2
+  },
+  "fechado": {
+   "pixels": 46357,
+   "camuflagem": 14.2,
+   "destaque": 48.5,
+   "contraste_borda": 7.1,
+   "borda_que_some": 77.2,
+   "L_heroi": 27.4,
+   "L_fundo": 23.7
+  },
+  "hero-cozy-fechado": {
+   "pixels": 48333,
+   "camuflagem": 17.8,
+   "destaque": 49.0,
+   "contraste_borda": 5.9,
+   "borda_que_some": 83.1,
+   "L_heroi": 27.2,
+   "L_fundo": 23.5
+  },
+  "hero-v3-roxo": {
+   "pixels": 49398,
+   "camuflagem": 31.3,
+   "destaque": 69.4,
+   "contraste_borda": 6.4,
+   "borda_que_some": 82.0,
+   "L_heroi": 27.1,
+   "L_fundo": 24.1
+  },
+  "hero-v3-azul": {
+   "pixels": 48723,
+   "camuflagem": 32.7,
+   "destaque": 48.2,
+   "contraste_borda": 7.4,
+   "borda_que_some": 78.8,
+   "L_heroi": 27.5,
+   "L_fundo": 23.3
+  },
+  "hero-v4": {
+   "pixels": 46763,
+   "camuflagem": 12.6,
+   "destaque": 47.2,
+   "contraste_borda": 6.7,
+   "borda_que_some": 78.7,
+   "L_heroi": 27.6,
+   "L_fundo": 23.8
+  },
+  "hero-antigo": {
+   "pixels": 46644,
+   "camuflagem": 15.4,
+   "destaque": 44.8,
+   "contraste_borda": 7.0,
+   "borda_que_some": 81.6,
+   "L_heroi": 19.0,
+   "L_fundo": 23.7
+  },
+  "hero-v5-aco": {
+   "pixels": 48664,
+   "camuflagem": 14.9,
+   "destaque": 49.9,
+   "contraste_borda": 6.5,
+   "borda_que_some": 82.0,
+   "L_heroi": 27.4,
+   "L_fundo": 24.5
+  },
+  "hero-v5-couro": {
+   "pixels": 47990,
+   "camuflagem": 11.2,
+   "destaque": 51.8,
+   "contraste_borda": 7.5,
+   "borda_que_some": 78.5,
+   "L_heroi": 27.0,
+   "L_fundo": 23.0
+  },
+  "hero-v6": {
+   "pixels": 50174,
+   "camuflagem": 12.9,
+   "destaque": 49.1,
+   "contraste_borda": 6.7,
+   "borda_que_some": 80.8,
+   "L_heroi": 27.5,
+   "L_fundo": 23.5
+  },
+  "hero-v7-indigo": {
+   "pixels": 51037,
+   "camuflagem": 15.5,
+   "destaque": 41.9,
+   "contraste_borda": 6.6,
+   "borda_que_some": 80.6,
+   "L_heroi": 27.0,
+   "L_fundo": 24.7
+  },
+  "hero-v7-violeta": {
+   "pixels": 51219,
+   "camuflagem": 17.0,
+   "destaque": 43.0,
+   "contraste_borda": 6.3,
+   "borda_que_some": 82.5,
+   "L_heroi": 26.0,
+   "L_fundo": 23.3
+  },
+  "hero-v8": {
+   "pixels": 47961,
+   "camuflagem": 13.9,
+   "destaque": 42.4,
+   "contraste_borda": 6.4,
+   "borda_que_some": 80.6,
+   "L_heroi": 26.7,
+   "L_fundo": 24.9
+  }
+ }
+}

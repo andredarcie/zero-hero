@@ -3,10 +3,10 @@ import * as THREE from 'three';
 import {
   reflectionMapUniform, reflectionMatrixUniform, reflectionOnUniform, reflectionTexelUniform,
 } from './pixelArtLight';
+import { bodiesRect, type MirrorRect as Rect, wetRect } from './mirrorRects';
 import type { CullView } from './sceneCull';
 import { WaterIndex } from './waterIndex';
 
-type Rect = { x0: number; y0: number; x1: number; y1: number };
 /** O alvo inteiro: o próximo espelho limpa tudo. */
 const everything = (): Rect => ({ x0: 0, y0: 0, x1: Number.POSITIVE_INFINITY, y1: Number.POSITIVE_INFINITY });
 
@@ -50,6 +50,8 @@ export class WaterMirror {
   /** O que o alvo pode ter de não-transparente: o retângulo do último desenho. */
   private dirty: Rect = everything();
   private readonly corner = new THREE.Vector3();
+  /** Os limites da água à vista neste quadro, em tiles (reaproveitado: nada aloca por quadro). */
+  private readonly wetBox = { x0: 0, z0: 0, x1: 0, z1: 0 };
 
   /**
    * `view` é a área de chão visível do último quadro (o objeto do GroundLightMap, atualizado no lugar); `planeY`, a
@@ -225,15 +227,27 @@ export class WaterMirror {
     const target = this.target;
     const tw = target.width;
     const th = target.height;
-    // Com cenário na lista (uma malha fundida cobre o mundo inteiro) o retângulo é o alvo todo.
-    const now = scenery > 0 ? { x0: 0, y0: 0, x1: tw, y1: th } : this.bodiesRect(kept, mirror, tw, th);
-    const was = this.dirty;
-    const x0 = Math.max(0, Math.min(now.x0, was.x0));
-    const y0 = Math.max(0, Math.min(now.y0, was.y0));
-    const x1 = Math.min(tw, Math.max(now.x1, was.x1));
-    const y1 = Math.min(th, Math.max(now.y1, was.y1));
-    this.dirty = now;
-    target.scissor.set(x0, y0, Math.max(0, x1 - x0), Math.max(0, y1 - y0));
+    if (scenery > 0) {
+      // COM CENÁRIO na lista (uma malha fundida cobre o mundo inteiro) o desenho cai no alvo todo — mas a água só lê o
+      // alvo onde ELA está (o UV de cada fragmento de água é a projeção dele pela câmera virtual). Então o recorte é a
+      // água à vista, projetada: fora dele o alvo pode guardar o que quiser, ninguém amostra. Na beira do lago do
+      // acampamento a água ocupa uma faixa da tela; desenhar a mata espelhada na tela inteira era metade do quadro.
+      // O que sobra fora do recorte é sujeira conhecida: o primeiro quadro só de corpos limpa tudo.
+      const wet = this.water.boundsInView(this.view, this.wetBox)
+        ? wetRect(this.wetBox, this.planeY, mirror, tw, th, this.corner)
+        : { x0: 0, y0: 0, x1: tw, y1: th };
+      target.scissor.set(wet.x0, wet.y0, Math.max(0, wet.x1 - wet.x0), Math.max(0, wet.y1 - wet.y0));
+      this.dirty = everything();
+    } else {
+      const now = bodiesRect(kept, mirror, tw, th, this.corner);
+      const was = this.dirty;
+      const x0 = Math.max(0, Math.min(now.x0, was.x0));
+      const y0 = Math.max(0, Math.min(now.y0, was.y0));
+      const x1 = Math.min(tw, Math.max(now.x1, was.x1));
+      const y1 = Math.min(th, Math.max(now.y1, was.y1));
+      this.dirty = now;
+      target.scissor.set(x0, y0, Math.max(0, x1 - x0), Math.max(0, y1 - y0));
+    }
     target.scissorTest = true;
 
     // ── o desenho: só a lista, sem o céu, sobre transparente ──
@@ -255,47 +269,4 @@ export class WaterMirror {
     r.setClearColor(s.clear, prevAlpha);
   }
 
-  /**
-   * O retângulo, em pixels do alvo (origem embaixo, como o scissor do GL), que cobre todos os corpos do espelho: os
-   * 8 cantos da caixa de cada um, projetados pela câmera virtual (o recorte oblíquo só mexe na linha do z, então o
-   * x e o y da tela são os da projeção comum), com 2 px de folga. Um canto atrás da câmera devolve o alvo inteiro.
-   */
-  private bodiesRect(kept: THREE.Object3D[], mirror: THREE.PerspectiveCamera, tw: number, th: number): Rect {
-    const full = { x0: 0, y0: 0, x1: tw, y1: th };
-    let x0 = Number.POSITIVE_INFINITY;
-    let y0 = Number.POSITIVE_INFINITY;
-    let x1 = Number.NEGATIVE_INFINITY;
-    let y1 = Number.NEGATIVE_INFINITY;
-    const v = this.corner;
-    const view = mirror.matrixWorldInverse.elements;
-    for (const o of kept) {
-      const m = o as THREE.Mesh;
-      if (!m.isMesh || !m.geometry) continue;
-      const geo = m.geometry;
-      if (!geo.boundingBox) geo.computeBoundingBox();
-      const box = geo.boundingBox;
-      if (!box) return full;
-      m.updateMatrixWorld();
-      for (let c = 0; c < 8; c++) {
-        v.set(c & 1 ? box.max.x : box.min.x, c & 2 ? box.max.y : box.min.y, c & 4 ? box.max.z : box.min.z)
-          .applyMatrix4(m.matrixWorld);
-        // Atrás da câmera (z de vista >= 0): a projeção vira do avesso — o alvo inteiro.
-        if (view[2] * v.x + view[6] * v.y + view[10] * v.z + view[14] >= 0) return full;
-        v.project(mirror);
-        const px = (v.x * 0.5 + 0.5) * tw;
-        const py = (v.y * 0.5 + 0.5) * th;
-        if (px < x0) x0 = px;
-        if (px > x1) x1 = px;
-        if (py < y0) y0 = py;
-        if (py > y1) y1 = py;
-      }
-    }
-    if (x0 > x1) return { x0: 0, y0: 0, x1: 0, y1: 0 };
-    return {
-      x0: Math.max(0, Math.floor(x0) - 2),
-      y0: Math.max(0, Math.floor(y0) - 2),
-      x1: Math.min(tw, Math.ceil(x1) + 2),
-      y1: Math.min(th, Math.ceil(y1) + 2),
-    };
-  }
 }

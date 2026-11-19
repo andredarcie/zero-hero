@@ -3,11 +3,11 @@ import type * as Engine from '@/game/engine';
 import { ASSET_KEYS } from '@/game/constants';
 import { createCanvas } from '@/game/platform/platform';
 import { replaceTextureImage, textureImage } from '@/game/render3d/textures3d';
-import { CAPE_GREENS, clothRamp, swapPalette, type ClothDye } from '@/game/runtime/homeState';
+import { CAPE_COLORS, clothRamp, swapPalette, type ClothDye } from '@/game/runtime/homeState';
 
 /**
- * A CAPA TINGIDA DO HERÓI (runtime/homeState). A folha do herói (`hero.png`) tem o pano em três verdes; tingir é trocar
- * esses três pela rampa da tinta, na folha INTEIRA, e pôr a folha nova no lugar da velha sob a mesma chave — assim o
+ * A CAPA TINGIDA DO HERÓI (runtime/homeState). A folha do herói (`hero.png`) tem a capa em três tons; tingir é
+ * trocar esses três pela rampa da tinta, na folha INTEIRA, e pôr a folha nova no lugar da velha sob a mesma chave — assim o
  * herói andando, sentado, dormindo, o reflexo na água e o contorno atrás das árvores mudam juntos, sem um quadro
  * redesenhado. O mundo 3D troca a imagem da chave `hero`; o 2D (a cerimônia de item novo) ganha uma folha com chave
  * própria por cor, e `heroSheet2D` diz qual usar.
@@ -35,7 +35,7 @@ const sheetOf = (dye: ClothDye): HTMLCanvasElement | null => {
   if (!ctx || !src) return null;
   const pixels = src.getImageData(0, 0, original.width, original.height);
   const image = ctx.createImageData(original.width, original.height);
-  image.data.set(swapPalette(pixels.data, CAPE_GREENS, clothRamp(dye)));
+  image.data.set(swapPalette(pixels.data, CAPE_COLORS, clothRamp(dye)));
   ctx.putImageData(image, 0, 0);
   return out;
 };

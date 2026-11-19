@@ -1,4 +1,4 @@
-import { CHUNK_COLUMNS, CHUNK_ROWS, setSoilSource, SOIL_AUTO } from '@/game/constants';
+import { CHUNK_COLUMNS, CHUNK_ROWS, SEA_TILE_FRAME, setSoilSource, SOIL_AUTO } from '@/game/constants';
 import type { DialogScript, DialogVoice } from '@/game/dialogs/NpcDialogs';
 import { localizedNpc } from '@/game/i18n/i18n';
 import type { ChunkData } from './Chunk';
@@ -69,6 +69,10 @@ let bounds: WorldBounds | null = null;
 let reliefGrid: Uint8Array | null = null;
 let reliefWidth = 0;
 let reliefHeight = 0;
+/** A linha de tile mais ao norte do mundo (0 no mapa de sempre; negativa quando ele cresce para o norte — `meta.originCy`). */
+let reliefTop = 0;
+/** O que `isVoidSea` já respondeu, por tile da borda (esvazia quando o mundo troca). */
+const voidSeaMemo = new Map<number, boolean>();
 /** O SOLO PINTADO no editor (grama ou terra forçada; ver constants.setSoilSource), na mesma grade plana da serra. */
 let soilGrid: Uint8Array | null = null;
 
@@ -113,10 +117,14 @@ export const setWorldData = (raw: unknown): void => {
 
   world = data;
   chunkByKey = new Map(data.chunks.map((chunk) => [chunkKey(chunk.cx, chunk.cy), chunk]));
+  // O mundo pode começar ACIMA da linha 0 (a praia do norte: `meta.originCy`, ver worldSchema).
+  const originCy = Math.trunc(data.meta.originCy ?? 0);
   reliefWidth = data.meta.worldChunksX * CHUNK_COLUMNS;
   reliefHeight = data.meta.worldChunksY * CHUNK_ROWS;
+  reliefTop = originCy * CHUNK_ROWS;
   reliefGrid = null;
   soilGrid = null;
+  voidSeaMemo.clear();
   for (const chunk of data.chunks) {
     for (const [layer, read] of [['relief', chunk.relief], ['soil', chunk.soil]] as const) {
       if (!read) continue;
@@ -126,7 +134,7 @@ export const setWorldData = (raw: unknown): void => {
       for (let r = 0; r < CHUNK_ROWS; r += 1) {
         for (let c = 0; c < CHUNK_COLUMNS; c += 1) {
           const v = read[r]?.[c] ?? 0;
-          if (v) grid[(chunk.cy * CHUNK_ROWS + r) * reliefWidth + chunk.cx * CHUNK_COLUMNS + c] = v;
+          if (v) grid[(chunk.cy * CHUNK_ROWS + r - reliefTop) * reliefWidth + chunk.cx * CHUNK_COLUMNS + c] = v;
         }
       }
     }
@@ -136,12 +144,12 @@ export const setWorldData = (raw: unknown): void => {
   bounds = {
     minCx: 0,
     maxCx: data.meta.worldChunksX - 1,
-    minCy: 0,
-    maxCy: data.meta.worldChunksY - 1,
+    minCy: originCy,
+    maxCy: originCy + data.meta.worldChunksY - 1,
     minTileX: 0,
     maxTileX: (data.meta.worldChunksX * CHUNK_COLUMNS) - 1,
-    minTileY: 0,
-    maxTileY: (data.meta.worldChunksY * CHUNK_ROWS) - 1,
+    minTileY: reliefTop,
+    maxTileY: reliefTop + (data.meta.worldChunksY * CHUNK_ROWS) - 1,
   };
 };
 
@@ -150,15 +158,45 @@ export const isWorldDataReady = (): boolean => world !== null;
 /** O código de serra de um tile (0 fora do mundo e onde não há serra). */
 export const getTileRelief = (wx: number, wy: number): number => {
   if (!reliefGrid) return 0;
-  if (wx < 0 || wy < 0 || wx >= reliefWidth || wy >= reliefHeight) return 0;
-  return reliefGrid[wy * reliefWidth + wx];
+  const row = wy - reliefTop;
+  if (wx < 0 || row < 0 || wx >= reliefWidth || row >= reliefHeight) return 0;
+  return reliefGrid[row * reliefWidth + wx];
 };
 
 /** O solo pintado de um tile (SOIL_AUTO fora do mundo e onde ninguém pintou). */
 export const getTileSoil = (wx: number, wy: number): number => {
   if (!soilGrid) return SOIL_AUTO;
-  if (wx < 0 || wy < 0 || wx >= reliefWidth || wy >= reliefHeight) return SOIL_AUTO;
-  return soilGrid[wy * reliefWidth + wx];
+  const row = wy - reliefTop;
+  if (wx < 0 || row < 0 || wx >= reliefWidth || row >= reliefHeight) return SOIL_AUTO;
+  return soilGrid[row * reliefWidth + wx];
+};
+
+/** O frame de chão GUARDADO num tile do mapa (`null` fora dele). */
+export const getTileGround = (wx: number, wy: number): number | null => {
+  const chunk = chunkByKey.get(chunkKey(Math.floor(wx / CHUNK_COLUMNS), Math.floor(wy / CHUNK_ROWS)));
+  if (!chunk) return null;
+  return chunk.ground[wy - chunk.cy * CHUNK_ROWS]?.[wx - chunk.cx * CHUNK_COLUMNS] ?? null;
+};
+
+/**
+ * O MAR DE FORA (a praia do norte, 2026-11-19): fora do mapa, o mar CONTINUA. Um tile de fora é mar quando o tile do
+ * mapa mais perto dele (a borda, em linha reta; na quina, o canto) é mar — então o oceano que encosta na borda norte
+ * segue até o horizonte e dobra as pontas da enseada, em vez de acabar numa parede de pinheiros. Onde a borda é terra,
+ * o fora continua sendo a mata de sempre.
+ */
+export const isVoidSea = (wx: number, wy: number): boolean => {
+  if (!bounds || !world) return false;
+  const b = bounds;
+  if (wx >= b.minTileX && wx <= b.maxTileX && wy >= b.minTileY && wy <= b.maxTileY) return false;
+  const ex = Math.max(b.minTileX, Math.min(b.maxTileX, wx));
+  const ey = Math.max(b.minTileY, Math.min(b.maxTileY, wy));
+  const key = (ex + 4096) * 16384 + (ey + 4096);
+  let sea = voidSeaMemo.get(key);
+  if (sea === undefined) {
+    sea = getTileGround(ex, ey) === SEA_TILE_FRAME;
+    voidSeaMemo.set(key, sea);
+  }
+  return sea;
 };
 
 /** O mundo tem alguma serra? (o caminho rápido de quem pergunta altura a cada quadro) */
@@ -190,6 +228,12 @@ const buildVoidChunk = (cx: number, cy: number): ChunkData => {
     for (let col = 0; col < CHUNK_COLUMNS; col += 1) {
       const wx = cx * CHUNK_COLUMNS + col;
       const wy = cy * CHUNK_ROWS + row;
+      // O mar de fora (isVoidSea): água aberta, sem árvore. A trava é a mesma de baixo — fora do mundo tudo bloqueia.
+      if (isVoidSea(wx, wy)) {
+        groundRow.push(SEA_TILE_FRAME);
+        upperRow.push(null);
+        continue;
+      }
       groundRow.push(VOID_FLOOR_FRAMES[voidVariant(wx, wy, VOID_FLOOR_FRAMES.length)]);
       const gap = voidVariant(wx + 31, wy + 17, 25) < VOID_GAP_IN_25;
       upperRow.push(gap ? null : VOID_FOREST_FRAMES[voidVariant(wx + 7, wy, VOID_FOREST_FRAMES.length)]);
@@ -321,6 +365,8 @@ export const getYardProps = (): WorldProp[] => (isWorldDataReady() ? allProps().
 export const getWoodFences = (): WorldProp[] => (isWorldDataReady() ? allProps().filter((prop) => prop.type === 'woodFence') : []);
 /** As árvores do bosque (objects/BigTrees): carvalhos velhos, bétulas, carvalhinhos e troncos caídos. */
 export const getBosqueTrees = (): WorldProp[] => (isWorldDataReady() ? allProps().filter((prop) => BOSQUE_PROP_KINDS.has(prop.type)) : []);
+/** Os coqueiros da praia do norte (objects/CoconutPalms). */
+export const getCoconutPalms = (): WorldProp[] => (isWorldDataReady() ? allProps().filter((prop) => prop.type === 'coconutPalm') : []);
 
 // Held items (everything except streamed hearts) are loaded once, up front, because the
 // hero can drop and swap them anywhere, so they must persist off-screen.

@@ -1,4 +1,4 @@
-import { getTileRelief, getWorldBounds, isInsideWorld, worldHasRelief } from './WorldData';
+import { getTileRelief, getWorldBounds, isInsideWorld, isVoidSea, worldHasRelief } from './WorldData';
 import { CHUNK_COLUMNS, CHUNK_ROWS } from '@/game/constants';
 
 /**
@@ -108,6 +108,8 @@ const rawVoidLevel = (wx: number, wy: number): number => {
   const dy = Math.max(b.minTileY - wy, 0);
   const d = Math.max(dx, dy);
   if (d <= 0) return 0;
+  // O mar de fora é água aberta: morro nenhum nasce dele (WorldData.isVoidSea).
+  if (isVoidSea(wx, wy)) return 0;
   const reach = d + (valueNoise(wx / 3.6 + 70, wy / 3.6 + 19) - 0.5) * 7 - 1;
   if (reach <= 0) return 0;
   const ridge = (x: number, y: number): number => 1 - Math.abs(2 * valueNoise(x, y) - 1);

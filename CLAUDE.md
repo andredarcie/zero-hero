@@ -92,7 +92,12 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
     o balão         →  TODA interação nova ganha uma palavra em `actions.*` e uma linha em `handVerbAt`
                        ou `useVerbAt`, na ordem dos botões. O balão é um só (`ActionPrompt`): nada de
                        keycap solto sobre as coisas. Os vizinhos não dormem.
-    ESC             →  a pausa: retornar, opções, sair. Não há bolsa, mapa nem caderno (pedido do autor).
+    ESC             →  a pausa: retornar, conversas, opções, músicas, sair. Não há bolsa, mapa nem caderno (pedido do autor).
+
+- **AS CONVERSAS** (pausa → Conversas; `runtime/talkLog` + `runtime/TalkLogOverlay`): toda conversa COM NOME que passa
+  por `NpcDialog.openDialogScript` entra no save (`talks`) com as falas lidas até o fim, como TEXTO pronto (a fala é
+  montada de pedaços; fica na língua em que foi lida). A narração sem nome não entra; conversa sem fala nova daquela
+  pessoa não vira página. Diálogo novo não precisa fazer nada — só não abrir caixa de fala fora de `openDialogScript`.
 
 - `pressAttack`/`pressUse` são ligados **por evento de teclado**, nunca por `JustDown`; a
   repetição se filtra por `event.repeat`.
@@ -153,6 +158,77 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
   props pelo `EditorStore`, aperta P) em vez de depender do que o mundo autorado contém hoje.
 - `/editor` edita o `world.json` via `/api/world`. **P** joga o mundo em memória (sem abertura e
   sem save), **ESC** volta; nada salva até o Salvar.
+- **AS FALAS se editam no /editor → "Falas…"** (`editor/DialogEditor` + `DialogEditorFalas`, o rascunho em
+  `editor/dialogDraft`): os dois `dialogos/*.json` via `/api/dialogos`, à parte do mundo (o Ctrl+S ali grava as
+  falas). PT e EN lado a lado; a forma de cada fala é a do arquivo (lista de caixas, caixa única lida por `t()`,
+  nome) e o editor não a muda; o verso é conferido com a regra do `versos.test` (`i18n/verseCheck`). Salvar não mexe
+  em mais nada do arquivo (`formatDialogJson` escreve como à mão) e o jogo aberto pega a fala nova pelo HMR do
+  `i18n.ts`, sem recarregar. "Cor e voz…" é o que o `world.json` ainda guarda de cada NPC. É FEITO PARA ESCRITOR:
+  cada fala tem título e QUANDO aparece (`editor/falaTitles` — **caminho de fala novo no código ganha uma linha lá**,
+  o `falaTitles.test` cobra), margem de sílabas e rima por verso (`DialogEditorBox`), prévia da caixa como no jogo +
+  ficha + guia (`DialogEditorSide`), desfazer da lista de caixas e rascunho guardado sozinho no navegador.
+- **AS RELÍQUIAS ENTERRADAS** (`relics/relics.ts`, `scenes/game/RelicDig`): coisas da vida do autor, nas trincas do vale;
+  a pá (que a Sisi deixa com o herói) cava de frente ou DE PÉ EM CIMA (`ShovelStab`, a cavada no pé, que a cova da Sisi
+  também usa), a coisa pula para a mão, a cerimônia, e a página na seção "Relíquias" do caderno (`found`). **Relíquia
+  nova:** o tipo e o tile em `relics.ts` (chão livre e nu, uma por região — o `relics.test` cobra), o desenho em
+  `render3d/relicArt` (32×32, rampas do jogo, sem logotipo) e `relics.<kind>` (name, what, text, note) nos dois locales.
+- **A torre de telefonia do cume** (`objects/CellTower`, desenho em `render3d/towerArt`) é só enfeite, na quina de trás
+  do cume (fogueira + (2, −3)); ocupa o tile dela. Billboard pisa no chão de onde o CENTRO dele cai: peça presa a
+  outra que sai do tile dela desconta `terrainHeightAt` (as luzes da torre). **Billboard alto tomba na perspectiva**
+  (o topo se abre para fora do meio da tela): a torre gira a cada quadro para ficar no prumo (`CellTower.standUp`).
+- **O MAPA É SEMPRE UM RETÂNGULO** (regra do autor, 2026-11-19; `beach.test` cobra): cada chunk de `worldChunksX` ×
+  `worldChunksY` existe uma vez, nenhum fora. Lugar novo cabe DENTRO (a fonte termal foi aberta no pé da serra); se precisar
+  crescer, é uma faixa inteira de chunks de ponta a ponta, nunca um chunk avulso.
+- **O MAPA COMEÇA ACIMA DA LINHA 0** (`meta.originCy` = -2, a praia do norte): há tiles de `worldY` NEGATIVO (-24 a -1).
+  Nada de `y >= 0`, `for (y = 0; y < H…)` nem `% CHUNK_ROWS` cru: use `getWorldBounds()` (jogo), `store.minY`
+  (editor) e `((y % n) + n) % n`. Crescer o mapa é pelo script (`scripts/praia-do-norte.mjs`), nunca renumerando.
+- **A PRAIA DO NORTE** (`scripts/praia-do-norte.mjs`, `--check`/`--map`): a trilha ao norte da Thea (**LIVRE desde o
+  começo do jogo**, o autor, 2026-11-19: nada de mato nem foice no caminho; o script prova `reach(false)`), o mirante, a
+  duna, a areia, os coqueiros (`objects/CoconutPalms`, prop `coconutPalm`) e o mar. **A areia e o oceano são UMA malha** (`render3d/surf.ts`, `worldFx: 'surf'`): tudo sai da
+  distância até a linha d'água (`aCoast4`); a faixa molhada é shader, não frame; só o tile de mar barra. O relógio da
+  onda (`swashAt`) é o mesmo no shader e no jogo: **só senos de argumento pequeno, nunca hash de seno**. O mar de fora
+  continua onde a borda é mar (`WorldData.isVoidSea`).
+- **Chão CLARO novo: albedo quase neutro.** A luz do vale é dourada; ocre ou madeira no arquivo saem laranja-queimado
+  na tela. A areia é o cinza quente do calçamento salpicado de ocre (`beach-sand.mjs` conta as três versões).
+- **Na praia a câmera é a de SEMPRE** (o autor, 2026-11-19: "no mirante, na areia ou no mar, a câmera fica como é
+  padrão, fixa"). A câmera que baixava até o horizonte no mirante e na beira saiu; `objects/beach/SeaVista` só puxa o
+  ar para a bruma do mar descendo a duna, e a câmera do horizonte (céu em `render3d/SeaSky`) ficou para quem SENTA na
+  cadeira do guarda-sol e para o playtest (`holdVista`). Não religar câmera que se mexe sozinha sem ele pedir. **O sol nasce no mar** (ao norte) e se põe atrás
+  da câmera: o astro da cúpula segue a luz do mundo, nunca um disco onde as sombras negariam.
+- **A AREIA DO JOGO SÓ VEM DA PRAIA, NUM BALDE** (o autor, 2026-11-19): os montinhos de `objects/beach/SandMounds` (sólidos;
+  o X com o balde vazio vira `bucketSand` e o montinho afunda; volta no dia seguinte, no mesmo tile). O forno da Thea
+  pede `bucketSand` e devolve o balde vazio (`ForgeWork.feedFurnaceAt`). Não existe mais monte de areia no lago do sul.
+- **OLHAR O MAR** é sentado, nunca andando: a cadeira do guarda-sol (`objects/beach/BeachSeat`, no meio da enseada,
+  41,-15: o quadro só pega mar, céu e coqueiros — o autor não quer a serra de pedra nele) e `scenes/game/SeaWatch`, que
+  liga a câmera do horizonte (`SeaVista.watch`) e o tempo corrido do descanso. As nuvens do céu do mar (`SeaSky`:
+  cirro + cúmulo sombreado) andam com o tempo corrido (`getTimeScale`).
+- **A FONTE TERMAL** (o autor, 2026-11-19: "um lugar para descanso, depois do lago de lava"; e "zero contato com a
+  praia, zero visão da praia... separar experiências... se compara mais com sentar e ver o lago"): uma GRUTA no pé da
+  serra, logo atrás do corredor das minas (entra-se por entre as pedras de minério, x 3/5/7). A água (3..6, -3..-2, chão
+  de baixo, com colisão), a lanterna (7,-2) e o pé do bordo (1,-2), sólidos, e o paredão de mata ALTA (relevo 7) entre a gruta e a duna são da
+  `scripts/praia-do-norte.mjs` (`SPRING`; ela é dona de todas as linhas negativas: mexer ali é nela, nunca à mão). **A
+  câmera alcança ~11 tiles ao norte no chão baixo e a areia começa na -7: nada de abrir a gruta para o norte nem baixar
+  aquele paredão** (o `beach.test` cobra). **A BACIA É FUNDA DE VERDADE** (o autor: "profundidade 3D, ser possível ver
+  o fundo"): `world/hotSpring` diz onde e quanto, o terreno a cava (`TerrainSorter.springTiles`,
+  `TerrainFeatures.bakeSpring`: leito de areia, borda avançando, parede) e a ÁGUA é uma lâmina translúcida pintada no
+  shader (`render3d/springWater`, `worldFx: 'spring'`, dentro da luz do mundo como o mar). **Ela não escreve
+  profundidade e é desenhada DEPOIS dos corpos (`WATER_ORDER`); tudo que é ar por cima dela e também não escreve
+  profundidade (vapor, cascata, folhas, halo, vaga-lumes) leva `OVER_WATER`, senão sai tingido como se estivesse no
+  fundo.** As peças são de `objects/spring` (`HotSpring` é o maestro: `SpringSteam`, `SpringCascade`, `SpringMaple`,
+  `SpringNight`; a arte em `springArt`/`rockArt`/`mapleArt`; roda no quadro da praia). **Quadro em pé deita para trás
+  com a câmera (o alto recua 0,454 × a altura): perto de parede, o pé fica longe dela na medida da altura.** O Z diante
+  da água, pela beira de baixo: `SeaWatch.soakAt` — ele senta no leito (`hero.lift` NEGATIVO; o contorno
+  `OccludedSilhouette` desliga com o corpo abaixo do chão), vira DE FRENTE e a câmera vai até a água como no banco do
+  lago (`cameraLook` com passeio curto + dolly 0,74). NUNCA a câmera do horizonte ali. Só se chega atravessando a lava
+  (`minas-alem-da-lava.mjs --check`, `beach.test`). Painel de testes: "Fonte termal".
+- **O cartão de 2024** (relíquia `nomadPostcard`) está enterrado na areia (15,-15, atrás do coqueiro); relíquia na areia
+  mostra a pontinha de papel (`SAND_HINT_ART`) em vez da rachadura.
+- **Bicho novo da praia** entra em `objects/beach/buildBeach.ts` (um `BeachSystem`); quem anda com a onda lê `swashAt`.
+  A água contorna os corpos de `standActorsUniform`; as pegadas e os respingos são de `objects/beach/BeachSteps`.
+- **AS PEGADAS** são deitadas no chão do mundo 3D, nunca 2D por cima dele (`objects/stepPrints`: a sola de bota afundada,
+  pé esquerdo e direito, quatro rumos, um desenho por chão — terra, lama na chuva, capim, areia, areia molhada). Fora da
+  praia quem as deixa é `scenes/game/Footprints` (dois passos por tile, pela posição DESENHADA do herói); na areia,
+  `BeachSteps`. O claro delas é ocre ou do próprio chão, nunca creme: a luz do vale o deixa amarelo-vivo.
 
 ## Fogo, e a lei das travas
 
@@ -255,7 +331,7 @@ PLAYTEST_BASE_URL=http://localhost:5180 npm run playtest -- perf-burn
   fornada.
 - **O FORNO É UM SÓ, FIXO, E GUIA A QUEST** (o da Thea): não se constrói, não se recolhe e não tem catálogo — pede o próximo item (`AstronomerQuest.furnaceNeed`). Picareta, só a que a Thea dá.
 - **CADA NPC É INDEPENDENTE** (pedido do autor): nenhum pedido precisa de ferramenta ou item de outro vizinho; o jogador faz na ordem que quiser.
-- **O ACAMPAMENTO DO HERÓI COMEÇA SÓ COM O COLCHÃO, O FOGO E O CADERNO** (pedido do autor, 2026-11-17; `objects/HeroCamp.ts`): todo o resto o jogador constrói ou põe pela bancada (as peças são `objects/CampPieces.ts`, salvas em `home.pieces`; as lembranças dos pedidos NÃO aparecem sozinhas: esperam na bancada). Em volta, MATO ALTO VERDE (`scripts/mato-do-acampamento.mjs`, zona `CAMP_ZONE` 48..59 × 44..52): não pega fogo, só a foice corta, e o tile cortado fica cortado (`objects/CampGrass` → `home.cleared`). O colchão fixo (onde ele dorme; as três primeiras noites nele são as das visitas da Morte), as pedras frias, e o CADERNO DE CAMPO em cima do colchão (a coleção de tudo que passou pelas mãos: a lista em `runtime/notebook.ts`, alimentada só pelo `Inventory.add`; coisa nova que se pega no vale entra na lista e ganha `notebook.entry.<kind>` nos dois locales; a seção Bichos vem do caderno de desenho, `runtime/sketches.ts` + `scenes/game/AnimalSketching.ts`, bicho novo entra em `ANIMALS`, no `ART` e em `sketch.animals.<kind>`), do lado direito do laguinho (margem nordeste). O LAZER mora no `CampLife`: o desenho (`camp.sketching`), a pedra que quica (`camp.skipping`, seixo da beira, nunca a pedra da mochila) e a MEDITAÇÃO na pedra do alto da colina (`camp.meditation`; a regra pura em `runtime/meditation.ts`, testada; cada nota do caderno de lá tem a fonte científica dela, e nota nova só entra com a fonte conferida; o chão é de `scripts/meditacao.mjs`). O chão do acampamento é de `scripts/acampamento.mjs` (a mesma tabela de tiles: mudou num, muda no outro). O LAR (`scenes/game/CampHome`): a bancada (prop `toolbox` do mesmo script, usada DE FRENTE de (55,46) — esse tile fica vazio no mapa e é passagem da grade, `CAMP_PASSAGES` — ou de lado de (54,45)) e as peças de usar (tina, placa, tronco, relógio de sol, sino; o banquinho saiu em 2026-11-17 — o tronco já senta — e o save antigo o troca por tronco). CADA PEÇA UMA VEZ SÓ (`homeMenu`): a posta sai das cartas; levantada, muda de lugar de graça ou se DESMONTA (botão/Delete: o material volta à bancada e a carta à tábua); a escada anda pelo `built`; a repetida de um save antigo sai e devolve o material (`cleanHome`). PEÇA DE SENTAR entra em `CampPieces.CAMP_SEAT_LIFT` com a altura do assento: o móvel fica `SEAT_BEHIND` atrás do tile e o corpo sobe (`hero.lift`) até o tampo, senão o herói some atrás dele ou o cobre inteiro; peça nova = uma linha em `HOME_BUILDS` (custo ou `gift` de quest) + `home.piece.<kind>` nos dois locales + arte em `CampPieces.pieceTexture` + a seção Casa do caderno. A capa tingida troca os TRÊS VERDES exatos do `hero.png` na folha inteira (`render3d/heroDye`, `homeState.CAPE_GREENS`): arte nova do herói mantém esses verdes no pano, senão a tina para de tingir.
+- **O ACAMPAMENTO DO HERÓI COMEÇA SÓ COM O COLCHÃO, O FOGO E O CADERNO** (pedido do autor, 2026-11-17; `objects/HeroCamp.ts`): todo o resto o jogador constrói ou põe pela bancada (as peças são `objects/CampPieces.ts`, salvas em `home.pieces`; as lembranças dos pedidos NÃO aparecem sozinhas: esperam na bancada). Em volta, MATO ALTO VERDE e RALO (`scripts/mato-do-acampamento.mjs`, zona `CAMP_ZONE` 48..59 × 44..52; desde 2026-11-19 o autor o quer espalhado: um tile de chão entre dois tufos, nunca em fileira, 19 tufos): não pega fogo, só a foice corta, e o tile cortado fica cortado (`objects/CampGrass` → `home.cleared`). O colchão fixo (onde ele dorme; as três primeiras noites nele são as das visitas da Morte), as pedras frias, e o CADERNO DE CAMPO em cima do colchão (a coleção de tudo que passou pelas mãos: a lista em `runtime/notebook.ts`, alimentada só pelo `Inventory.add`; coisa nova que se pega no vale entra na lista e ganha `notebook.entry.<kind>` nos dois locales; a seção Bichos vem do caderno de desenho, `runtime/sketches.ts` + `scenes/game/AnimalSketching.ts`, bicho novo entra em `ANIMALS`, no `ART` e em `sketch.animals.<kind>`), do lado direito do laguinho (margem nordeste). O LAZER mora no `CampLife`: o desenho (`camp.sketching`), a pedra que quica (`camp.skipping`, seixo da beira, nunca a pedra da mochila) e a MEDITAÇÃO na pedra do alto da colina (`camp.meditation`; a regra pura em `runtime/meditation.ts`, testada; cada nota do caderno de lá tem a fonte científica dela, e nota nova só entra com a fonte conferida; o chão é de `scripts/meditacao.mjs`). O chão do acampamento é de `scripts/acampamento.mjs` (a mesma tabela de tiles: mudou num, muda no outro). O LAR (`scenes/game/CampHome`): a bancada (prop `toolbox` do mesmo script, usada DE FRENTE de (55,46) — esse tile fica vazio no mapa e é passagem da grade, `CAMP_PASSAGES` — ou de lado de (54,45)) e as peças de usar (tina, placa, tronco, relógio de sol, sino; o banquinho saiu em 2026-11-17 — o tronco já senta — e o save antigo o troca por tronco). CADA PEÇA UMA VEZ SÓ (`homeMenu`): a posta sai das cartas; levantada, muda de lugar de graça ou se DESMONTA (botão/Delete: o material volta à bancada e a carta à tábua); a escada anda pelo `built`; a repetida de um save antigo sai e devolve o material (`cleanHome`). PEÇA DE SENTAR entra em `CampPieces.CAMP_SEAT_LIFT` com a altura do assento: o móvel fica `SEAT_BEHIND` atrás do tile e o corpo sobe (`hero.lift`) até o tampo, senão o herói some atrás dele ou o cobre inteiro; peça nova = uma linha em `HOME_BUILDS` (custo ou `gift` de quest) + `home.piece.<kind>` nos dois locales + arte em `CampPieces.pieceTexture` + a seção Casa do caderno. A capa tingida troca os TRÊS TONS exatos da capa no `hero.png` na folha inteira (`render3d/heroDye`, `homeState.CAPE_COLORS`): arte nova do herói mantém esses três só na capa, senão a tina para de tingir (ou tinge o que não devia). **O HERÓI (desde 2026-11-19)** é o cavaleiro cozy SEM ROSTO — elmo redondo de aço com viseira em T e chifrinhos de marfim, armadura de aço um degrau mais escura, BRAÇOS FINOS de aço claro, broche dourado e CAPA ÍNDIGO (a cor do herói de antes, o "roxo" dele) —, escolhido em oito rodadas julgadas no jogo (`docs/heroi-cozy/README.md`): o rosto fica atrás do elmo de propósito (o jogador se projeta nele), o T, os chifres e a capa são a marca do Zero, e o aço é AZULADO na folha porque a luz dourada do dia o leva a cinza (aço "neutro" sai bege). O autor reprovou o rosto, a túnica roxa, o cachecol e o couro, e pediu os braços ("faltou os braços"). Braço do herói é do aço CLARO e tem UM pixel de largura, no lugar de um pixel da capa (o tronco não encolhe): no aço escuro ele some na capa, e com 2 pixels o autor achou grosso e feio. A folha sai de `docs/heroi-cozy/gerar_heroi_cozy.py` (`hero-v8`), não da Sprite Factory (`hero-meditate.mjs` é o herói antigo: não reinstalar).
 - **NADA NA FRENTE DO NPC** (pedido do autor): o tile exatamente de frente para um NPC (o sul dele) nunca guarda item no chão, para a conversa não se misturar com o pegar. Todo item novo cai pelo ponto único `GameScene.dropItem`/`dropNear`, e o que ia cair na frente vai para a DIREITA do NPC, depois a ESQUERDA, depois para TRÁS (`world/npcFront.ts`). O herói não pousa ali, e um save antigo com item ali é corrigido ao carregar (`enforceNpcFrontRule`). Nunca chamar `itemManager.drop` direto para um item novo. O cenário `frente-do-npc` confere.
 - **Nada solto no chão que uma ferramenta produz**: graveto só de árvore seca cortada, pedra só de rocha quebrada (`scripts/ajustes-do-vale.mjs`).
 - **A automação industrial foi removida por completo.** Não existem energia, cabos, esteiras,
@@ -314,6 +390,18 @@ o mundo do overworld é feito de **tiles**, e um tile só sabia ser um quad chap
 
 ## Renderização: as leis que doem
 
+- **A CÂMERA É A DOS JOGOS HD-2D** (2026-11-19, aprovada pelo autor como definitiva): 27° para baixo, lente de 18°
+  (`worldParams`: 9,1192 / 17,1126). Ela olhava 46,5° com lente de 30°. Tudo que contava com a direção antiga foi
+  refeito junto e tem de ser refeito de novo se ela mudar: o fog (conta da câmera), o piso da tela em pé
+  (`WorldScreen`), a flor da lua (`DEPTH_UP` = tg da inclinação, `spritefactory/sprites/moonflower.mjs`), as máscaras
+  de cima (`AirLight`/`ShadowLayers`, centradas AO NORTE do herói, `MASK_NORTH`) e as lentes de cena, que somam
+  FOV sobre a lente do chão (`SeaVista`, `StarGaze`, `TeaTrip`), e o PASSO VERTICAL (`verticalStepSpeedup`: ×1,6, para
+  subir e descer não parecerem câmera lenta; as pernas giram no ritmo de sempre). Zoom é dolly (os dois números pelo
+  mesmo fator).
+- **O DESFOQUE É UMA LENTE, pela DISTÂNCIA** (`finishShader` "A LENTE", `hd3d.dofDepth`/`dofBand`/`dofRamp`/`bokeh`):
+  nítido a 2,4 tiles de profundidade do herói, borrado (com bokeh) só no fundo, e só amacia o pé da tela. A névoa de
+  distância é pela mesma profundidade. A cor separa nos cantos e pulsa no baque da câmera (`hd3d.aberration`).
+  `playtest camera-hd2d` fotografa o antes (câmera e lente velhas, por knob) e o depois nos mesmos lugares.
 - **Nada pode adicionar ou remover uma luz THREE em runtime.** O three assa a *contagem* de luzes na chave de todo
   shader: um `scene.add(pointLight)` no meio do jogo recompila o mundo (~550ms). Fogo **empresta** de um pool fixo
   (`FIRE_LIGHT_SLOTS`); mesh pode nascer e morrer, luz não. `perf-burn` guarda isso.
@@ -322,7 +410,16 @@ o mundo do overworld é feito de **tiles**, e um tile só sabia ser um quad chap
   no canvas, e o three assa o color space do alvo na chave do programa. E ele **DESENHA**, não só
   compila: no ANGLE (Chrome/Windows) o shader só termina no primeiro draw (o rio travava 312ms).
 - **A luz pontual do CHÃO sai do `GroundLightMap`** (uma conta por célula, não por pixel): mexer na
-  conta de luz do `pixelArtLight` exige mexer nele também. E **nada de `THREE.Points`** (`ParticleBatch`).
+  conta de luz do `pixelArtLight` exige mexer nele também. Ele também escreve o ALCANCE das luzes acesas
+  (`groundLightReachUniform`): fora dessa caixa o material com encaixe na grade pula o laço de luz pontual (vale zero
+  exato pelo corte `distance`). Luz pontual nova precisa estar em `WorldLights.livePointLights`, senão ela some fora da
+  caixa. E **nada de `THREE.Points`** (`ParticleBatch`).
+- **POÇA DE LUZ NO CHÃO é do `GlowField`** (`render3d/world/GlowField.ts`): as poças dos fogos, da lava e das janelas
+  são malhas de `WorldLights` que só guardam lugar/tamanho/força (`setFireGlow`, material invisível); o campo soma todas
+  UMA vez por célula (8 por tile) numa textura e desenha um quadro só. Poça nova = `addFireLight`/`addStillGlow`,
+  nunca um quad aditivo grande próprio (eram 50 de 15×15 tiles na lava: 3,5 ms de GPU na fonte termal).
+- **Cúpula de céu desenha POR ÚLTIMO, no plano distante** (`SeaSky`: `gl_Position.z = w`, `renderOrder` alto,
+  sem gravar profundidade): o teste de profundidade só a deixa pintar onde nada foi desenhado.
 - **NÃO HÁ TONE MAPPING.** O mundo é desenhado num render target, e o three só monta o ACES quando
   o alvo é a tela — então o linear vai cru pro canvas e **`hd3d.exposure` não faz nada**. Quem levanta
   um quadro é a CURVA (`hd3d.lift`); só o alto ROLA até o branco (`hd3d.shoulder`). O claro-escuro do dia é um PAR:
@@ -330,7 +427,7 @@ o mundo do overworld é feito de **tiles**, e um tile só sabia ser um quad chap
 - **O MUNDO TEM TRÊS TABELAS DE HORA, e o SOL é a mesma luz que a lua** (`skyPreset.ts`: a noite é o padrão,
   `DAY_SKY` e `GOLDEN_SKY` são deltas pesados por `daylight` e `golden`): cor de luz, de céu ou de partícula cravada
   num arquivo só existe numa delas — e some, ou fica preta, nas outras. Ela é knob ou é um valor por tabela.
-- **Nenhum sprite pode vazar do seu tile.** Profundidade vem do shader, nunca de escalar arte. **A MATA é a exceção desenhada** (`render3d/forest.ts`, pedido do autor): a COLISÃO é da grade (um tile, uma árvore, no dado), mas cada árvore sai do centro em pixel inteiro e veste uma forma da família `forest-trees` (frames 78..119; as altas são duas células na mesma coluna do atlas, só com dois tiles em pé ao norte). Forma nova de árvore entra lá, nunca centrada à mão; a sombra lê o `look` do tile (`solidCastArt`). **Só o chão puro fica deitado** (o tile de capim e de terra, e o que É chão: trilha, estrada, poça, água, trinca, folha caída). TODA a decoração do mapa fica EM PÉ (`render3d/standingDecor.ts`): a planta se curva (`aFlex`, = `WIND_STIR_FRAMES`), o rígido fica parado; a GRAMA fica em FIOS (`grassBlades.ts`, `BLADE_FRAMES`): cada risco em pé no ponto do pé dele no desenho, nunca o quadro como cartão; a haste cresce em pixel INTEIRO (`bladeGrowth`, nunca esticar), a sombra de contato fica deitada, e o herói abre esteira e passa por trás dos fios da frente (`decorSway.ts`). Nunca plantar vegetação nova por cima (dois matos, em pé e chapado, poluem: o autor reprovou) — a exceção pedida é o SUB-BOSQUE da mata fechada, só nos tiles de árvore e nas clareiras da mata de fora, feito das PRÓPRIAS árvores na malha delas (`forest.forestUnderstory`: mudas, jovem e copas afundadas, com a cor e a roupa da árvore; a decoração não combinava), só nos VÃOS e com folga (`TRUNK_ROOM`/`PLANT_ROOM`: nada colado num tronco nem noutra planta), mais o capim e o mato alto do mapa onde o chão da mata aparece (`forest.forestGrass`: peça PARADA, `still` — um quad por tufo, sem fio, vento nem pisão; ali ninguém pisa), com a sombra de mata `FOREST_SHADE` no chão: ali o herói nunca pisa, e o chão vazio prometia uma passagem.
+- **Nenhum sprite pode vazar do seu tile.** Profundidade vem do shader, nunca de escalar arte. **A MATA é a exceção desenhada** (`render3d/forest.ts`, pedido do autor): a COLISÃO é da grade (um tile, uma árvore, no dado), mas cada árvore sai do centro em pixel inteiro e veste uma forma da família `forest-trees` (frames 78..119; as altas são duas células na mesma coluna do atlas, só com dois tiles em pé ao norte). Forma nova de árvore entra lá, nunca centrada à mão; a sombra lê o `look` do tile (`solidCastArt`, que segue o espelho). As ANCIÃS do jardim alto (73/74 no dado) vestem a família `ancient-grove-2` (135..140: larga, jovem, torta, gêmea, alta de dois tiles), espelhadas, pela coordenada (`forest.ancientLookAt`). A mata e o capim balançam na RAJADA do vale (`windGustUniform` = `runtime/wind.gustAt`), medidos do chão de cada árvore (`aWind.w`); folhas caem das copas (`objects/nature/FallingLeaves`) e de dia raios de sol entram nos vãos da mata (`objects/nature/SunShafts`: calmos, sem piscar — as manchinhas de sol que dançavam foram reprovadas). **Só o chão puro fica deitado** (o tile de capim e de terra, e o que É chão: trilha, estrada, poça, água, trinca, folha caída). TODA a decoração do mapa fica EM PÉ (`render3d/standingDecor.ts`): a planta se curva (`aFlex`, = `WIND_STIR_FRAMES`), o rígido fica parado; a GRAMA fica em FIOS (`grassBlades.ts`, `BLADE_FRAMES`): cada risco em pé no ponto do pé dele no desenho, nunca o quadro como cartão; a haste cresce em pixel INTEIRO (`bladeGrowth`, nunca esticar), a sombra de contato fica deitada, e o herói abre esteira e passa por trás dos fios da frente (`decorSway.ts`). Nunca plantar vegetação nova por cima (dois matos, em pé e chapado, poluem: o autor reprovou) — a exceção pedida é o SUB-BOSQUE da mata fechada, só nos tiles de árvore e nas clareiras da mata de fora, feito das PRÓPRIAS árvores na malha delas (`forest.forestUnderstory`: mudas, jovem e copas afundadas, com a cor e a roupa da árvore; a decoração não combinava), só nos VÃOS e com folga (`TRUNK_ROOM`/`PLANT_ROOM`: nada colado num tronco nem noutra planta), mais o capim e o mato alto do mapa onde o chão da mata aparece (`forest.forestGrass`: peça PARADA, `still` — um quad por tufo, sem fio, vento nem pisão; ali ninguém pisa), com a sombra de mata `FOREST_SHADE` no chão: ali o herói nunca pisa, e o chão vazio prometia uma passagem.
 - **TODA MALHA DE CHÃO PINTA COM `groundShadeAt`** (bioma × mancha × sombra de copa × sombra de canto): uma que pinte por conta própria faz um risco reto onde encosta no chão comum. `chao-sem-risco` mede. **A cor do bioma é RAMPA da folha, não multiplicação** (`render3d/biomeRamp.ts`): o `biomeTintAt` é só dos materiais de terreno; sprite INTEIRO tingido pelo bioma usa `biomeWashAt`, senão a flor e o tronco viram a cor do capim.
 - **Tudo em que o herói pisa declara `depthLayer: 'ground'`** (`Billboard3D`), senão dois quads
   coplanares piscam. Quads deitados (buracos, água, flor aberta) são isentos.
@@ -401,13 +498,18 @@ reprova o `playtestContract.test.ts`. Membro novo que um cenário precisa ler vi
 
 A abertura (espada real fincada, mago) → `abertura`; o jogo inteiro, título → créditos → `zerar` (só para mudança que atravessa o arco); machado → `machado`; pedra →
 `pedra`; altar → `altar`; flor da lua → `flor-da-lua`; montanha → `montanha`; vento na mata → `vento`;
-menu → `menu-flow`; nenhum bloqueio sem nada visível → `sem-parede`; trilha, leitos de dia/noite/água e SFX → `audio`; a cerimônia de ganhar item → `item-get`; o vale respondendo aos pedidos e a vida dos NPCs → `marcas`; sentar na fogueira e ver o tempo passar → `descanso`; fogueira de vizinho nunca faz dormir → `fogueira-dormir`; borboletas e folhas do dia → `dia`; a quest inteira da Thea → `telescopio`; os ajustes do autor jogando (cadeira, aceno, bolsa, carvão, lava, título) → `ajustes`; o jardim do fim em dois andares → `jardim-alto`; o lar (bancada guarda material, grade com o jogo parado, peças postas com o mouse, mato verde, foice abrindo espaço, recarga) → `lar`; o acampamento mínimo e a lembrança esperando na bancada → `acampamento`; o mato alto fio a fio, a roçada, as pontas voando, os tocos e a grade no chão → `mato-alto`; os tocos somem e o mato sem uso volta com o tempo → `mato-volta`; o modo construir legível e funcional no computador, tablet e celular → `construir-telas`; as três noites da Morte e a foice só na terceira → `morte-tres-noites`; nenhum risco reto de cor no chão → `chao-sem-risco`; tamanho do herói → `smoke`; fogo e luz → `perf-burn`; frame → `perf-profile`.
+menu → `menu-flow`; nenhum bloqueio sem nada visível → `sem-parede`; trilha, leitos de dia/noite/água e SFX → `audio`; a cerimônia de ganhar item → `item-get`; o vale respondendo aos pedidos e a vida dos NPCs → `marcas`; sentar na fogueira e ver o tempo passar → `descanso`; fogueira de vizinho nunca faz dormir → `fogueira-dormir`; borboletas e folhas do dia → `dia`; a quest inteira da Thea → `telescopio`; os ajustes do autor jogando (cadeira, aceno, bolsa, carvão, lava, título) → `ajustes`; o jardim do fim em dois andares → `jardim-alto`; o lar (bancada guarda material, grade com o jogo parado, peças postas com o mouse, mato verde, foice abrindo espaço, recarga) → `lar`; o acampamento mínimo e a lembrança esperando na bancada → `acampamento`; o mato alto fio a fio, a roçada, as pontas voando, os tocos e a grade no chão → `mato-alto`; os tocos somem e o mato sem uso volta com o tempo → `mato-volta`; o modo construir legível e funcional no computador, tablet e celular → `construir-telas`; as três noites da Morte e a foice só na terceira → `morte-tres-noites`; nenhum risco reto de cor no chão → `chao-sem-risco`; tamanho do herói → `smoke`; fogo e luz → `perf-burn`; frame → `perf-profile`; o quadro em cada lugar do mapa (acampamento, lava, Thea, praia, cadeira, fonte) → `perf-lugares` (`PERF_LUGARES=praia,fonte` filtra).
 A suíte inteira está verde (2026-11-09): um cenário vermelho é regressão, ou um cenário que precisa acompanhar uma mudança
 de desenho — nunca "conserte" editando conteúdo do jogo para o teste passar.
 
-**Performance sempre contra a `main`** (`git stash`), e sempre com vsync livre
-(`PLAYTEST_UNTHROTTLED=1 PLAYTEST_SLOWMO=0`) — com vsync a GPU só *reduz o clock* e toda variante
-mede igual. Mudança de renderer: `npm run playtest -- visual-ref` + `node
+**Performance sempre contra a `main`** (`git stash`) ou, melhor, com a variante antiga e a nova ligáveis na MESMA
+sessão. **Nesta máquina (monitor de 165 Hz) não medir com vsync livre** (`PLAYTEST_UNTHROTTLED=1`): o Chrome alterna
+de regime e mostra travadas de 90–180 ms que não existem no jogo (achado de 2026-11-19). Meça com vsync: o
+`perf-lugares` grava os intervalos do rAF por lugar (o quadro sai em múltiplos de ~6 ms: 12 ms = perdeu um vsync) e,
+para saber ONDE a GPU gasta, um cronômetro `EXT_disjoint_timer_query_webgl2` por passe do compositor ou por draw
+(não aninham: um modo de cada vez). O timer do `__prof` mede só o `composer.render` (não o espelho nem a luz do
+chão) e o profiler infla o tempo de CPU. O knob `hd3d.pixelScale` é sobrescrito a cada quadro pelo ajuste do menu.
+Mudança de renderer: `npm run playtest -- visual-ref` + `node
 playtest/compare-visual.mjs <dirA> <dirB>` (duas rodadas do mesmo build diferem em **0 pixels**).
 Armadilha: o three gasta `Math.random()` em UUID, então alocar um número diferente de objetos no
 boot muda o ritmo das chamas e o diff "falha" por 40% da tela sem nada de render ter mudado.

@@ -39,9 +39,11 @@ const CUES: ReadonlyArray<readonly [number, TripStage]> = [
  */
 const EYE_HEIGHT = 0.66;
 const EYE_BACK = 0.6;
-const EYE_FOV_EXTRA = 38;
-/** O voo: uma lente um pouco mais aberta que a do chão. */
-const FLIGHT_FOV_EXTRA = 10;
+// + 12 nas duas (2026-11-19): a lente do chão fechou de 30° para 18° (a câmera HD-2D, worldParams), e estes olhos são
+// próprios: os quadros continuam com os 68° e os 40° com que foram compostos.
+const EYE_FOV_EXTRA = 50;
+/** O voo: uma lente um pouco mais aberta que a do chão (40° no total). */
+const FLIGHT_FOV_EXTRA = 22;
 /**
  * O CAMINHO DA BORBOLETA sobre o vale, em tiles (x, altura, y): uma volta por dentro dele, da colina da pedra de
  * meditar ao acampamento e de volta pelo sul até o herói. O primeiro ponto (logo acima dele) e o último (onde a câmera

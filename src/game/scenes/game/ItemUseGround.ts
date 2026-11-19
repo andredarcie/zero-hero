@@ -9,23 +9,26 @@ import type { GameScene } from '../GameScene';
 /** O que ItemUseGround usa de GameScene. */
 export type ItemUseGroundHost = Pick<GameScene,
   'camera' | 'carry' | 'debris' | 'fire' | 'garden' | 'gardenUnlock' | 'groundItems' | 'heldItem'
-  | 'playerWorld' | 'props' | 'query' | 'sparkle' | 'swing' | 'tileSize' | 'time' | 'torch' | 'verbs' | 'water'
+  | 'playerWorld' | 'props' | 'query' | 'relics' | 'sparkle' | 'swing' | 'tileSize' | 'time' | 'torch' | 'verbs' | 'water'
 >;
 
 export class ItemUseGround {
   public constructor(private readonly host: ItemUseGroundHost) {}
 
   /**
-   * A COVA DEBAIXO DOS PÉS (pedido do autor): de pé em cima da rachadura, a pá cava ali mesmo — não precisa sair dela
-   * e olhar para ela de fora. A pá guardada vem às costas. O arco do golpe vai para onde ele olha; quem morde é o tile
-   * dele. Só quando o tile da frente não tem nada a ver com o X (ver pressUse).
+   * A TRINCA DEBAIXO DOS PÉS (pedido do autor): de pé em cima dela, a pá cava ali mesmo — não precisa sair dela e olhar
+   * para ela de fora. A pá guardada vem às costas, e a cavada é a do pé (ShovelStab): a pá fincada reto no chão, não o
+   * golpe para a frente. Vale para a cova da Sisi e para a trinca de uma relíquia (RelicDig). Só quando o tile da frente
+   * não tem nada a ver com o X (ver pressUse).
    */
   public digUnderfoot(): boolean {
     const { worldX: x, worldY: y } = this.host.playerWorld;
+    if (this.host.relics.canDigAt(x, y, true)) return this.host.relics.digAt(x, y, true);
     if (!this.host.garden.canDigAt(x, y, true) || !this.host.swing.equip('shovel')) return false;
-    const front = this.host.verbs.facingTile();
-    this.host.swing.swingHeld(front.x, front.y);
-    this.host.time.delayedCall(150, () => this.host.garden.digPlantHole(x, y, true));
+    // A primeira pazada abre o canteiro; a segunda só tira mais terra.
+    this.host.relics.stab.stab(x, y, 2, (stroke) => {
+      if (stroke === 0) this.host.garden.digPlantHole(x, y, true);
+    });
     return true;
   }
 
@@ -167,6 +170,8 @@ export class ItemUseGround {
     // cava um canteiro (plantSpot). Por último de propósito, depois de todo prop e de toda marca:
     // qualquer coisa EM CIMA da terra responde primeiro, e fora das covas o `false` deixa o arco
     // sair no vazio.
+    // A trinca de uma relíquia, de frente: o golpe da pá, duas vezes, e a coisa pula do buraco (RelicDig).
+    if (this.host.heldItem === 'shovel' && this.host.relics.canDigAt(wx, wy)) return this.host.relics.digAt(wx, wy, false);
     if (this.host.heldItem === 'shovel' && this.host.garden.canDigAt(wx, wy)) {
       this.host.swing.swingHeld(wx, wy);
       this.host.time.delayedCall(150, () => this.host.garden.digPlantHole(wx, wy));

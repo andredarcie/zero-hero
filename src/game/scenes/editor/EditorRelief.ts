@@ -106,7 +106,7 @@ export class EditorRelief {
       if (up) return (up[0] === -dx && up[1] === -dy && stairBase(n) + 1 === mine) || stairBase(n) >= mine;
       return codeFloor(n) >= mine;
     };
-    for (let y = 0; y < store.tilesY; y += 1) {
+    for (let y = store.minY; y < store.minY + store.tilesY; y += 1) {
       for (let x = 0; x < store.tilesX; x += 1) {
         const code = this.reliefAt(x, y);
         if (code === RELIEF_GROUND) continue;

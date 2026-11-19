@@ -54,7 +54,22 @@ export const solidCastArt = (tile: SolidTileEntry): typeof castArt => {
     castArt.height = 1;
     castArt.footPad = frameFootPad('forest-tileset', frame);
   }
+  // A árvore ESPELHADA (as anciãs do jardim, o sub-bosque) deita a silhueta espelhada: a torta pende para o mesmo lado
+  // na sombra e na árvore.
+  if (look?.flip) castArt.uv = mirrored(castArt.uv);
   return castArt;
+};
+
+type UvWindow = typeof castArt.uv;
+const mirrors = new WeakMap<UvWindow, UvWindow>();
+/** A mesma janela lida da direita para a esquerda (uma por janela, guardada: nada de objeto novo por quadro). */
+const mirrored = (win: UvWindow): UvWindow => {
+  let m = mirrors.get(win);
+  if (!m) {
+    m = { offsetX: win.offsetX + win.repeatX, offsetY: win.offsetY, repeatX: -win.repeatX, repeatY: win.repeatY };
+    mirrors.set(win, m);
+  }
+  return m;
 };
 
 /** O que SolidCastEmitter usa de World3D. */

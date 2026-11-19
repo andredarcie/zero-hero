@@ -69,13 +69,13 @@ export default {
     assert('Dois segundos depois do corte os tocos somem: o chão fica limpo', clean.drawn === 'gone' && clean.quads === 0 && !clean.blocking, JSON.stringify(clean));
     await shot('03-chao-limpo', { note: 'Os tocos afundaram: o chão limpo' });
 
-    // uma sequência de golpes (o som sobe de tom; o tile abre a cada um)
-    for (const [hx, hy, dx, dy] of [[56, 48, 1, 0], [56, 48, 0, -1], [56, 48, 0, 1]]) {
+    // mais um golpe, no tufo de quina (o mato do acampamento é ralo desde 2026-11-19: um tile de chão entre dois tufos)
+    for (const [hx, hy, dx, dy] of [[57, 48, 0, -1]]) {
       await teleport(hx, hy, dx, dy);
       await page.keyboard.press('x');
       await sleep(520);
     }
-    const after = await grass(57, 48);
+    const after = await grass(57, 47);
     assert('Em sequência, cada golpe corta um tufo', after.blades === 0, JSON.stringify(after));
     await sleep(1600);
     await teleport(55, 48, 1, 0);

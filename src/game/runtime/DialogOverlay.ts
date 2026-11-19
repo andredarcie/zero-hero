@@ -3,7 +3,7 @@ import { getTextScale } from '@/game/runtime/accessibility';
 import type * as Engine from '@/game/engine';
 
 import { dialogBoxMetrics, isTallDialog } from '@/game/constants';
-import type { DialogScript, DialogVoice } from '@/game/dialogs/NpcDialogs';
+import type { DialogLine, DialogScript, DialogVoice } from '@/game/dialogs/NpcDialogs';
 import { personaFor, type VoicePersona } from '@/game/dialogs/voicePersonas';
 
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
@@ -338,6 +338,11 @@ export class DialogOverlay {
 
   /** Kept for parity with the old canvas overlay; DOM handles its own events. */
   public update(): void { /* no-op */ }
+
+  /** As falas lidas até o fim nesta conversa (o caderno das conversas, runtime/talkLog). */
+  public get heardLines(): readonly DialogLine[] {
+    return this.writer.heard;
+  }
 
   public destroy(): void {
     if (this.destroyed) return;

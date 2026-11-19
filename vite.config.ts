@@ -71,6 +71,48 @@ const worldApiPlugin = (): Plugin => ({
   },
 });
 
+// AS FALAS (o editor de falas do /editor, src/game/editor/DialogEditor): os dois arquivos de src/game/i18n/dialogos.
+// GET devolve os dois; PUT recebe o TEXTO de cada um (o editor formata como o arquivo é escrito à mão) e só grava se
+// os dois forem JSON de verdade — nunca um sem o outro. O jogo aberto pega o texto novo pelo HMR (i18n.ts).
+const DIALOG_LANGS = ['pt-br', 'en'] as const;
+const dialogPath = (lang: string): string => fileURLToPath(new URL(`./src/game/i18n/dialogos/${lang}.json`, import.meta.url));
+
+const dialogApiPlugin = (): Plugin => ({
+  name: 'dialog-api',
+  configureServer(server) {
+    server.middlewares.use('/api/dialogos', async (req, res) => {
+      res.setHeader('Content-Type', 'application/json');
+      try {
+        if (req.method === 'GET') {
+          const out: Record<string, unknown> = {};
+          for (const lang of DIALOG_LANGS) out[lang] = JSON.parse(await fs.readFile(dialogPath(lang), 'utf8'));
+          res.end(JSON.stringify(out));
+          return;
+        }
+        if (req.method === 'PUT') {
+          const texts = JSON.parse(await readRequestBody(req)) as Record<string, unknown>;
+          for (const lang of DIALOG_LANGS) {
+            const text = texts[lang];
+            const parsed = typeof text === 'string' ? JSON.parse(text) as unknown : null;
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error(`dialogos/${lang}.json invalido`);
+          }
+          for (const lang of DIALOG_LANGS) {
+            const text = texts[lang] as string;
+            await fs.writeFile(dialogPath(lang), text.endsWith('\n') ? text : `${text}\n`, 'utf8');
+          }
+          res.end(JSON.stringify({ ok: true }));
+          return;
+        }
+        res.statusCode = 405;
+        res.end(JSON.stringify({ error: 'Metodo nao suportado' }));
+      } catch (error) {
+        res.statusCode = 500;
+        res.end(JSON.stringify({ error: error instanceof Error ? error.message : 'Erro inesperado' }));
+      }
+    });
+  },
+});
+
 const spaFallbackPlugin = (): Plugin => ({
   name: 'spa-fallback',
   apply: 'build',
@@ -96,7 +138,7 @@ const resolveBasePath = (): string => {
 
 export default defineConfig({
   base: resolveBasePath(),
-  plugins: [worldApiPlugin(), spaFallbackPlugin()],
+  plugins: [worldApiPlugin(), dialogApiPlugin(), spaFallbackPlugin()],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

@@ -1,6 +1,6 @@
 import { t } from '@/game/i18n/i18n';
 import { withKeyNames } from '@/game/runtime/accessibility';
-import { CAPE_GREENS, DYE_SWATCH, type ClothDye, type ClothTarget } from '@/game/runtime/homeState';
+import { CAPE_COLORS, DYE_SWATCH, type ClothDye, type ClothTarget } from '@/game/runtime/homeState';
 import { HAND_FONT, INK, PAPER_SURFACE, paperTexture, seedOf, tornEdge } from '@/game/runtime/uiStyle';
 
 /**
@@ -17,9 +17,9 @@ const DIP_KEYS: ReadonlySet<string> = new Set(['z', 'j', ' ', 'enter']);
 const CLOSE_KEYS: ReadonlySet<string> = new Set(['escape', 'x', 'k']);
 const ROWS: readonly ClothTarget[] = ['cape', 'blanket'];
 
-/** A amostra de cada pano sem tinta: o verde da capa, e o cru listrado de azul da manta de sempre. */
+/** A amostra de cada pano sem tinta: o índigo da capa, e o cru listrado de azul da manta de sempre. */
 const NATURAL_SWATCH: Readonly<Record<ClothTarget, string>> = {
-  cape: CAPE_GREENS[0],
+  cape: CAPE_COLORS[0],
   blanket: 'repeating-linear-gradient(90deg, #d9d0b9 0 5px, #3a6e8e 5px 7px)',
 };
 

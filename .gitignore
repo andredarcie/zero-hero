@@ -25,6 +25,13 @@ yarn-error.log*
 # um press kit se reproduz rodando o jogo de novo, que e o oposto de um asset.
 press/
 
+# AS FOTOS DO HERÓI NO JOGO (docs/heroi-cozy): 100 MB de capturas e as pranchas de cada rodada, que
+# `capturar.mjs` + `montar_comparacao.py` refazem. Fica versionada só a prancha da escolha final
+# (definitivo.png), as folhas e os scripts.
+docs/heroi-cozy/capturas/
+docs/heroi-cozy/rodada*.png
+docs/heroi-cozy/comparacao.png
+
 # Sobra de script. Os scripts que reescrevem o mundo deixam um `.bak` ao lado do arquivo
 # (public/world.json.bak). O backup que se GUARDA e outro e tem nome proprio —
 # `backup/world-pre-<mudanca>.json` —, e esse continua versionado de proposito.

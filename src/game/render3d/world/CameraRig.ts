@@ -267,6 +267,11 @@ export class CameraRig {
    * desenhavam o mesmo tremor, e a direcao e a unica coisa que um impacto tem a dizer sobre si
    * alem de "aconteceu" — mas exagerar isso vira enjoo de camera, que e o defeito oposto e pior.
    */
+  /** O baque deste quadro, em tiles (0 sem impacto): a cor que se separa no golpe (finishShader "A COR SEPARA") o lê. */
+  public get impact(): number {
+    return this.shakeMs > 0 ? this.shakeAmp * (this.shakeMs / this.shakeDurMs) : 0;
+  }
+
   public shake(durationMs: number, amplitudeTiles: number, dirX = 0, dirY = 0): void {
     if (isReducedMotion()) return;
     // A landed hit during a fading shake must not cut it short — keep the stronger kick.

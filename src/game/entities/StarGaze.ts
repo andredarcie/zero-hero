@@ -26,8 +26,11 @@ const EYE_HEIGHT = 1.6;
 const EYE_BACK = 0.9;
 /** Para onde ele olha lá em cima: o céu do norte, com as copas da clareira recortadas embaixo do quadro. */
 const SKY_PITCH = THREE.MathUtils.degToRad(25);
-/** O quadro abre olhando o céu (uma lente mais aberta que a do chão, 30°). */
-const SKY_FOV_EXTRA = 26;
+/**
+ * O quadro abre olhando o céu: 56° no total. A lente do chão era 30° e hoje é 18° (a câmera HD-2D, worldParams,
+ * 2026-11-19); o olho daqui é próprio, então o céu continua o mesmo: 26 + 12.
+ */
+const SKY_FOV_EXTRA = 38;
 
 export class StarGaze {
   public constructor(private readonly host: StarGazeHost) {}

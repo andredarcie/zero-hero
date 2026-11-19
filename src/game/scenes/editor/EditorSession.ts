@@ -64,11 +64,12 @@ export class EditorSession {
   public applyWorldSettings(settings: { name: string; chunksX: number; chunksY: number }): void {
     const store = this.host.store;
     if (!store) return;
+    // O TAMANHO NÃO SE MEXE AQUI. Esta janela fixava a grade em 5×5, e com o mapa maior (a praia do norte, 5×7 a partir
+    // de `originCy` -2) "aplicar" cortaria as linhas novas fora, com tudo o que está nelas. O mapa tem o tamanho do
+    // arquivo; quem o cresce é um script (scripts/praia-do-norte.mjs).
     store.meta.renameWorld(settings.name);
-    const resized = store.world.meta.worldChunksX !== 5 || store.world.meta.worldChunksY !== 5;
-    if (resized) store.meta.resizeWorld(5, 5);
     this.host.ui?.refreshHeader();
-    this.host.ui?.toast(resized ? 'Mundo fixado em 5x5 chunks' : 'Mundo atualizado');
+    this.host.ui?.toast('Mundo atualizado');
   }
 
   /** Runs the real GameScene over the in-memory (possibly unsaved) world; ESC comes back. */

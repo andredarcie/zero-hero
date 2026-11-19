@@ -88,7 +88,8 @@ export class EditorModals {
     nameInput.type = 'text';
     nameInput.value = meta.name;
     const dimensions = document.createElement('p');
-    dimensions.textContent = 'Mundo aberto fixo: 5 x 5 chunks.';
+    // O tamanho é o do arquivo (o vale 5×5 mais as linhas da praia ao norte): esta janela não o muda.
+    dimensions.textContent = `Mundo aberto fixo: ${meta.worldChunksX} x ${meta.worldChunksY} chunks.`;
     body.append(this.field('Nome', nameInput), dimensions);
 
     const stats = this.host.store.checks.stats();
@@ -110,16 +111,21 @@ export class EditorModals {
       this.host.button('Aplicar', '', () => {
         this.host.cb.onWorldApply({
           name: nameInput.value,
-          chunksX: 5,
-          chunksY: 5,
+          chunksX: meta.worldChunksX,
+          chunksY: meta.worldChunksY,
         });
         this.closeModal();
       }, 'primary'),
     );
   }
 
+  /**
+   * A COR E A VOZ de cada NPC (o que o world.json ainda decide). O NOME e as FALAS não moram mais aqui: o jogo lê os
+   * dois de src/game/i18n/dialogos, e quem os edita é o editor de falas (editor/DialogEditor, o botão "Falas…") — os
+   * campos que havia aqui gravavam no world.json um texto que o jogo nunca mostrava.
+   */
   public openDialogModal(initialKind: NpcKind = NPC_KINDS[0]): void {
-    const { body, foot } = this.modalShell('Dialogos dos NPCs');
+    const { body, foot } = this.modalShell('Cor e voz dos NPCs');
     let currentKind = initialKind;
     let working: WorldDialog = this.host.store.meta.getDialog(currentKind);
 
@@ -154,11 +160,6 @@ export class EditorModals {
     const renderForm = (): void => {
       formEl.innerHTML = '';
 
-      const nameInput = document.createElement('input');
-      nameInput.type = 'text';
-      nameInput.value = working.npcName;
-      nameInput.addEventListener('input', () => { working.npcName = nameInput.value; });
-
       const colorInput = document.createElement('input');
       colorInput.type = 'color';
       colorInput.value = working.npcColorHex;
@@ -181,65 +182,15 @@ export class EditorModals {
       });
       waveSelect.addEventListener('change', () => { working.voice.wave = waveSelect.value as OscillatorType; });
 
+      const note = document.createElement('p');
+      note.style.color = '#8fb2ba';
+      note.textContent = 'O nome e as falas ficam em "Falas…" (src/game/i18n/dialogos).';
       formEl.append(
-        this.field('Nome exibido', nameInput),
         this.field('Cor do nome', colorInput),
         this.field('Voz (freq Hz)', freqInput),
         this.field('Voz (onda)', waveSelect),
-        this.host.sectionLabel('Falas (npc fala, narrador descreve)'),
+        note,
       );
-
-      const linesEl = document.createElement('div');
-      formEl.appendChild(linesEl);
-
-      const renderLines = (): void => {
-        linesEl.innerHTML = '';
-        working.lines.forEach((line, index) => {
-          const row = document.createElement('div');
-          row.className = 'zh-line-row';
-
-          const speakerSelect = document.createElement('select');
-          (['npc', 'narrator'] as const).forEach((speaker) => {
-            const option = document.createElement('option');
-            option.value = speaker;
-            option.textContent = speaker === 'npc' ? 'NPC' : 'Narrador';
-            option.selected = line.speaker === speaker;
-            speakerSelect.appendChild(option);
-          });
-          speakerSelect.addEventListener('change', () => { line.speaker = speakerSelect.value as 'npc' | 'narrator'; });
-
-          const textInput = document.createElement('input');
-          textInput.type = 'text';
-          textInput.value = line.text;
-          textInput.addEventListener('input', () => { line.text = textInput.value; });
-
-          const up = this.host.button('&#8593;', 'Mover para cima', () => {
-            if (index === 0) return;
-            [working.lines[index - 1], working.lines[index]] = [working.lines[index], working.lines[index - 1]];
-            renderLines();
-          });
-          const down = this.host.button('&#8595;', 'Mover para baixo', () => {
-            if (index >= working.lines.length - 1) return;
-            [working.lines[index + 1], working.lines[index]] = [working.lines[index], working.lines[index + 1]];
-            renderLines();
-          });
-          const del = this.host.button('&#10005;', 'Remover fala', () => {
-            working.lines.splice(index, 1);
-            renderLines();
-          });
-
-          row.append(speakerSelect, textInput, up, down, del);
-          linesEl.appendChild(row);
-        });
-
-        const add = this.host.button('+ Adicionar fala', '', () => {
-          working.lines.push({ speaker: 'npc', text: '' });
-          renderLines();
-        });
-        add.style.marginTop = '4px';
-        linesEl.appendChild(add);
-      };
-      renderLines();
     };
 
     renderList();
@@ -247,11 +198,10 @@ export class EditorModals {
 
     foot.append(
       this.host.button('Fechar', '', () => this.closeModal()),
-      this.host.button('Aplicar neste NPC', 'Grava as falas editadas no mundo (salve depois com Ctrl+S)', () => {
-        working.lines = working.lines.filter((line) => line.text.trim().length > 0);
+      this.host.button('Aplicar neste NPC', 'Grava a cor e a voz no mundo (salve depois com Ctrl+S)', () => {
         this.host.cb.onDialogApply(currentKind, working);
         working = this.host.store.meta.getDialog(currentKind);
-        this.host.toast(`Dialogo de ${NPC_LABELS[currentKind]} aplicado`);
+        this.host.toast(`Cor e voz de ${NPC_LABELS[currentKind]} aplicadas`);
       }, 'primary'),
     );
   }

@@ -228,13 +228,51 @@ describe('a mata fora da grade', () => {
     }
   });
 
-  it('as outras árvores (a seca, os tocos, as anciãs) saem do centro mas não trocam de forma', () => {
-    for (const frame of [3, 21, 36, 37, 73, 74]) {
+  it('as outras árvores (a seca e os tocos) saem do centro mas não trocam de forma', () => {
+    for (const frame of [3, 21, 36, 37]) {
       for (const l of looks(forest, frame)) {
         expect(l.frame).toBe(frame);
         expect(l.tall).toBe(false);
       }
     }
+  });
+
+  it('as ANCIÃS do jardim (73/74 no mapa) vestem a família toda: sete formas, espelhadas ou não, e a alta só com mata atrás', () => {
+    const family = new Set([73, 74, 135, 136, 138, 139, 140]);
+    for (const frame of [73, 74]) {
+      const all = looks(forest, frame);
+      const shapes = new Set(all.map((l) => l.shape));
+      expect([...shapes].sort()).toEqual(['ancientA', 'ancientB', 'ancientLean', 'ancientTall', 'ancientTwin', 'ancientWide', 'ancientYoung']);
+      for (const l of all) {
+        expect(family.has(l.frame), `${l.shape} → ${l.frame}`).toBe(true);
+        expect(l.tall).toBe(l.shape === 'ancientTall');
+        if (l.tall) {
+          expect(l.topFrame).toBe(137);
+          expect(forest.solid(l.x, l.z - 1) && forest.solid(l.x, l.z - 2)).toBe(true);
+        }
+        // a mesma árvore no mesmo tile, sempre
+        expect(treeLookAt(frame, l.x, l.z, forest)).toEqual(treeLookAt(frame, l.x, l.z, forest));
+      }
+      const flipped = all.filter((l) => l.flip).length / all.length;
+      expect(flipped).toBeGreaterThan(0.3);
+      expect(flipped).toBeLessThan(0.7);
+    }
+  });
+
+  it('a anciã TORTA, na beira, pende para o lado aberto (para a luz)', () => {
+    // mata maciça, com chão aberto só a leste (ou só a oeste) da árvore do (10, z)
+    let seen = 0;
+    for (let z = 0; z < 400 && seen < 2; z++) {
+      for (const open of ['east', 'west'] as const) {
+        const ctx: ForestContext = { solid: (x, zz) => (zz === z ? (open === 'east' ? x <= 10 : x >= 10) : true), outside: () => false };
+        const l = treeLookAt(73, 10, z, ctx);
+        if (l?.shape !== 'ancientLean') continue;
+        // desenhada pendendo para o leste: aberta a oeste, ela vira
+        expect(l.flip).toBe(open === 'west');
+        seen += 1;
+      }
+    }
+    expect(seen).toBeGreaterThan(0);
   });
 
   it('a mata de fora do mundo cabe debaixo da névoa: nenhuma alta, e nenhuma vem para a frente do plano do tile', () => {

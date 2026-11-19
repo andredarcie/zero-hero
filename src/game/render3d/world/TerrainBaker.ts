@@ -80,6 +80,9 @@ export class TerrainBaker {
     const groundFrame = new Map<number, number>();
     for (const g of t.groundTiles) groundFrame.set(tileKey(g.x, g.z), g.frame);
     const wetTiles = this.host.ground.bakeGroundAndWater(t, mats, groundFrame);
+    // A praia do norte: a areia e o oceano (render3d/surf.ts), e o capim mordendo a beira da areia.
+    this.host.ground.bakeSurf(t, mats);
+    this.host.ground.bakeSandEdges(t, mats, groundFrame);
     this.host.ground.bakeStoneEdges(t, mats);
     this.host.ground.bakeEarthEdges(t, mats);
     this.host.features.bakeLavaAndPit(t, mats, groundFrame);

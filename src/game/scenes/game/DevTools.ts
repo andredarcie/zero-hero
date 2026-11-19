@@ -43,6 +43,8 @@ const FIXED_PLACES: ReadonlyArray<{ id: string; name: string; x: number; y: numb
   { id: 'camp', name: 'Acampamento', x: 54, y: 50, dx: 0, dy: -1 },
   { id: 'bench', name: 'Bancada (frente)', x: 54, y: 45, dx: 1, dy: 0 },
   { id: 'campGrass', name: 'Mato do acampamento', x: 55, y: 48, dx: 1, dy: 0 },
+  { id: 'spring', name: 'Fonte termal', x: 5, y: -1, dx: 0, dy: -1 },
+  { id: 'beachSeat', name: 'Guarda-sol da praia', x: 41, y: -14, dx: 0, dy: -1 },
 ];
 
 export interface DevQuestRow { dialog: string; name: string; done: boolean; progress: string }

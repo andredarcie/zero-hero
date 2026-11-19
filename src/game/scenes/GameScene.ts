@@ -58,6 +58,7 @@ import { ItemUseGround } from './game/ItemUseGround';
 import { BodyBumps } from './game/BodyBumps';
 import { WorldQuery } from './game/WorldQuery';
 import { Garden } from './game/Garden';
+import { RelicDig } from './game/RelicDig';
 import { FireSpread } from './game/FireSpread';
 import { QuestSetup } from './game/QuestSetup';
 import { QuestMarks } from './game/QuestMarks';
@@ -231,6 +232,8 @@ export class GameScene extends Engine.Scene {
   public readonly query: WorldQuery = new WorldQuery(this);
   /** O canteiro: cavar, regar, brotar. (ver Garden) */
   public readonly garden: Garden = new Garden(this);
+  /** As relíquias enterradas: as trincas, a cavada no pé e a coisa que pula para a mão. (ver RelicDig) */
+  public readonly relics: RelicDig = new RelicDig(this);
   /** O fogo que se espalha e as fogueiras do vale. (ver FireSpread) */
   public readonly fire: FireSpread = new FireSpread(this);
   /** As quests montadas: Marco, Thea, Sisi. (ver QuestSetup) */

@@ -12,8 +12,9 @@ const STEPS = [
   { day: 2, phase: 0.27, level: 0.75, name: 'quase', shotName: '04-quase' },
   { day: 2, phase: 0.45, level: 1, name: 'em pé', shotName: '05-em-pe' },
 ];
+// o mato do acampamento é ralo (2026-11-19): os dois tufos que este cenário corta são de quina um com o outro
 const FREE = [56, 48];
-const BUILT = [56, 47];
+const BUILT = [57, 47];
 
 export default {
   name: 'mato-volta',
@@ -63,7 +64,7 @@ export default {
     await shot('01-chao-limpo', { note: 'Dois segundos depois: o chão limpo' });
 
     // o segundo tile: cortado e USADO (uma peça em cima)
-    await teleport(56, 48, 0, -1);
+    await teleport(57, 48, 0, -1);
     await page.keyboard.press('x');
     await sleep(2800);
     await page.keyboard.press('Backquote');

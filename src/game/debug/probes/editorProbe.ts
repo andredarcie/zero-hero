@@ -3,6 +3,7 @@
 // Como as sondas do jogo (ver index.ts), só no modo de desenvolvimento.
 
 import type { CellLayerId, CellValue, PlacedEntity } from '@/game/editor/EditorStore';
+import { tLines } from '@/game/i18n/i18n';
 import type { EditorScene } from '@/game/scenes/EditorScene';
 
 export const buildEditorProbes = (s: EditorScene) => {
@@ -12,6 +13,8 @@ export const buildEditorProbes = (s: EditorScene) => {
   };
   return {
     ready: (): boolean => Boolean(s.store),
+    /** As falas de um caminho como o jogo as lê agora (o editor de falas grava, e o i18n troca sem recarregar). */
+    lines: (key: string): string[] => tLines(key).map((l) => l.text),
     /** Limpa o retângulo [x0..x1]×[y0..y1]: tira as peças, a camada de cima e a colisão pintada. */
     clearArea: (x0: number, y0: number, x1: number, y1: number): void => {
       for (let x = x0; x <= x1; x += 1) {

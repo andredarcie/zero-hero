@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { DECOR_KINDS } from '@/game/entities/ItemPickup';
 import { MUSHROOM_KINDS } from '@/game/fungi/fungi';
 import { HOME_BUILDS } from '@/game/objects/homeBuilds';
+import { isRelicKind } from '@/game/relics/relics';
 import en from '@/game/i18n/locales/en.json';
 import ptBr from '@/game/i18n/locales/pt-br.json';
 import { Inventory } from './Inventory';
@@ -36,9 +37,11 @@ describe('o caderno de campo', () => {
     for (const lang of [en, ptBr]) {
       for (const kind of kinds) {
         const animal = (ANIMALS as readonly string[]).includes(kind);
-        const name = animal ? `sketch.animals.${kind}.name` : `items.name.${kind}`;
+        // A relíquia tem o texto dela em `relics.<kind>` (o nome, o que é, a obra e a nota de quem a enterrou).
+        const relic = isRelicKind(kind);
+        const name = animal ? `sketch.animals.${kind}.name` : relic ? `relics.${kind}.name` : `items.name.${kind}`;
         expect(typeof lookup(lang, name), `${kind}: nome`).toBe('string');
-        const note = animal ? `sketch.animals.${kind}.fact`
+        const note = animal ? `sketch.animals.${kind}.fact` : relic ? `relics.${kind}.text`
           : MUSHROOM_KINDS.includes(kind as never) ? `fungi.species.${kind}.curiosity` : `notebook.entry.${kind}`;
         expect(typeof lookup(lang, note), `${kind}: nota`).toBe('string');
         if (animal) expect(typeof lookup(lang, `sketch.animals.${kind}.latin`), `${kind}: nome científico`).toBe('string');

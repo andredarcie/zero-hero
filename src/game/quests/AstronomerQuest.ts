@@ -6,9 +6,7 @@ import type { HeldItemKind } from '@/game/entities/ItemPickup';
 import { tLines, type I18nLine } from '@/game/i18n/i18n';
 
 import type { Billboard3D } from '@/game/render3d/Billboard3D';
-import {
-  ASH_TEXTURE, SAND_TEXTURE, TELESCOPE_STAND_TEXTURE, TRIPOD_TEXTURE,
-} from '@/game/render3d/skyTextures';
+import { ASH_TEXTURE, TELESCOPE_STAND_TEXTURE, TRIPOD_TEXTURE } from '@/game/render3d/skyTextures';
 import { CAIRN_TEXTURE } from '@/game/render3d/cozyTextures';
 import { world3d } from '@/game/render3d/World3D';
 import { adventureState, type SkyQuestSave } from '@/game/runtime/adventureState';
@@ -23,8 +21,9 @@ import { AstronomerForge } from './AstronomerForge';
  * pedra afunda na lava e vira chão. NINGUÉM DEPENDE DE OUTRO VIZINHO (pedido do autor): nada aqui pede o machado do Marco
  * nem coisa de outra quest, e o jogador faz os pedidos na ordem que quiser. O FORNO dela, fixo ao lado da
  * nave, é o guia: ele pede um item de cada vez, na ordem certa (`furnaceNeed`), e devolve o resultado — o
- * carvão (fica aceso lá dentro), o minério (sai a esponja, que o martelo vira ferro); depois areia (só na
- * beira do lago grande, no sul) e cinza (ao lado dela), que viram vidro. O vidro, polido num minijogo, vira lente. Montado, o herói o leva nas costas ao planalto, onde o céu é
+ * carvão (fica aceso lá dentro), o minério (sai a esponja, que o martelo vira ferro); depois areia (num BALDE, de um
+ * montinho da praia do norte — objects/beach/SandMounds; desde 2026-11-19 é a única areia do jogo) e cinza (ao lado
+ * dela), que viram vidro. O vidro, polido num minijogo, vira lente. Montado, o herói o leva nas costas ao planalto, onde o céu é
  * mais limpo. De noite, e só de noite, ele procura os quatro alvos que ela ensina. Ela sobe, os dois
  * conversam, a nave pousa e leva Thea para casa (ver TheaDeparture), e o pedido fecha. O telescópio fica
  * lá para sempre.
@@ -72,11 +71,8 @@ export interface AstronomerHost {
   theaGone: () => void;
 }
 
-/**
- * A AREIA SÓ EXISTE NA BEIRA DO LAGO GRANDE, no sul, ao lado do tronco onde se senta para olhar a água
- * (pedido do autor): o herói desce o vale inteiro para buscá-la. O primeiro tile livre desta lista.
- */
-const SAND_TILES = [[40, 50], [42, 50], [40, 51], [42, 51], [39, 50], [43, 50]] as const;
+// A AREIA não mora mais aqui (2026-11-19): o monte infinito da beira do lago do sul saiu. Ela vem num balde, dos
+// montinhos da praia do norte (objects/beach/SandMounds), e o forno a pede assim (AstronomerForge.furnaceNeed).
 const SIZE_TRIPOD = 1;
 const SIZE_TELESCOPE = 1.15;
 const SIZE_HEAP = 0.95;
@@ -88,8 +84,6 @@ export class AstronomerQuest {
   public npc?: { worldX: number; worldY: number };
   public tripod?: Billboard3D;
   public tripodTile?: { x: number; y: number };
-  public sand?: Billboard3D;
-  private sandTile?: { x: number; y: number };
   public ash?: Billboard3D;
   private ashTile?: { x: number; y: number };
   public mark?: Billboard3D;
@@ -143,8 +137,8 @@ export class AstronomerQuest {
   }
 
   /**
-   * À esquerda dela o tripé, e atrás dele a areia; à direita, além da fogueira, a cinza. Só se escolhe na
-   * hora de mostrar: até lá o herói pode ter posto o forno, ou estar parado, num desses tiles.
+   * À esquerda dela o tripé; à direita, além da fogueira, a cinza. Só se escolhe na hora de mostrar: até lá o herói
+   * pode ter posto o forno, ou estar parado, num desses tiles.
    */
   public placeCamp(): void {
     const npc = this.npc;
@@ -159,26 +153,21 @@ export class AstronomerQuest {
       return found;
     };
     this.tripodTile = pick([[-1, 0], [-1, 1], [0, 1], [-2, 0]]);
-    this.sandTile = SAND_TILES.map(([x, y]) => ({ x, y })).find((t) => this.host.isFree(t.x, t.y) && !(t.x === hero.x && t.y === hero.y));
     this.ashTile = pick([[2, 0], [2, 1], [1, 1], [2, -1]]);
   }
 
   public destroy(): void {
     this.overlay?.destroy();
     this.overlay = undefined;
-    for (const bb of [this.tripod, this.sand, this.ash, this.mark, this.telescope]) bb?.destroy();
+    for (const bb of [this.tripod, this.ash, this.mark, this.telescope]) bb?.destroy();
   }
 
   public isSolidAt(x: number, y: number): boolean {
-    return this.isTripod(x, y) || this.isSand(x, y) || this.isAsh(x, y) || this.isMark(x, y) || this.isTelescope(x, y);
+    return this.isTripod(x, y) || this.isAsh(x, y) || this.isMark(x, y) || this.isTelescope(x, y);
   }
 
   private isTripod(x: number, y: number): boolean {
     return this.tripod !== undefined && this.tripodTile?.x === x && this.tripodTile.y === y;
-  }
-
-  private isSand(x: number, y: number): boolean {
-    return this.sand !== undefined && this.sandTile?.x === x && this.sandTile.y === y;
   }
 
   private isAsh(x: number, y: number): boolean {
@@ -212,12 +201,6 @@ export class AstronomerQuest {
   }
 
   public showHeaps(animate: boolean): void {
-    if (!this.sand && this.sandTile) {
-      this.sand = world3d().objects.addBillboard(SAND_TEXTURE, 0, { groundShadow: { rx: 0.36, rz: 0.16, alpha: 0.2 } })
-        .setPosition(this.sandTile.x, this.sandTile.y)
-        .setDisplaySize(SIZE_HEAP, SIZE_HEAP);
-      if (animate) this.pop(this.sand, SIZE_HEAP);
-    }
     if (!this.ash && this.ashTile) {
       this.ash = world3d().objects.addBillboard(ASH_TEXTURE, 0, { groundShadow: { rx: 0.36, rz: 0.16, alpha: 0.2 } })
         .setPosition(this.ashTile.x, this.ashTile.y)
@@ -299,7 +282,6 @@ export class AstronomerQuest {
   // ── os gestos no mundo ──────────────────────────────────────────────────────────────────────────
 
   public interactAt(x: number, y: number): boolean {
-    if (this.isSand(x, y)) { this.takeHeap('sand', x, y); return true; }
     if (this.isAsh(x, y)) { this.takeHeap('ash', x, y); return true; }
     if (this.isTripod(x, y)) {
       if (this.save.stage === 'polish') this.scope.openPolish();
@@ -327,15 +309,14 @@ export class AstronomerQuest {
   /** O gesto da mão neste tile agora, se houver: a mesma pergunta que o botão faz. */
   public actionAt(x: number, y: number): string | null {
     const held = this.host.held();
-    if (this.isSand(x, y)) return held !== 'sand' ? 'take' : null;
     if (this.isAsh(x, y)) return held !== 'ash' ? 'take' : null;
     if (this.isTripod(x, y)) return this.save.stage === 'polish' || held === 'glass' ? 'polish' : null;
     if (this.isMark(x, y)) return held === 'telescope' ? 'install' : null;
     return this.isTelescope(x, y) ? 'look' : null;
   }
 
-  /** Os dois montes não acabam: nada se perde, e quem largou o punhado volta e pega outro. */
-  private takeHeap(kind: 'sand' | 'ash', x: number, y: number): void {
+  /** O monte de cinza não acaba: nada se perde, e quem largou o punhado volta e pega outro. */
+  private takeHeap(kind: 'ash', x: number, y: number): void {
     if (this.host.held() === kind) return;
     const hero = this.host.hero();
     this.host.fling(kind, x, y, hero.x, hero.y);

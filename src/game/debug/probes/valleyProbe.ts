@@ -55,6 +55,9 @@ export const valleyProbe = (s: GameScene) => {
         drips: { level: n.drips.level, fallen: n.drips.fallen },
         rainbow: n.rainbow.level,
         mushrooms: { count: n.mushrooms.count, spots: n.mushrooms.spots },
+        leaves: { count: n.leaves.count, dropped: n.leaves.dropped },
+        shafts: { level: n.shafts.level, count: n.shafts.count, list: n.shafts.list },
+        gust: n.frame.gust,
       };
     },
     /** O peixe que pula: o billboard dele no mundo 3D (posição, escala, se tem textura), ou null. */

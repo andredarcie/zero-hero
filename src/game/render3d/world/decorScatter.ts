@@ -15,12 +15,13 @@
 // próprias porque elas BARRAM (render3d/forest.ts). O mato alto (19/20) fica parado e sempre visível: ele barra o
 // herói, e uma barreira que some na clareira mentiria.
 
-import { ANCIENT_GROVE, BIOME_DECOR } from '@/game/world/biomes';
+import { ANCIENT_GROVE, BEACH_DECOR, BIOME_DECOR } from '@/game/world/biomes';
 
-/** O que ANDA dentro do tile: a decoração rasteira e a flora dos biomas (não o mato alto, que barra). */
+/** O que ANDA dentro do tile: a decoração rasteira, a flora dos biomas e a da praia (não o mato alto, que barra). */
 const SCATTER_FRAMES: ReadonlySet<number> = new Set([
   0, 1, 7, 8, 10, 11, 13,
   ...Object.values(BIOME_DECOR),
+  ...Object.values(BEACH_DECOR),
   ANCIENT_GROVE.grass,
 ]);
 /** O que pode SUMIR na clareira: só o enchimento (capim, folhagem, folha caída, trevo) — nunca a flor que dá o lugar. */

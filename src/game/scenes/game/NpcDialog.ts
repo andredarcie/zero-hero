@@ -6,6 +6,9 @@ import type { HeldItemKind } from '@/game/entities/ItemPickup';
 import { t, tLines, type I18nLine } from '@/game/i18n/i18n';
 import { isMushroomKind } from '@/game/fungi/fungi';
 import { DialogOverlay } from '@/game/runtime/DialogOverlay';
+import { adventureState } from '@/game/runtime/adventureState';
+import { addTalk, talkEntry } from '@/game/runtime/talkLog';
+import { getDay } from '@/game/runtime/timeOfDay';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { getDialog, getDialogVoice } from '@/game/world/WorldData';
 import { allQuestsDone, isQuestComplete, isQuestDone, questDialogFor } from '@/game/runtime/QuestLog';
@@ -253,6 +256,8 @@ export class NpcDialog {
     // Focus on the conversation: fade the music down while the NPC talks.
     getSoundManager().music.fadeMusicOut();
     this.dialogOverlay = new DialogOverlay(this.host, script, () => {
+      // O CADERNO DAS CONVERSAS (runtime/talkLog): o que foi lido até o fim fica para reler no menu de pausa.
+      if (this.host.adventure && this.dialogOverlay) addTalk(adventureState().talks, talkEntry(script, this.dialogOverlay.heardLines, getDay()));
       this.dialogOverlay?.destroy();
       this.dialogOverlay = undefined;
       this.dialogOpen = false;

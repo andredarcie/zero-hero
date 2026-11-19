@@ -44,6 +44,9 @@ const world = JSON.parse(raw);
 const { worldChunksX, worldChunksY, chunkColumns: CW, chunkRows: CH } = world.meta;
 const W = worldChunksX * CW;
 const H = worldChunksY * CH;
+/** A primeira linha do mapa: ele começa ACIMA da linha 0 desde a praia do norte (`meta.originCy`). */
+const TOPY = (world.meta.originCy ?? 0) * CH;
+const outside = (x, y) => x < 0 || y < TOPY || x >= W || y >= TOPY + H;
 
 /** Os arbustos secos da entrada leste do corredor viram lava. */
 const NEW_LAVA = [[10, 3], [10, 4]];
@@ -76,8 +79,8 @@ const SEA = 33;
 const GROUND = 5;
 const key = (x, y) => `${x},${y}`;
 const chunkOf = (x, y) => world.chunks.find((c) => c.cx === Math.floor(x / CW) && c.cy === Math.floor(y / CH));
-const at = (x, y) => { const c = chunkOf(x, y); return { c, lx: x % CW, ly: y % CH }; };
-const relief = (x, y) => (x < 0 || y < 0 || x >= W || y >= H ? 0 : chunkOf(x, y).relief?.[y % CH]?.[x % CW] ?? 0);
+const at = (x, y) => { const c = chunkOf(x, y); return { c, lx: ((x % CW) + CW) % CW, ly: ((y % CH) + CH) % CH }; };
+const relief = (x, y) => { if (outside(x, y)) return 0; const { c, lx, ly } = at(x, y); return c.relief?.[ly]?.[lx] ?? 0; };
 const canStep = makeCanStep(relief);
 const N4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
@@ -96,7 +99,7 @@ const stonesTo = (lavaOpen) => {
   const items = new Set(world.chunks.flatMap((c) => (c.pickups ?? []).filter((p) => FUNGI.has(p.type)).map((p) => key(p.worldX, p.worldY))));
   const propAt = new Map(world.props.map((p) => [key(p.worldX, p.worldY), p.type]));
   const solid = (x, y) => {
-    if (x < 0 || y < 0 || x >= W || y >= H) return true;
+    if (outside(x, y)) return true;
     const { c, lx, ly } = at(x, y);
     return c.collisions[ly][lx] || SOLID_UPPER.has(c.upper[ly][lx]) || c.ground[ly][lx] === SEA;
   };

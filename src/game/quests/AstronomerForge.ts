@@ -38,7 +38,8 @@ export class AstronomerForge {
     }
     if (this.host.save.stage === 'glass') {
       if (oven.glass) return null;
-      return oven.sand ? 'ash' : 'sand';
+      // A AREIA vem num BALDE, da praia do norte (pedido do autor, 2026-11-19): a única areia do jogo.
+      return oven.sand ? 'ash' : 'bucketSand';
     }
     return null;
   }
@@ -65,7 +66,7 @@ export class AstronomerForge {
     } else if (kind === 'ore') {
       oven.bloom = true;
       result = { done: true, product: 'bloom' };
-    } else if (kind === 'sand') {
+    } else if (kind === 'bucketSand') {
       oven.sand = true;
     } else if (kind === 'ash') {
       oven.glass = true;

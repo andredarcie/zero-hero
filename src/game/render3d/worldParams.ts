@@ -6,6 +6,20 @@ import { TILESET_FRAME_SIZE } from '@/game/constants';
 import { CAST_MAX_ALPHA } from './CastShadow3D';
 import type { World3DParams } from './World3D';
 
+/**
+ * O PASSO PARA O NORTE E PARA O SUL (pedido do autor, 2026-11-19: com a câmera HD-2D, "quando ele sobe ou desce parece
+ * que ele anda mais lento... só parece, a distância andada é a mesma").
+ *
+ * Um tile para o norte ocupa na tela sen(inclinação) do que um tile para o lado ocupa: com a câmera de 46,5° eram 72%,
+ * e a caminhada lia como uma só; com a de 27° são 45%, e subir ou descer parecia andar em câmera lenta. O passo
+ * vertical fica mais curto na mesma proporção, para o chão correr na tela como corria antes: 72% da velocidade do
+ * passo de lado (o que o autor achava certo), e não 100% — igualar de todo faria o herói disparar no eixo em que o mundo
+ * é mais comprido. Sai da própria câmera: se a inclinação mudar, o passo acompanha. Nunca deixa o passo mais lento.
+ */
+export const VERTICAL_SCREEN_SHARE = 0.725;
+export const verticalStepSpeedup = (camHeight: number, camBack: number): number =>
+  Math.max(1, VERTICAL_SCREEN_SHARE / Math.sin(Math.atan2(camHeight - 0.4, camBack)));
+
 export const defaultWorld3DParams = (): World3DParams => ({
     // O enquadramento do jogo: a camera em (0, camHeight, camBack) olhando pro alvo. O par ja foi
     // 72% do original (8.4/7.6 → 6.048/5.472, dois passos de slider: 80%, e 90% desse 80%); depois
@@ -23,11 +37,21 @@ export const defaultWorld3DParams = (): World3DParams => ({
     // A PERSPECTIVA MAIS CALMA (2026-11-10): o fov desceu de 38 para 30 e o par subiu pelo fator que mantém o tamanho
     // do tile NA LINHA DO HERÓI (tan 19° / tan 15° = 1,285; 6,72/6,08 → 8,636/7,813). Um dolly zoom: o herói e o chão
     // dele saem iguais, e o que está ao norte encolhe menos — com 38° perto, quem estava três tiles acima saía com o
-    // pixel 30% menor, e o quadro misturava tamanhos de pixel (o vizinho parecia de outra resolução que o herói). A
-    // razão (a direção de visão) não mudou. O fog e a largura mínima da tela em pé foram divididos pelo mesmo fator.
-    camHeight: 8.636,
-    camBack: 7.813,
-    fov: 30,
+    // pixel 30% menor, e o quadro misturava tamanhos de pixel (o vizinho parecia de outra resolução que o herói).
+    //
+    // A CÂMERA HD-2D (2026-11-19, aprovada pelo autor: "ficou muito melhor... deixe assim de forma definitiva"). Ela
+    // olhava 46,5° para baixo com lente de 30°; os jogos HD-2D olham ~25–27° com lente fechada (medido nas capturas de
+    // Octopath II e Live A Live; os desenvolvedores contam o mesmo: câmera baixa, "olhando para dentro" do cenário, e
+    // teleobjetiva — no protótipo de Octopath a lente aberta dava "estranheza de escala"). Agora: 27° e 18°, e outro
+    // dolly zoom: a câmera recuou o quanto a lente fechou (distância × tg(fov/2) constante), então o tile NA LINHA DO
+    // HERÓI tem o mesmo tamanho de antes e a largura de tela também. O que muda é o resto, e é o efeito: o chão achata
+    // (sen 27° contra sen 46,5°), o que está em pé cresce (cos), e o quadro alcança ~11 tiles ao norte em vez de 6.
+    // Tudo que contava com a direção antiga foi refeito junto: o fog (÷ o recuo, 0,591), o piso da tela em pé
+    // (WorldScreen), a flor da lua (spritefactory/sprites/moonflower.mjs, DEPTH_UP = tg 27°) e as máscaras de cima
+    // (AirLight, ShadowLayers), que agora alcançam o alto do quadro.
+    camHeight: 9.1192,
+    camBack: 17.1126,
+    fov: 18,
     // UM PARA TODOS. O celular desenhava na METADE (`isHandheld() ? 2 : 1`) para economizar
     // preenchimento — e essa metade se somava ao `devicePixelRatio` que a conta do buffer ignorava,
     // dando um quadro a 1/6 da tela: o serrilhado que o autor viu. O reescalonamento invisível foi
@@ -172,7 +196,8 @@ export const defaultWorld3DParams = (): World3DParams => ({
     heroSightTiles: 2.6,
     heroSightLean: 0.9,
     // 0,02 ÷ 1,285: a câmera recuou (ver camHeight), e o fog conta da câmera — sem isto o mundo todo enevoava mais.
-    fogDensity: 0.0156,
+    // × 0,591 (2026-11-19): a câmera HD-2D recuou de novo (11,35 → 19,21 tiles do alvo), pelo mesmo motivo.
+    fogDensity: 0.00922,
     // Raised with the ambient (see above) — a fuller moon for a brighter night.
     moon: 3.6,
     // Near-neutral (just a hint of cool) so tree-green etc. read as the art's own
@@ -195,8 +220,20 @@ export const defaultWorld3DParams = (): World3DParams => ({
     focusBand: 0.16,
     // O desfoque cedeu a vez à perspectiva atmosférica (2026-11-10): metade da força, e só no fundo distante — pixel
     // art borrada lê como imagem estragada. O primeiro plano mal amacia.
-    dofBlur: 1.6,
-    dofNear: 0.3,
+    // A LENTE HD-2D (2026-11-19, pedido "o HD-2D mais legítimo possível"): o borrão agora é pela distância (dofDepth),
+    // então pode ser forte sem tocar no que o jogador está olhando — tudo a até 2,4 tiles de profundidade do herói fica
+    // nítido de cima a baixo, e só o fundo de verdade derrete, até 4,5 px no alto do quadro (era 1,6 px por fileira).
+    // O pé da tela (o chão uns 5 tiles ao sul) só amacia, como o primeiro plano dos jogos HD-2D.
+    dofBlur: 4.5,
+    dofNear: 0.35,
+    dofDepth: 1,
+    dofBand: 2.4,
+    dofRamp: 7,
+    bokeh: 1,
+    // A aberração cromática dos jogos HD-2D (2026-11-19): fraca de propósito, a cor só se separa perto da borda (~1 px
+    // nas laterais da faixa nítida; os cantos de cima e de baixo já são borrão da lente); um golpe soma um pulso. (O reflexo de lente foi feito e tirado no mesmo dia: o sol nunca entra no quadro
+    // desta câmera, e nenhuma luz do vale tem força para quicar na lente — nem com o knob no quádruplo ele aparecia.)
+    aberration: 1.5,
     vignette: 0.16, // eased with the brighter night — 0.24 re-darkened the corners
     // A noite: o longe escurece e perde cor devagar (a cor do ar é quase preta). O dia leva o dobro (skyPreset).
     haze: 0.45,

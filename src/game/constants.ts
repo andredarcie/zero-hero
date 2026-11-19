@@ -424,6 +424,16 @@ export const SEA_TILE_FRAME = 33;
 export const SEA_TILE_FRAMES: readonly number[] = [SEA_TILE_FRAME, 34, 35];
 export const SOLID_GROUND_FRAMES: ReadonlySet<number> = new Set([SEA_TILE_FRAME]);
 
+// A AREIA DA PRAIA DO NORTE (spritefactory/sprites/beach-sand.mjs, 2026-11-19). O mapa guarda UMA (a 141), e a
+// coordenada escolhe qual das quatro pinturas cada tile veste — o mecanismo do mar e da terra. Pisa-se nela como em
+// qualquer chão; a pá não a cava (DIGGABLE_GROUND_FRAMES). A faixa molhada junto do mar não é frame nenhum: é o
+// material da arrebentação (render3d/surf.ts) escurecendo esta mesma areia.
+export const SAND_TILE_FRAME = 141;
+const SAND_GRAIN_FRAMES: readonly number[] = [141, 142];
+const SAND_RIPPLE_FRAME = 143;
+const SAND_SHELL_FRAME = 144;
+export const SAND_TILE_FRAMES: ReadonlySet<number> = new Set([...SAND_GRAIN_FRAMES, SAND_RIPPLE_FRAME, SAND_SHELL_FRAME]);
+
 // THE WORLD'S FLOOR, AND THE EARTH THAT SHOWS THROUGH IT.
 //
 // 87% of the 3.600 ground tiles in world.json are this one frame, and it covers 68-76% of every
@@ -514,6 +524,16 @@ const earthField = (x: number, y: number, grain: number, salt: number): number =
 const groundEarthiness = (x: number, y: number): number => (
   0.76 * earthField(x, y, GROUND_DETAIL_GRAIN, 0) + 0.24 * earthField(x, y, 1, 977)
 );
+/**
+ * A pintura de areia de cada tile: as RUGAS do vento vêm em manchas largas (um campo suave, como o da terra nua — uma
+ * ruga solta no meio do grão lê como tile quebrado), a concha em um tile de cada nove, e o resto é grão.
+ */
+const sandFrameAt = (x: number, y: number): number => {
+  if (earthField(x, y, 4, 311) > 0.62) return SAND_RIPPLE_FRAME;
+  if (terrainVariant(x + 17, y + 5, 9) === 0) return SAND_SHELL_FRAME;
+  return SAND_GRAIN_FRAMES[terrainVariant(x, y, SAND_GRAIN_FRAMES.length)];
+};
+
 /** As pinturas do calçamento, só arte: o mundo guarda 23 e 24, e a coordenada escolhe qual cada tile veste. */
 const STONE_FLOOR_VARIANTS: Readonly<Record<number, readonly number[]>> = { 23: [23, 57, 58], 24: [24, 59, 60] };
 export const STONE_FLOOR_FRAMES: ReadonlySet<number> = new Set(Object.values(STONE_FLOOR_VARIANTS).flat());
@@ -529,6 +549,7 @@ export const STONE_FLOOR_FRAMES: ReadonlySet<number> = new Set(Object.values(STO
 export const groundFrameAt = (frame: number, x: number, y: number): number => {
   const stones = STONE_FLOOR_VARIANTS[frame];
   if (stones) return stones[terrainVariant(x, y, stones.length)];
+  if (frame === SAND_TILE_FRAME) return sandFrameAt(x, y);
   if (frame !== GROUND_TILE_FRAME) return frame;
   if (!isEarthAt(x, y)) return frame;
   return GROUND_DETAIL_FRAMES[terrainVariant(x, y, GROUND_DETAIL_FRAMES.length)];

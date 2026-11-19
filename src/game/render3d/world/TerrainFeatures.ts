@@ -2,7 +2,8 @@
 // negra de fora do mapa, e as sombras assadas (o blob de cada sólido e os campos instanciados do fogo e da lua).
 
 import * as THREE from 'three';
-import { DUNGEON_TILES, TREE_UPPER_FRAMES } from '@/game/constants';
+import { DUNGEON_TILES, GROUND_TILE_FRAME, TREE_UPPER_FRAMES } from '@/game/constants';
+import { SPRING_DEPTH } from '@/game/world/hotSpring';
 import { RELIEF_HEIGHT, reliefLevelAt } from '@/game/world/relief';
 import { isLifeHome } from '@/game/world/biomeLife';
 import { ANCIENT_GROVE, BIOME_DECOR, biomeTreeTintAt } from '@/game/world/biomes';
@@ -38,6 +39,13 @@ const PLANT_WIND_FRAME = 4;
  * a descida ATRAVESSANDO o fundo — e o fundo é a única coisa que ainda o esconde.
  */
 export const STAIRS_PIT_DEPTH = 0.62;
+/** A parede da bacia da fonte termal: pedra molhada, mais escura para o fundo ([de, até, cor] ao longo da altura). */
+const SPRING_BED_TINT = [0.6, 0.8, 0.9] as const;
+const SPRING_BANK_BANDS: ReadonlyArray<readonly [number, number, number]> = [
+  [0, 0.24, 0x5c5850],
+  [0.24, 0.62, 0x46474a],
+  [0.62, 1, 0x34383c],
+];
 // O VAGA-LUME MORA NO MATO. Estes são os frames de decoração que contam como vegetação viva —
 // capim, folhagem, o arbusto florido e os cogumelos —, e deliberadamente NÃO a serrapilheira
 // (graveto, seixo, osso): um enxame precisa dizer "aqui é verde", e piscar sobre cascalho não diz
@@ -103,6 +111,37 @@ export class TerrainFeatures {
       for (const t of pitTiles) this.host.tiles.sunkenTiles.add(tileKey(t.x, t.z));
     }
 
+    this.bakeSpring(t, mats, groundFrame);
+  }
+
+  /**
+   * A BACIA DA FONTE TERMAL (world/hotSpring; pedido do autor, 2026-11-19: "faça o lago ter profundidade 3D, ser
+   * possível ver o fundo"). A receita do lago do vale, mais funda e de pedra: o leito de areia desce `SPRING_DEPTH`, o
+   * chão em volta (o deque de pedra, o capim do pé do paredão) AVANÇA sobre a bacia num contorno orgânico, e a parede
+   * desce por esse contorno em faixas de pedra molhada. A água é da fonte (objects/spring/HotSpring: um quad
+   * translúcido um palmo abaixo da borda), e é através dela que se vê o leito, a parede e as pedras do fundo.
+   */
+  private bakeSpring(t: TerrainSort, mats: TerrainMaterials, groundFrame: ReadonlyMap<number, number>): void {
+    const { springTiles, solidSet, treeSet } = t;
+    if (springTiles.length === 0) return;
+    // O leito: areia, puxada para o frio. A luz dourada do vale a deixava amarela, e vista através da água ela sujava o
+    // turquesa de verde-mostarda; assim ela é o claro azulado de um fundo de água limpa.
+    this.host.terrain.addTerrainMesh(new THREE.Mesh(
+      buildFlatTileGeometry(springTiles, -SPRING_DEPTH, solidSet, undefined, () => SPRING_BED_TINT), mats.ground,
+    ));
+    const keys = new Set(springTiles.map((s) => tileKey(s.x, s.z)));
+    // A margem, mais larga e de quinas mais redondas que a do lago (como a da lava): em 4 × 2 tiles a bacia lia como um
+    // tanque retangular. (O tile do paredão ao norte não tem chão próprio no assado: o capim do pé dele é o de sempre.)
+    const shore = buildShoreGeometry(
+      keys, springTiles, (x, z) => groundFrame.get(tileKey(x, z)) ?? GROUND_TILE_FRAME, SPRING_DEPTH,
+      {
+        min: 0.05, variance: 0.3, round: 0.3, corner: 0.7, wobble: 2.6, bands: SPRING_BANK_BANDS, mud: 0x34383a,
+        shadeAt: groundShadeAt(solidSet, treeSet),
+      },
+    );
+    this.host.terrain.addTerrainMesh(new THREE.Mesh(shore.lip, mats.ground));
+    this.host.terrain.addTerrainMesh(new THREE.Mesh(shore.walls, mats.bank));
+    for (const s of springTiles) this.host.tiles.sunkenTiles.add(tileKey(s.x, s.z));
   }
 
   /**

@@ -30,6 +30,7 @@
       "stone": "Uma pedra.",
       "bucket": "Um balde. Encha na água.",
       "bucketFull": "Água.",
+      "bucketSand": "Areia da praia. Leve ao forno da Thea.",
       "charcoal": "Carvão. Funde minério.",
       "iron": "Ferro.",
       "ore": "Minério de ferro. Funda.",
@@ -49,7 +50,7 @@
       "dyeBundle": "As quatro flores. Leve à mesa.",
       "brush": "Um pincel. O quadro espera.",
       "splitWood": "O galho, em dois. Leve à terra.",
-      "sand": "Areia da margem.",
+      "sand": "Areia da praia.",
       "ash": "Cinza da fogueira.",
       "glass": "Vidro. Leve à Thea.",
       "telescope": "O telescópio!",
@@ -74,6 +75,7 @@
       "bloom": "Esponja de ferro",
       "bucket": "Balde",
       "bucketFull": "Balde cheio",
+      "bucketSand": "Balde de areia",
       "charcoal": "Carvão",
       "furnace": "Forno",
       "knife": "Faca de cogumelo",
@@ -106,6 +108,15 @@
     "continue": "Próximo",
     "close": "Fechar"
   },
+  "talks": {
+    "title": "Conversas",
+    "all": "Todos",
+    "day": "Dia {n}",
+    "empty": "Nenhuma conversa ainda. Fale com alguém do vale: o que cada um disser fica guardado aqui para ler de novo.",
+    "hint": "↑ ↓ rolam  ·  ← → escolhem quem  ·  X volta",
+    "hintTouch": "Arraste para rolar; toque num nome para ver só as conversas dele",
+    "back": "Voltar"
+  },
   "pause": {
     "sectionAccess": "Acessibilidade",
     "textSize": "Tamanho do texto",
@@ -120,6 +131,7 @@
     "pressKey": "Aperte uma tecla",
     "title": "PAUSA",
     "resume": "Retornar ao jogo",
+    "talks": "Conversas",
     "options": "Opções",
     "quit": "Sair",
     "back": "Voltar",
@@ -190,6 +202,7 @@
     "take": "Pegar",
     "swap": "Trocar",
     "sit": "Sentar",
+    "soak": "Entrar na fonte",
     "sleep": "Dormir",
     "getUp": "Levantar",
     "knock": "Bater",
@@ -223,6 +236,7 @@
     "break": "Quebrar",
     "water": "Regar",
     "fill": "Encher",
+    "scoop": "Pegar areia",
     "ford": "Pôr pedra",
     "bridge": "Construir",
     "cover": "Cobrir",
@@ -405,7 +419,8 @@
       "neighbours": "Para os vizinhos",
       "mushrooms": "Cogumelos",
       "animals": "Bichos",
-      "home": "Casa"
+      "home": "Casa",
+      "relics": "Relíquias"
     },
     "unknownName": "???",
     "unknownText": "Ainda não achei isto.",
@@ -427,7 +442,7 @@
       "ore": "Minério de ferro: pedra com ferro preso dentro, na forma de ferrugem. Sozinho, não serve para nada.",
       "bloom": "A esponja de ferro que sai do forno: ferro poroso, cheio de escória. Só vira barra levando martelada.",
       "iron": "Uma barra de ferro de verdade. Do minério até aqui foram o carvão, o forno e o martelo.",
-      "sand": "Areia da margem do lago. É quase toda sílica, a matéria de que o vidro é feito.",
+      "sand": "Areia da praia do norte, num balde, de um montinho que o vento juntou. É quase toda sílica, a matéria de que o vidro é feito.",
       "ash": "Cinza de fogueira. Tem potássio, que ajuda a areia a derreter num fogo menos quente.",
       "glass": "Vidro de areia e cinza, fundido no forno da Thea. Polido, vira lente.",
       "dyeSeeds": "Sementes sortidas da Sisi: quatro plantas que dão tinta. Cada uma vai numa cova.",
@@ -440,6 +455,66 @@
       "sundial": "A sombra do graveto anda com o sol e aponta a hora. De noite, sem sol, ele não marca nada.",
       "cairn": "Pedras empilhadas, a maior embaixo. Pilhas assim marcam trilhas nas montanhas há milhares de anos.",
       "windChime": "Lascas de minério penduradas num gancho. Batem umas nas outras quando a rajada passa."
+    }
+  },
+  "relics": {
+    "get": "Você encontrou {name}!\nA relíquia foi para o caderno de campo.",
+    "briansMansion": {
+      "name": "Brian's Mansion",
+      "what": "Fita de Mega Drive · 2011",
+      "text": "Um jogo de terror numa mansão assombrada, feito no RPG Maker por um menino, para crianças: o primeiro sonho de fazer jogos. Nunca saiu em fita; esta é a fita que ele sonhava."
+    },
+    "zeroToOne": {
+      "name": "Zero To One",
+      "what": "Fita azul · jogo de Bitsy",
+      "text": "Zero é um programador preso numa rotina sem sentido. Em cinco dias, ele larga tudo e vai embora: do zero ao um. No jogo, tudo o que é vivo é azul."
+    },
+    "tinyRpgStudio": {
+      "name": "Tiny RPG Studio",
+      "what": "Disquete · engine de jogos, 2025",
+      "text": "Uma engine de jogos para a web, com uma comunidade grande: mais de 60 jogos criados e compartilhados com ela. Em 2026 veio a primeira Tiny RPG Jam, com 17 jogos inscritos."
+    },
+    "diploma": {
+      "name": "Diploma de Ciência da Computação",
+      "what": "Diploma de bacharel",
+      "text": "A ciência do que dá para calcular, e de como: algoritmos, dados, linguagens e máquinas. Ela começou no papel, com Ada Lovelace e Alan Turing, antes de existir computador: a máquina é só o jeito mais rápido de fazer a conta."
+    },
+    "journey": {
+      "name": "Journey",
+      "what": "Disco de PlayStation 3 · 2012",
+      "text": "Um viajante de manto atravessa o deserto rumo à luz no alto da montanha. Ninguém fala: quem aparece no caminho não tem nome e conversa cantando. Foi daqui que os jogos passaram a ser pensados como arte."
+    },
+    "goneHome": {
+      "name": "Gone Home",
+      "what": "Caixa de jogo de computador · 2013",
+      "text": "Uma noite de tempestade em 1995: a filha volta de viagem e acha a casa vazia; nas cartas e gavetas, a história da irmã. O walking sim que ficou famoso: mostrou que jogo vai além de ação e combate e pode emocionar."
+    },
+    "discoElysium": {
+      "name": "Disco Elysium",
+      "what": "Livro (que é um jogo) · 2019",
+      "text": "Um detetive acorda num albergue sem lembrar o próprio nome, com um enforcado no quintal para investigar. Não há combate: as habilidades dele são vozes que discutem dentro da cabeça.",
+      "notes": ["Mais de um milhão de palavras: um jogo que se lê como romance."]
+    },
+    "book1984": {
+      "name": "1984",
+      "what": "Livro de George Orwell · 1949",
+      "text": "Winston reescreve o passado no Ministério da Verdade, sob os olhos do Grande Irmão. A novilíngua encolhe as palavras até não sobrar como pensar contra o Partido.",
+      "notes": ["Liberdade é poder dizer que dois e dois são quatro."]
+    },
+    "odyssey2001": {
+      "name": "2001: Uma Odisseia no Espaço",
+      "what": "Fita VHS · Stanley Kubrick, 1968",
+      "text": "Dos macacos diante do monólito até uma nave a caminho de Júpiter, com o HAL 9000, o computador que se recusa a abrir a porta. Daqui vieram as missões da astronauta deste vale."
+    },
+    "bookClub": {
+      "name": "O marcador do clube",
+      "what": "Clube de Leitura nas Montanhas",
+      "text": "Cada um lê em casa o mesmo livro técnico ou de ciência, e depois a turma conversa sobre ele. As montanhas do desenho são as do nome."
+    },
+    "nomadPostcard": {
+      "name": "Cartão-postal do litoral",
+      "what": "Cartão-postal · 2024",
+      "text": "Um ano inteiro de mudança, um estado por vez, subindo o litoral do Brasil: o mar, a areia, os coqueiros, e o trabalho cabendo numa mochila."
     }
   },
   "meditation": {

@@ -12,6 +12,7 @@ import { AfterRainRainbow } from './AfterRainRainbow';
 import { CanopyDrips } from './CanopyDrips';
 import { Daisies } from './Daisies';
 import { Dragonflies } from './Dragonflies';
+import { FallingLeaves } from './FallingLeaves';
 import { FishJumps } from './FishJumps';
 import { Frogs } from './Frogs';
 import { Hares } from './Hares';
@@ -23,6 +24,7 @@ import { RainMushrooms } from './RainMushrooms';
 import { Seeds } from './Seeds';
 import { Squirrel } from './Squirrel';
 import { SunDapples } from './SunDapples';
+import { SunShafts } from './SunShafts';
 
 /**
  * A NATUREZA DO VALE (pedido do autor: "adicione exatamente todas as suas sugestões"): os bichos, as plantas e o que
@@ -63,6 +65,9 @@ export class NatureLife {
   public readonly rainbow: AfterRainRainbow;
   public readonly puddles: Puddles;
   public readonly drips: CanopyDrips;
+  /** As folhas que se soltam das copas e os raios de sol entre elas (2026-11-18): toda mata, sem lar de bioma. */
+  public readonly leaves: FallingLeaves;
+  public readonly shafts: SunShafts;
   /** Cada sistema com o host do lar dele (world/biomeLife): ele só acha chão, água e árvore no bioma onde mora. */
   private readonly systems: Array<{ system: NatureSystem; host: NatureHost; frame: NatureFrame }>;
   private readonly host: NatureHost;
@@ -98,6 +103,8 @@ export class NatureLife {
     this.rainbow = new AfterRainRainbow();
     this.puddles = new Puddles();
     this.drips = new CanopyDrips();
+    this.leaves = new FallingLeaves();
+    this.shafts = new SunShafts();
     this.host = {
       hero: () => world.hero(),
       isWater: (x, y) => world.isWater(x, y),
@@ -128,6 +135,7 @@ export class NatureLife {
       const host = homed(kind);
       return { system, host, frame: { ...this.frame, host } };
     });
+    for (const system of [this.leaves, this.shafts]) this.systems.push({ system, host: this.host, frame: { ...this.frame, host: this.host } });
     scene.events.on(Engine.Scenes.Events.POST_UPDATE, this.onFrame, this);
   }
 

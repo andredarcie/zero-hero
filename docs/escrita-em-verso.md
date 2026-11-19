@@ -64,6 +64,9 @@ Depois (o mesmo estoicismo, dito como numa conversa):
 - [ ] Se é missão, diz para onde ir, o quê e quantos?
 - [ ] O português e o inglês têm o mesmo número de caixas e de versos em cada caixa (`node scripts/dialogos.mjs --check`)?
 
+O editor de falas (no `/editor`, botão "Falas…") mostra as sílabas de cada verso, a rima da estrofe e o inglês com o
+mesmo número de versos enquanto se escreve — a mesma regra do `versos.test`. O ouvido continua sendo a última palavra.
+
 ## O inglês
 
 O inglês é outro poema, não tradução (a rima não se traduz): common meter (8·6·8·6), dísticos 8·8, conferido de

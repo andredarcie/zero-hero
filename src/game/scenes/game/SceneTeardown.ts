@@ -13,7 +13,7 @@ export type SceneTeardownHost = Pick<GameScene,
   'actions' | 'boot' | 'bumps' | 'camera' | 'camp' | 'carry' | 'cinema' | 'cutsceneActive' | 'debug'
   | 'dialog' | 'dialogCam' | 'events' | 'fire' | 'forage' | 'forge' | 'game' | 'groundItems' | 'hand'
   | 'heroBillboard' | 'intro' | 'itemManager' | 'life' | 'machines' | 'marks' | 'morning' | 'npcManager' | 'orders'
-  | 'pause' | 'props' | 'questSetup' | 'roastEnding' | 'scale' | 'steps' | 'swing' | 'swordPlanting' | 'torch'
+  | 'pause' | 'props' | 'questSetup' | 'relics' | 'roastEnding' | 'scale' | 'steps' | 'swing' | 'swordPlanting' | 'torch'
   | 'tweens' | 'valley' | 'verbs' | 'view' | 'world3d'
 >;
 
@@ -79,6 +79,12 @@ export class SceneTeardown {
     this.host.valley.koiPond = undefined;
     this.host.valley.bigTrees?.destroy();
     this.host.valley.bigTrees = undefined;
+    this.host.valley.beach?.destroy();
+    this.host.valley.beach = undefined;
+    this.host.valley.beachSeat?.destroy();
+    this.host.valley.beachSeat = undefined;
+    this.host.valley.palms?.destroy();
+    this.host.valley.palms = undefined;
     this.host.valley.woodFence?.destroy();
     this.host.valley.woodFence = undefined;
     this.host.valley.lumberYard?.destroy();
@@ -176,6 +182,9 @@ export class SceneTeardown {
     this.host.valley.trails = undefined;
     this.host.valley.gardenMist?.destroy();
     this.host.valley.gardenMist = undefined;
+    this.host.valley.cellTower?.destroy();
+    this.host.valley.cellTower = undefined;
+    this.host.relics.destroy();
     this.host.forage.mushroomKin?.destroy();
     this.host.forage.mushroomKin = undefined;
     this.host.forage.mushroomGlow?.destroy();
@@ -205,8 +214,7 @@ export class SceneTeardown {
     this.host.carry.backItemBb = undefined;
     this.host.steps.breathingTween?.destroy();
     this.host.steps.breathingTween = undefined;
-    this.host.steps.footprints.length = 0;
-    this.host.steps.footprintPool.length = 0;
+    this.host.steps.destroy();
     this.host.torch.torchFlameBb?.destroy();
     this.host.torch.torchFlameBb = undefined;
     this.host.torch.torchGutter.level = 1.0;

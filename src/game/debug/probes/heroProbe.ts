@@ -50,6 +50,9 @@ export const heroProbe = (s: GameScene) => ({
     return bb ? { visible: bb.visible, alpha: bb.alpha, texKey: bb.texKey, x: bb.x, y: bb.y, elevation: bb.elevation } : null;
   },
 
+  /** As pegadas do herói fora da praia: quantas já deixou (Footprints). */
+  steps: (): { stepped: number } => ({ stepped: s.steps.stepped }),
+
   /** Quanto dura um passo de um tile, em ms. */
   stepMs: (): number => s.movementController?.stepMs ?? 0,
 

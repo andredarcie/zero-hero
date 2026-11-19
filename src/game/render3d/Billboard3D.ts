@@ -114,8 +114,8 @@ export interface Billboard3DOptions {
    * that use a separate contact blob (the hero). Ignored on flat/emissive billboards.
    */
   castGroundShadow?: boolean;
-  /** Animated surface shader (see pixelArtLight.ts): lava heat shimmer / water moon-glint. */
-  worldFx?: 'lavaFlow' | 'waterGlint';
+  /** Animated surface shader (see pixelArtLight.ts): lava heat shimmer / water moon-glint / a água da fonte termal. */
+  worldFx?: 'lavaFlow' | 'waterGlint' | 'spring';
   /** Água que ESPELHA os personagens (o quad do rio) — ver pixelArtLight.mirrorSurface. */
   mirrorSurface?: boolean;
   /**

@@ -23,6 +23,7 @@ import { registerTeaTextures } from '@/game/render3d/teaTextures';
 import { registerWoodTextures } from '@/game/render3d/woodTextures';
 import { registerPaintTextures } from '@/game/render3d/paintTextures';
 import { PlayerMovementController } from '@/game/runtime/PlayerMovementController';
+import { defaultWorld3DParams, verticalStepSpeedup } from '@/game/render3d/worldParams';
 import { WorldCamera } from '@/game/runtime/WorldCamera';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { ChunkManager } from '@/game/world/ChunkManager';
@@ -33,6 +34,7 @@ import { adventureArcStore, memoryArcStore } from '@/game/systems/RunArc';
 import { clearHomeYards } from '@/game/objects/NpcHomes';
 import { registerHomeTextures } from '@/game/render3d/homeTextures';
 import { registerFindTextures } from '@/game/objects/ValleyFinds';
+import { registerRelicTextures } from '@/game/render3d/relicTextures';
 import type { GameScene } from '../GameScene';
 import { INTRO_WALK_TILES, OPENING_TALK_KEY } from './sceneDefs';
 
@@ -119,6 +121,7 @@ export class RunBoot {
     registerTeaTextures(this.host);
     registerHomeTextures(this.host);
     registerFindTextures(this.host);
+    registerRelicTextures(this.host);
     // The 3D canvas is position:fixed (z-index 0), which paints ABOVE static content.
     // Promote the 2D canvas into its own stacking level so the whole 2D side —
     // lighting overlays, FX, canvas UI — draws over the 3D world, not under it.
@@ -259,6 +262,9 @@ export class RunBoot {
       },
       (wx, wy) => this.host.bumps.handlePlayerBump(wx, wy),
     );
+    // A inclinação da câmera de sempre (o zoom e o dolly mexem nos dois pelo mesmo fator: ela não muda).
+    const camParams = defaultWorld3DParams();
+    this.host.movementController.verticalSpeedup = verticalStepSpeedup(camParams.camHeight, camParams.camBack);
 
     this.host.scale.on(Engine.Scale.Events.RESIZE, this.host.view.handleResize, this.host.view);
     this.host.view.handleResize({ width: this.host.scale.width, height: this.host.scale.height });

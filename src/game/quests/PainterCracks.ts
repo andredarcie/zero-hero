@@ -4,7 +4,8 @@ import type { PainterHost } from './PainterQuest';
 /**
  * AS QUATRO COVAS DA SISI (pedido do autor, 2026-11-09: "a pá só cava onde tem trincos no chão"): a terra já vem
  * rachada, de leve, numa fila logo à frente dela — DUAS, UM VÃO, DUAS ("hoje está tudo coladinho") — e ela diz para
- * cavar ali. A pá não cava em mais lugar nenhum (Garden.canDigAt pergunta `isCrack`).
+ * cavar ali. O canteiro só nasce nelas (Garden.canDigAt pergunta `isCrack`); fora delas, a pá só cava as trincas das
+ * relíquias enterradas pelo vale (scenes/game/RelicDig), e lá não nasce canteiro.
  *
  * A fila fica dois passos ao sul dela, longe da frente dela (o tile ao sul, que o jogador pisa para falar, nunca recebe
  * nada). O VÃO cai na coluna dela de propósito: os montes semeados são sólidos, e é por ele que quem chega pela trilha

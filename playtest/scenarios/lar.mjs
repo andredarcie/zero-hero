@@ -17,10 +17,13 @@ const STOCK = [['wood', 9], ['stone', 6], ['charcoal', 3], ['ore', 1]];
 // Sisi (o presente) entra no miolo também; o sino, o último degrau, vai para o chão que a foice abrir.
 const LAYOUT = [
   ['log', [52, 49]], ['easel', [55, 49]], ['sign', [55, 50]], ['tub', [55, 47]], ['sundial', [53, 45]],
-  ['cairn', [52, 45]], ['lantern', [53, 50]], ['flowerPot', [52, 50]], ['windChime', [57, 48]],
+  ['cairn', [52, 45]], ['lantern', [53, 50]], ['flowerPot', [52, 50]], ['windChime', [56, 48]],
 ];
-/** Onde o herói fica e o tile de mato que ele corta: primeiro do (55,48), depois de dentro do que abriu. */
-const MOW = [[55, 48, 56, 48], [56, 48, 57, 48], [56, 48, 56, 47], [56, 48, 56, 49]];
+/**
+ * Onde o herói fica e o tufo de mato que ele corta. O mato do acampamento é RALO (2026-11-19, scripts/mato-do-acampamento:
+ * um tile de chão entre dois tufos): o (56,48) da frente do acampamento, e o (57,47), de quina com ele.
+ */
+const MOW = [[55, 48, 56, 48], [57, 48, 57, 47]];
 
 export default {
   name: 'lar',
@@ -85,7 +88,7 @@ export default {
       grass: window.gameDebug.camp.home().grassStanding,
     }));
     assert('O acampamento começa com o colchão, o fogo e o caderno, e nada mais', start.pieces.length === 0 && start.fixed.join() === 'bed,ring,notebook', JSON.stringify(start));
-    assert('Em volta dele, bastante mato alto', start.grass >= 40, String(start.grass));
+    assert('Em volta dele, mato alto espalhado (ralo: um tile de chão entre dois tufos)', start.grass >= 15, String(start.grass));
     await teleport(54, 50, 0, -1);
     await g(() => window.gameDebug.verbs.hidePrompt());
     await shot('00-comeco', { note: 'O começo: o colchão, o fogo e o caderno, cercados de mato alto' });
@@ -128,7 +131,7 @@ export default {
     await openBuild();
     const opened = await build();
     log(`  grade: ${opened.free} verdes, ${opened.grass} de mato, ${opened.blocked} fechariam o caminho; cartas ${JSON.stringify(opened.cards)}`);
-    assert('O Z na bancada para o jogo e mostra a grade: verde e vermelho', opened.open && opened.paused && opened.free >= 8 && opened.grass >= 40, JSON.stringify({ paused: opened.paused, free: opened.free, grass: opened.grass }));
+    assert('O Z na bancada para o jogo e mostra a grade: verde e vermelho', opened.open && opened.paused && opened.free >= 8 && opened.grass >= 15, JSON.stringify({ paused: opened.paused, free: opened.free, grass: opened.grass }));
     assert('As cartas: a primeira construção da escada, e o quadro da Sisi de presente', opened.cards.map((c) => c.kind).join() === 'log,easel', JSON.stringify(opened.cards));
     await shot('01-grade', { note: 'O jogo parado: a grade do acampamento, verde e vermelha' });
 
@@ -159,7 +162,8 @@ export default {
     for (const [i, [kind, want]] of FIRST.entries()) await placeCard(kind, want, i === 0);
     const full = await build();
     log(`  miolo cheio: ${full.free} verdes`);
-    assert('O miolo encheu: para pôr mais, é preciso abrir espaço no mato', full.free <= 2, String(full.free));
+    // (com o mato ralo sobra chão verde entre os tufos: as peças só tiram o lugar que ocupam)
+    assert('As peças ocupam o chão verde que tomaram', full.free < opened.free, `${opened.free} → ${full.free}`);
     await press('Escape', 600);
     const closed = await build();
     assert('O Esc fecha a bancada e o jogo volta (sem pausa)', !closed.open && !closed.paused, JSON.stringify({ open: closed.open, paused: closed.paused }));
@@ -183,9 +187,9 @@ export default {
     // ── A GRADE MAIOR: O SINO E O QUADRO DA SISI NO CHÃO NOVO ─────────────────────────────────────────────────────
     await openBuild();
     const wider = await build();
-    assert('Na grade, o mato cortado virou chão verde', wider.free >= full.free + 2 && wider.cells.some((c) => c.x === 57 && c.y === 48 && c.state === 'free'), JSON.stringify({ free: wider.free, before: full.free }));
+    assert('Na grade, o mato cortado virou chão verde', wider.free >= full.free + 1 && wider.cells.some((c) => c.x === 57 && c.y === 47 && c.state === 'free'), JSON.stringify({ free: wider.free, before: full.free }));
     await shot('04-grade-expandida', { note: 'Depois da foice: mais chão verde para construir' });
-    await placeCard('windChime', [57, 48]);
+    await placeCard('windChime', [57, 47]);
     const after = await home();
     assert('A construção gastou o material certo, e o presente não custou nada', after.stock.wood === 0 && after.stock.stone === 0 && after.stock.charcoal === 0 && after.stock.ore === 0, JSON.stringify(after.stock));
 

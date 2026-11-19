@@ -6,7 +6,8 @@
 //                  membership here as "on palette" so remasters of old sprites stay legal.
 //
 // The single most important colour: #1d2b53. It is the game's INK — sprites here don't wear black
-// outlines, their dark mass IS this navy (the hero is a navy silhouette; the vase is navy on navy).
+// outlines, their dark mass IS this navy (the vase is navy on navy; the hero's outline is this ink — until 2026-11-19
+// the whole hero was a navy silhouette, now he is a steel helmet, steel armour and an indigo cape ringed by it).
 
 import { GAME_PALETTE } from './palette-data.mjs';
 

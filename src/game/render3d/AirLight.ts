@@ -32,8 +32,14 @@ import type { World3D } from './World3D';
 
 /** A área que a máscara cobre em volta do alvo da câmera, em tiles, e quantos texels por tile (a grade da arte). */
 const MASK_TILES_X = 36;
-const MASK_TILES_Z = 30;
+const MASK_TILES_Z = 40;
 const MASK_RES = 16;
+/**
+ * O quanto o meio da máscara fica AO NORTE do alvo, em tiles. A câmera HD-2D (2026-11-19, worldParams) olha baixo: o
+ * alto do quadro alcança ~11 tiles ao norte do herói (o dobro de antes, e mais no zoom de longe) e o pé só ~5 ao sul.
+ * Centrada no alvo, a máscara acabava antes do alto da tela, e o que estava lá ficava sem sombra e sem ar aceso.
+ */
+const MASK_NORTH = 6;
 /** Passos do raio dentro da camada de ar. O passo é sorteado por pixel (e desmanchado no acabamento). */
 const STEPS = 8;
 /** Quantas chamas acendem o ar ao mesmo tempo: as mais perto da câmera, mais a tocha. */
@@ -305,7 +311,7 @@ export class AirLight {
 
     // Presa à grade de texels da máscara: solta, as sombras lidas nadariam contra o mundo quando a câmera anda.
     const cx = Math.round(camTarget.x * MASK_RES) / MASK_RES;
-    const cz = Math.round(camTarget.z * MASK_RES) / MASK_RES;
+    const cz = Math.round((camTarget.z - MASK_NORTH) * MASK_RES) / MASK_RES;
     this.maskCamera.position.set(cx, 20, cz);
     this.maskCamera.updateMatrixWorld();
     (this.uniforms.uMaskRect.value as THREE.Vector4).set(

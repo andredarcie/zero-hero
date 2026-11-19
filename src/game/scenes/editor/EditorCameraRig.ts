@@ -48,7 +48,7 @@ export class EditorCameraRig {
     const worldH = store.tilesY * WORLD_TILE;
     const zoom = Engine.Math.Clamp(Math.min(cam.width / worldW, cam.height / worldH) * 0.95, MIN_ZOOM, MAX_ZOOM);
     cam.setZoom(zoom);
-    cam.centerOn(worldW / 2, worldH / 2);
+    cam.centerOn(worldW / 2, store.minY * WORLD_TILE + worldH / 2);
     this.host.session.persistUi();
   }
 

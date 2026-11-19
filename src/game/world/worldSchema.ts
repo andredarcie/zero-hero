@@ -11,6 +11,13 @@ export type WorldMeta = {
   schemaVersion: typeof WORLD_SCHEMA_VERSION;
   worldChunksX: number; // number of chunks across (e.g. 8)
   worldChunksY: number; // number of chunks down (e.g. 8)
+  /**
+   * O MUNDO CRESCEU PARA O NORTE (a praia, 2026-11-19): a linha de chunk mais ao norte da grade. Ausente = 0, o mapa de
+   * sempre. Negativo, o mapa ganha linhas ACIMA da linha 0 (`cy` de `originCy` a `originCy + worldChunksY - 1`), e
+   * nenhuma coordenada que já existia muda: os tiles novos têm `worldY` negativo. Crescer para baixo renumeraria nada;
+   * crescer para cima sem isto renumeraria o vale inteiro (as relíquias, os biomas, o acampamento, os saves).
+   */
+  originCy?: number;
   chunkColumns: number; // tiles per chunk, must equal CHUNK_COLUMNS (validated on load)
   chunkRows: number; // tiles per chunk, must equal CHUNK_ROWS (validated on load)
   tileSize: number;
@@ -90,7 +97,9 @@ export type PropKind = 'campfire' | 'dryBush' | 'lockedDoor' | 'swingGate' | 'dr
   // A FORJA VELHA (objects/OldForge): a chaminé caída e o suporte de ferramentas do ferreiro que foi embora.
   | 'forgeRubble' | 'forgeRack'
   // A CRATERA DA NAVE DA THEA (objects/CrashSite): o buraco da queda e os pedaços da nave, onde era a casa dela.
-  | 'crashCrater' | 'shipHull' | 'shipThruster' | 'shipFin';
+  | 'crashCrater' | 'shipHull' | 'shipThruster' | 'shipFin'
+  // A PRAIA DO NORTE (objects/CoconutPalms): o coqueiro, que bloqueia o tile do pé como as árvores do bosque.
+  | 'coconutPalm';
 
 /** Os props do bosque (ver acima). */
 export const BOSQUE_PROP_KINDS: ReadonlySet<PropKind> = new Set<PropKind>(['oakTree', 'birchTree', 'youngOak', 'fallenLog']);

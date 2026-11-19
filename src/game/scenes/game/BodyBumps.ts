@@ -25,8 +25,8 @@ const UNIQUE_TOOL_GIVERS: Partial<Record<HeldItemKind, NpcKind | null>> = {
 
 /** O que BodyBumps usa de GameScene. */
 export type BodyBumpsHost = Pick<GameScene,
-  'heldItem' | 'inventory' | 'itemManager' | 'life' | 'npcManager' | 'playerWorld' | 'query' | 'questSetup' | 'steps'
-  | 'swing' | 'torch'
+  'heldItem' | 'inventory' | 'itemManager' | 'life' | 'npcManager' | 'playerWorld' | 'query' | 'questSetup' | 'relics'
+  | 'steps' | 'swing' | 'torch' | 'valley'
 >;
 
 export class BodyBumps {
@@ -117,8 +117,8 @@ export class BodyBumps {
       return need && held !== need ? need : null;
     }
     if (isMushroomKind(this.host.itemManager?.kindAt(wx, wy))) return held === 'knife' ? null : 'knife';
-    // A cova rachada da Sisi pede a pá (o chão em volta não pede nada: ali a pá não cava).
-    if (this.host.questSetup.painterQuest?.cracks.isCrack(wx, wy)) return held === 'shovel' ? null : 'shovel';
+    // A cova rachada da Sisi e a trinca de uma relíquia pedem a pá (o chão em volta não pede nada: ali a pá não cava).
+    if (this.host.questSetup.painterQuest?.cracks.isCrack(wx, wy) || this.host.relics.isCrack(wx, wy)) return held === 'shovel' ? null : 'shovel';
     if (this.host.query.getDryTreeAt(wx, wy)?.blocking || this.host.query.getDryShrubAt(wx, wy)?.blocking) return this.host.swing.holdsAnAxe ? null : 'axe';
     if (this.host.query.getRockAt(wx, wy)?.blocking) return held === 'pickaxe' ? null : 'pickaxe';
     if (this.host.query.getLockedDoorAt(wx, wy)?.blocking) return held === 'key' ? null : 'key';
@@ -129,6 +129,8 @@ export class BodyBumps {
     if (grass?.blocking && grass.isTall) return held === 'scythe' || (this.host.torch.heldOnFire && !grass.green) ? null : 'scythe';
     const spot = this.host.query.getPlantSpotAt(wx, wy);
     if (spot?.isMound) return held === 'bucketFull' ? null : 'bucketFull';
+    // o montinho de areia da praia pede o balde VAZIO (o cheio de água, ou já de areia, não recolhe)
+    if (this.host.valley.beach?.mounds.at(wx, wy)) return held === 'bucket' ? null : 'bucket';
     if (!pressed) {
       const bridge = this.host.query.getWaterAt(wx, wy);
       return bridge?.blocking && bridge.canBuild && held !== 'wood' && held !== 'stone' ? 'wood' : null;

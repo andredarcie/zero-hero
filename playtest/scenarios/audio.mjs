@@ -110,7 +110,8 @@ export default {
     // THE PLAYER (pause → Music): every song listed, a click plays one (the valley goes quiet under it),
     // the transport moves on, and resuming the game stops the player and brings the valley back.
     await page.evaluate(() => window.gameDebug.scene.openPause());
-    await page.locator('#zh-pause-root .zh-main .zh-pause-btn').nth(2).click();
+    // pelo nome, não pela posição: "Conversas" entrou antes das Músicas (2026-11-18)
+    await page.locator('#zh-pause-root .zh-main .zh-pause-btn', { hasText: /^(Músicas|Music)$/ }).click();
     const listed = await page.locator('#zh-pause-root .zh-music-track').count();
     assert('Pause → Music lists every song', listed === 7, `rows=${listed}`);
     await page.locator('#zh-pause-root .zh-music-track').nth(3).click();

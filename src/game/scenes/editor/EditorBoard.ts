@@ -37,6 +37,8 @@ export class EditorBoard {
   private map?: Engine.Tilemaps.Tilemap;
   private groundLayer?: Engine.Tilemaps.TilemapLayer;
   private upperLayer?: Engine.Tilemaps.TilemapLayer;
+  /** A linha do mundo que é a linha 0 da grade do tilemap (`store.minY`; ver buildWorldObjects). */
+  private rowTop = 0;
 
   public constructor(private readonly host: EditorBoardHost) {}
 
@@ -90,25 +92,31 @@ export class EditorBoard {
 
     const tilesX = store.tilesX;
     const tilesY = store.tilesY;
+    // O mapa pode começar ACIMA da linha 0 (`meta.originCy`): as camadas nascem deslocadas para o norte, e a linha da
+    // grade do tilemap é a linha do mundo menos `minY`. No resto do editor a conta é a de sempre: tile × WORLD_TILE.
+    const minY = store.minY;
+    this.rowTop = minY;
+    const top = minY * WORLD_TILE;
 
     this.map = this.host.make.tilemap({ tileWidth: WORLD_TILE, tileHeight: WORLD_TILE, width: tilesX, height: tilesY });
     const tiles = this.map.addTilesetImage('tiles', ASSET_KEYS.forestTileset, WORLD_TILE, WORLD_TILE, 0, 0, 0)!;
     const collisionTiles = this.map.addTilesetImage('collision', COLLISION_TEXTURE, WORLD_TILE, WORLD_TILE, 0, 0, COLLISION_GID)!;
     const treeCollisionTiles = this.map.addTilesetImage('treeCollision', TREE_COLLISION_TEXTURE, WORLD_TILE, WORLD_TILE, 0, 0, TREE_COLLISION_GID)!;
 
-    this.groundLayer = this.map.createBlankLayer('ground', tiles, 0, 0)!.setDepth(0);
-    this.upperLayer = this.map.createBlankLayer('upper', tiles, 0, 0)!.setDepth(1);
-    this.host.collisionLayer = this.map.createBlankLayer('collision', [collisionTiles, treeCollisionTiles], 0, 0)!.setDepth(2);
+    this.groundLayer = this.map.createBlankLayer('ground', tiles, 0, top)!.setDepth(0);
+    this.upperLayer = this.map.createBlankLayer('upper', tiles, 0, top)!.setDepth(1);
+    this.host.collisionLayer = this.map.createBlankLayer('collision', [collisionTiles, treeCollisionTiles], 0, top)!.setDepth(2);
 
     // A terra do chão lê o solo pintado deste armazém (EditorSoil), não o do último mundo carregado.
     this.host.soil.useLiveSource();
-    for (let wy = 0; wy < tilesY; wy += 1) {
+    for (let wy = minY; wy < minY + tilesY; wy += 1) {
+      const row = wy - minY;
       for (let wx = 0; wx < tilesX; wx += 1) {
-        biomeTint(this.groundLayer.putTileAt(groundFrameAt(store.readCell('ground', wx, wy) as number, wx, wy), wx, wy, false), wx, wy);
+        biomeTint(this.groundLayer.putTileAt(groundFrameAt(store.readCell('ground', wx, wy) as number, wx, wy), wx, row, false), wx, wy);
         const upper = store.readCell('upper', wx, wy) as number | null;
-        if (upper !== null) biomeTint(this.upperLayer.putTileAt(decorFrameAt(upper, wx, wy), wx, wy, false), wx, wy);
+        if (upper !== null) biomeTint(this.upperLayer.putTileAt(decorFrameAt(upper, wx, wy), wx, row, false), wx, wy);
         const collisionGid = this.collisionOverlayGid(wx, wy);
-        if (collisionGid !== null) this.host.collisionLayer.putTileAt(collisionGid, wx, wy, false);
+        if (collisionGid !== null) this.host.collisionLayer.putTileAt(collisionGid, wx, row, false);
       }
     }
 
@@ -129,7 +137,7 @@ export class EditorBoard {
 
     const worldW = tilesX * WORLD_TILE;
     const worldH = tilesY * WORLD_TILE;
-    this.host.cameras.main.setBounds(-CAMERA_PAD, -CAMERA_PAD, worldW + CAMERA_PAD * 2, worldH + CAMERA_PAD * 2);
+    this.host.cameras.main.setBounds(-CAMERA_PAD, top - CAMERA_PAD, worldW + CAMERA_PAD * 2, worldH + CAMERA_PAD * 2);
     this.host.view.applyViewToggles();
   }
 
@@ -138,20 +146,21 @@ export class EditorBoard {
     const gfx = this.host.gridGfx;
     if (!store || !gfx) return;
     const worldW = store.tilesX * WORLD_TILE;
-    const worldH = store.tilesY * WORLD_TILE;
+    const y0 = store.minY * WORLD_TILE;
+    const y1 = y0 + store.tilesY * WORLD_TILE;
 
     gfx.clear();
     gfx.lineStyle(1, 0xffffff, 0.07);
-    for (let x = 0; x <= store.tilesX; x += 1) gfx.lineBetween(x * WORLD_TILE, 0, x * WORLD_TILE, worldH);
-    for (let y = 0; y <= store.tilesY; y += 1) gfx.lineBetween(0, y * WORLD_TILE, worldW, y * WORLD_TILE);
+    for (let x = 0; x <= store.tilesX; x += 1) gfx.lineBetween(x * WORLD_TILE, y0, x * WORLD_TILE, y1);
+    for (let y = 0; y <= store.tilesY; y += 1) gfx.lineBetween(0, y0 + y * WORLD_TILE, worldW, y0 + y * WORLD_TILE);
 
     // Chunk seams stand out so authors can see the streaming/screen boundaries.
     gfx.lineStyle(1, 0xf4a261, 0.28);
     for (let cx = 0; cx <= store.world.meta.worldChunksX; cx += 1) {
-      gfx.lineBetween(cx * CHUNK_COLUMNS * WORLD_TILE, 0, cx * CHUNK_COLUMNS * WORLD_TILE, worldH);
+      gfx.lineBetween(cx * CHUNK_COLUMNS * WORLD_TILE, y0, cx * CHUNK_COLUMNS * WORLD_TILE, y1);
     }
     for (let cy = 0; cy <= store.world.meta.worldChunksY; cy += 1) {
-      gfx.lineBetween(0, cy * CHUNK_ROWS * WORLD_TILE, worldW, cy * CHUNK_ROWS * WORLD_TILE);
+      gfx.lineBetween(0, y0 + cy * CHUNK_ROWS * WORLD_TILE, worldW, y0 + cy * CHUNK_ROWS * WORLD_TILE);
     }
   }
 
@@ -181,12 +190,13 @@ export class EditorBoard {
     if (!store || !this.groundLayer || !this.upperLayer || !this.host.collisionLayer) return;
     if (!store.isInside(wx, wy)) return;
 
-    biomeTint(this.groundLayer.putTileAt(groundFrameAt(store.readCell('ground', wx, wy) as number, wx, wy), wx, wy, false), wx, wy);
+    const row = wy - this.rowTop; // a linha da grade do tilemap (ver buildWorldObjects)
+    biomeTint(this.groundLayer.putTileAt(groundFrameAt(store.readCell('ground', wx, wy) as number, wx, wy), wx, row, false), wx, wy);
     const upper = store.readCell('upper', wx, wy) as number | null;
-    if (upper === null) this.upperLayer.removeTileAt(wx, wy, true, false);
-    else biomeTint(this.upperLayer.putTileAt(decorFrameAt(upper, wx, wy), wx, wy, false), wx, wy);
+    if (upper === null) this.upperLayer.removeTileAt(wx, row, true, false);
+    else biomeTint(this.upperLayer.putTileAt(decorFrameAt(upper, wx, wy), wx, row, false), wx, wy);
     const collisionGid = this.collisionOverlayGid(wx, wy);
-    if (collisionGid !== null) this.host.collisionLayer.putTileAt(collisionGid, wx, wy, false);
-    else this.host.collisionLayer.removeTileAt(wx, wy, true, false);
+    if (collisionGid !== null) this.host.collisionLayer.putTileAt(collisionGid, wx, row, false);
+    else this.host.collisionLayer.removeTileAt(wx, row, true, false);
   }
 }

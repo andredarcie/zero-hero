@@ -185,6 +185,8 @@ export interface PauseMenuCallbacks {
   onQuit?: () => void;
   /** Abre o ajuste do zoom por cima do jogo parado (ver ZoomSetup); sem ele, a linha do zoom não aparece. */
   onZoom?: () => void;
+  /** Abre o caderno das conversas por cima do menu (ver TalkLogOverlay); sem ele (fora da aventura), não há a saída. */
+  onTalks?: () => void;
 }
 
 type OptionSection = { title: string; options: OptionDef[] };
@@ -330,6 +332,8 @@ export class PauseMenu {
   private readonly optionsPage: HTMLDivElement;
   private readonly list: HTMLDivElement;
   private readonly mainButtons: HTMLButtonElement[] = [];
+  private readonly optionsBtn: HTMLButtonElement;
+  private readonly musicBtn: HTMLButtonElement;
   public readonly rows: OptionRow[] = [];
   private readonly backBtn: HTMLButtonElement;
   private readonly musicPage: HTMLDivElement;
@@ -360,8 +364,13 @@ export class PauseMenu {
 
     this.mainPage = this.pageEl('zh-main', t('pause.title'));
     this.mainButton(t('pause.resume'), () => this.cb.onResume());
-    this.mainButton(t('pause.options'), () => this.showPage('options'));
-    this.mainButton(t('pause.musicPage'), () => this.showPage('music'));
+    // AS CONVERSAS (pedido do autor, 2026-11-18): reler tudo o que os vizinhos disseram até aqui.
+    if (this.cb.onTalks) {
+      const onTalks = this.cb.onTalks;
+      this.mainButton(t('pause.talks'), onTalks);
+    }
+    this.optionsBtn = this.mainButton(t('pause.options'), () => this.showPage('options'));
+    this.musicBtn = this.mainButton(t('pause.musicPage'), () => this.showPage('music'));
     if (this.cb.onQuit) {
       // Sem "certeza?": sair guarda a aventura, e o título oferece Continuar. Nada se perde.
       const onQuit = this.cb.onQuit;
@@ -456,11 +465,12 @@ export class PauseMenu {
     return btn;
   }
 
-  private mainButton(label: string, onClick: () => void): void {
+  private mainButton(label: string, onClick: () => void): HTMLButtonElement {
     const index = this.mainButtons.length;
     const btn = this.pageButton(this.mainPage, label, onClick);
     btn.addEventListener('pointerenter', (event) => { if (event.pointerType === 'mouse') this.select(index); });
     this.mainButtons.push(btn);
+    return btn;
   }
 
   // ── as músicas: o player e a lista ─────────────────────────────────────────
@@ -489,7 +499,8 @@ export class PauseMenu {
     if (page === 'options') this.list.scrollTop = 0;
     if (page === 'music') this.musicList.scrollTop = 0;
     // Voltar reacende o botão de onde a pessoa veio ("Opções" ou "Músicas").
-    this.select(page === 'main' && leaving === 'options' ? 1 : page === 'main' && leaving === 'music' ? 2 : 0);
+    const from = page === 'main' && leaving === 'options' ? this.optionsBtn : page === 'main' && leaving === 'music' ? this.musicBtn : null;
+    this.select(from ? this.mainButtons.indexOf(from) : 0);
   }
 
   public select(index: number): void {

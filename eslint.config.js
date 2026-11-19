@@ -12,8 +12,8 @@ export default [
   {
     // Playtest harness: plain Node ESM scripts that also embed browser-context callbacks
     // (page.evaluate). Give them both Node and browser globals. A Sprite Factory e o mesmo
-    // tipo de script de Node.
-    files: ['playtest/**/*.mjs', 'tools/**/*.mjs', 'scripts/**/*.mjs', 'spritefactory/**/*.mjs'],
+    // tipo de script de Node, e os de docs/ (docs/heroi-cozy/capturar.mjs) tambem.
+    files: ['playtest/**/*.mjs', 'tools/**/*.mjs', 'scripts/**/*.mjs', 'spritefactory/**/*.mjs', 'docs/**/*.mjs'],
     languageOptions: {
       sourceType: 'module',
       globals: { ...globals.node, ...globals.browser },

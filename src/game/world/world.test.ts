@@ -15,7 +15,9 @@ const world = JSON.parse(readFileSync(path.resolve(here, '../../../public/world.
 const { worldChunksX, worldChunksY, chunkColumns, chunkRows } = world.meta;
 const W = worldChunksX * chunkColumns;
 const H = worldChunksY * chunkRows;
-const inside = (x: number, y: number): boolean => Number.isInteger(x) && Number.isInteger(y) && x >= 0 && y >= 0 && x < W && y < H;
+/** A linha de tile mais ao norte: o mapa cresceu para cima da linha 0 (a praia do norte, `meta.originCy`). */
+const TOP = (world.meta.originCy ?? 0) * chunkRows;
+const inside = (x: number, y: number): boolean => Number.isInteger(x) && Number.isInteger(y) && x >= 0 && y >= TOP && x < W && y < TOP + H;
 
 /** As oito espécies colhidas com a faca da Shui (fungi/fungi.ts, MUSHROOM_KINDS). */
 const MUSHROOMS = ['porcini', 'morel', 'puffball', 'inkCap', 'chanterelle', 'flyAgaric', 'oyster', 'jackOLantern'];
@@ -28,6 +30,11 @@ describe('world.json', () => {
     expect(world.chunks).toHaveLength(worldChunksX * worldChunksY);
     const cells = new Set(world.chunks.map((c) => `${c.cx},${c.cy}`));
     expect(cells.size).toBe(worldChunksX * worldChunksY);
+    // as linhas vão de `originCy` para o sul, sem buraco
+    const top = world.meta.originCy ?? 0;
+    for (const c of world.chunks) {
+      expect(c.cx >= 0 && c.cx < worldChunksX && c.cy >= top && c.cy < top + worldChunksY, `chunk ${c.cx},${c.cy}`).toBe(true);
+    }
     for (const c of world.chunks) {
       const id = `chunk ${c.cx},${c.cy}`;
       for (const layer of [c.ground, c.upper, c.collisions, ...(c.relief ? [c.relief] : []), ...(c.soil ? [c.soil] : [])]) {

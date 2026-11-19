@@ -25,11 +25,13 @@
 // dela repetido um número INTEIRO de vezes (`bladeGrowth`). Pixel inteiro, a mesma cor, a grade de pixel intacta: o fio
 // fica mais comprido, não borrado nem achatado. Cada fio sorteia a altura dele, como numa touceira de verdade.
 
-import { ANCIENT_GROVE, BIOME_DECOR } from '@/game/world/biomes';
+import { ANCIENT_GROVE, BEACH_DECOR, BIOME_DECOR } from '@/game/world/biomes';
 import { STAND_BLADE_SWING } from './decorSway';
 
-/** A grama: o capim do autor (0, 7, 8 e o mato alto 19, 20), o capim antigo do jardim e o trigo. */
-export const BLADE_FRAMES: ReadonlySet<number> = new Set([0, 7, 8, 19, 20, ANCIENT_GROVE.grass, BIOME_DECOR.wheat]);
+/** A grama: o capim do autor (0, 7, 8 e o mato alto 19, 20), o capim antigo do jardim, o trigo e os dois capins da praia. */
+export const BLADE_FRAMES: ReadonlySet<number> = new Set([
+  0, 7, 8, 19, 20, ANCIENT_GROVE.grass, BIOME_DECOR.wheat, BEACH_DECOR.grass, BEACH_DECOR.seaOats,
+]);
 
 /** O que conta como pixel do desenho: o mesmo corte de alfa do material da decoração (0,35). */
 const OPAQUE_ALPHA = 90;
