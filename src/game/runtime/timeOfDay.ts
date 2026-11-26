@@ -6,8 +6,16 @@
 // leva DAY_MS e a noite (18h-06h) leva NIGHT_MS — a mesma metade do mostrador, andada em
 // velocidades diferentes. A noite continua existindo inteira (os grilos, os vaga-lumes, a abertura
 // e o fim), so passa mais depressa.
+//
+// OS DOIS CREPUSCULOS ANDAM NO PASSO DO DIA (2026-11-20, pedido do autor: "cada momento do dia bem claro e
+// observavel"). O passo rapido comecava as 18h em ponto e ia ate as 6h: a hora azul, o arrebol e a aurora (os
+// momentos mais bonitos do ceu, render3d/skyPreset.SKY_TRACK) passavam em oito segundos cada, e o dia virava noite
+// num piscar. Agora o relogio so corre na noite FECHADA (19h45 a 4h30); do fim da madrugada ao fim da hora azul ele
+// anda devagar. `isNightTime` nao muda (18h-6h): ele diz quem dorme e quem acorda, nao a pressa do relogio.
 const DAY_MS = 8 * 60 * 1000;
 const NIGHT_MS = 3 * 60 * 1000;
+const SLOW_FROM = 4.5 / 24;
+const SLOW_TO = 19.75 / 24;
 
 let time = 0; // 0 = midnight, .25 = sunrise, .5 = noon, .75 = sunset
 let initialized = false;
@@ -48,9 +56,12 @@ export const setTimeScale = (scale: number): void => { restScale = Math.max(0, s
 /** Quantas vezes o relógio do jogo corre agora (1 andando; 24 sentado; 48 dormindo): as nuvens do céu do mar andam junto. */
 export const getTimeScale = (): number => restScale;
 
+/** O relógio anda no passo lento do dia? (Do fim da madrugada ao fim da hora azul; ver o cabeçalho.) */
+export const isSlowClock = (): boolean => time >= SLOW_FROM && time < SLOW_TO;
+
 export const advanceTimeOfDay = (ms: number): void => {
-  // Meio mostrador (0.5) por DAY_MS de dia e por NIGHT_MS de noite.
-  const half = isNightTime() ? NIGHT_MS : DAY_MS;
+  // Meio mostrador (0.5) por DAY_MS no passo lento e por NIGHT_MS na noite fechada.
+  const half = isSlowClock() ? DAY_MS : NIGHT_MS;
   const next = time + (Math.max(0, ms) * restScale * 0.5) / half;
   if (next >= 1) day += 1;
   setTimeOfDay(next);

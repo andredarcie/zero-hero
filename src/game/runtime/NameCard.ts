@@ -1,5 +1,7 @@
 import { t } from '@/game/i18n/i18n';
 import { setKeyCapture } from '@/game/runtime/accessibility';
+import { isPadEvent, usingPad } from '@/game/runtime/gamepad';
+import { PadKeyboard } from '@/game/runtime/PadKeyboard';
 import { HOME_NAME_MAX, cleanHomeName } from '@/game/runtime/homeState';
 import { HAND_FONT, INK, PAPER_SURFACE, paperTexture, seedOf, tornEdge } from '@/game/runtime/uiStyle';
 
@@ -7,7 +9,8 @@ import { HAND_FONT, INK, PAPER_SURFACE, paperTexture, seedOf, tornEdge } from '@
  * A PLACA DO ACAMPAMENTO, aberta (scenes/game/CampHome): um papel com uma linha para escrever o nome do lugar, à mão.
  * Enter escreve, Esc deixa como estava; no toque, os dois botões de pena. O que se digita é da placa: nenhuma tecla
  * chega ao jogo, e a troca de teclas (runtime/accessibility) para enquanto ela está aberta — senão uma letra remapeada
- * viraria um Z do jogo no meio do nome.
+ * viraria um Z do jogo no meio do nome. O CONTROLE não digita: com ele, a placa ganha um teclado de letras no papel
+ * (runtime/PadKeyboard), aberto já na hora se o jogador está no controle, ou no primeiro botão dele.
  */
 const ROOT_ID = 'zh-name-card';
 
@@ -46,6 +49,9 @@ export interface NameCardCallbacks {
 export class NameCard {
   private readonly root: HTMLDivElement;
   private readonly input: HTMLInputElement;
+  private readonly paper: HTMLDivElement;
+  private readonly foot: HTMLDivElement;
+  private padKeys?: PadKeyboard;
   private closed = false;
 
   public constructor(current: string, placeholder: string, private readonly cb: NameCardCallbacks, touch = false) {
@@ -54,6 +60,7 @@ export class NameCard {
     const style = document.createElement('style');
     style.textContent = CSS;
     const paper = document.createElement('div');
+    this.paper = paper;
     paper.className = 'zh-name-paper';
     const texture = paperTexture();
     if (texture) paper.style.backgroundImage = `url(${texture})`;
@@ -77,6 +84,7 @@ export class NameCard {
     actions.className = 'zh-name-actions';
     actions.append(this.button(t('home.sign.write'), () => this.write()), this.button(t('home.sign.cancel'), () => this.close()));
     const foot = document.createElement('div');
+    this.foot = foot;
     foot.className = 'zh-name-foot';
     foot.textContent = t(touch ? 'home.sign.keysTouch' : 'home.sign.keys');
     paper.append(title, this.input, actions, foot);
@@ -85,11 +93,24 @@ export class NameCard {
     document.body.appendChild(this.root);
     window.addEventListener('keydown', this.handleOutside, true);
     setKeyCapture(true);
+    const pad = usingPad();
     window.requestAnimationFrame(() => {
       this.root.classList.add('zh-in');
-      this.input.focus();
+      // No controle a linha não ganha o foco: num celular ou tablet, o foco abriria o teclado do aparelho por cima.
+      if (!pad) this.input.focus();
       this.input.select();
     });
+    if (pad) this.openPadKeys();
+  }
+
+  /** O teclado de letras do controle, embaixo da linha (uma vez só). */
+  private openPadKeys(): PadKeyboard {
+    if (this.padKeys) return this.padKeys;
+    this.padKeys = new PadKeyboard({ input: this.input, write: () => this.write(), close: () => this.close() });
+    this.input.after(this.padKeys.element);
+    this.foot.textContent = t('home.sign.keysPad');
+    this.paper.style.width = 'min(560px, 96vw)';
+    return this.padKeys;
   }
 
   public get element(): HTMLDivElement {
@@ -133,6 +154,13 @@ export class NameCard {
 
   /** Com o foco fora da linha (um clique no papel), a tecla também é da placa: o Esc fecha, o resto volta à linha. */
   private readonly handleOutside = (event: KeyboardEvent): void => {
+    // O botão do controle é do teclado de letras, esteja o foco onde estiver.
+    if (isPadEvent(event)) {
+      event.stopPropagation();
+      event.preventDefault();
+      this.openPadKeys().key(event);
+      return;
+    }
     if (event.target instanceof Node && this.root.contains(event.target)) return;
     event.stopPropagation();
     event.preventDefault();

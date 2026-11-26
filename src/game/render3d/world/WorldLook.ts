@@ -4,34 +4,21 @@
 import * as THREE from 'three';
 import { setDaylight } from '@/game/runtime/graphicsSettings';
 import { advanceTimeOfDay, getTimeOfDay, setTimeOfDay } from '@/game/runtime/timeOfDay';
-import { DAY_SKY, GOLDEN_SKY } from '../skyPreset';
+import { SKY_KEYS, skyMomentsAt } from '../skyPreset';
 import type { World3D } from '../World3D';
 
 // Per-region colour grading (see updateBiomeGrade): the split-tone the frame is graded with in the
 // woodland, and the one a lava basin drags it toward, plus how far the lava's influence reaches.
 const BIOME_LAVA_RADIUS = 11; // tiles
 // Tinted shadows, the A Short Hike way: the dark is a COLOUR (violet-blue), never just
-// darker — it's what makes the fire pool's warmth read as warmth.
-// A noite longe do fogo puxa para o AZUL FRIO de pouca cor (2026-11-10) — mas pelo grade, nunca pela luz: uma luz
-// azul forte já pintou as árvores de turquesa (relato do autor, ver ambientColor). Aqui é só a sombra que esfria, e o
-// fogo (que vive no alto do quadro) fica quente por contraste.
-const GRADE_WOOD_SHADOW = new THREE.Vector3(0.84, 0.9, 1.22);
-const GRADE_WOOD_HIGH = new THREE.Vector3(1.12, 1.02, 0.86); // warm amber highlights
+// darker — it's what makes the fire pool's warmth read as warmth. O par do bosque muda com a HORA: cada momento do
+// dia traz o seu (skyPreset.SKY_TRACK); a bacia de lava tem um só.
 /**
- * O MESMO bosque ao meio-dia. Ele precisa de par próprio — e não do de cima com `grade` mais alto
- * — porque a separação quente/frio do dia é MAIOR e tem outra cor: o que enche a sombra de um dia
- * de sol é o CÉU (azul), e o que bate no alto é o SOL (ouro). Aqui é o único desenho de "quente
- * contra frio" que sobra no dia, e é onde o amarelo dele é decidido.
- *
- * O alto puxa forte para o ouro porque a CURVA come tinta: `pow(0.66)` transforma uma razão de
- * 1,24× em 1,15× na tela. Todo tom escolhido aqui chega mais fraco do que parece — e é por isso
- * que este par é mais extremo que o noturno em vez de ser o noturno com o volume alto.
+ * De quanto em quanto o relógio reescreve os knobs do céu: 2880 passos por dia, meio minuto de relógio. Entre dois
+ * momentos vizinhos da trilha cabem mais de 70 passos, então nenhum se vê; e a conta (umas dez cores misturadas) roda
+ * três vezes por segundo, não a cada quadro.
  */
-const GRADE_DAY_SHADOW = new THREE.Vector3(0.84, 0.93, 1.2);
-const GRADE_DAY_HIGH = new THREE.Vector3(1.24, 1.06, 0.72);
-/** A HORA DOURADA: a sombra puxa para o violeta do céu que escurece, e o alto para o laranja do sol rente. */
-const GRADE_GOLD_SHADOW = new THREE.Vector3(0.86, 0.88, 1.2);
-const GRADE_GOLD_HIGH = new THREE.Vector3(1.24, 1.04, 0.74);
+const SKY_STEPS = 2880;
 const GRADE_LAVA_SHADOW = new THREE.Vector3(1.06, 0.92, 0.86); // even the dark runs warm here
 const GRADE_LAVA_HIGH = new THREE.Vector3(1.20, 0.98, 0.72); // molten amber
 export interface World3DParams {
@@ -350,13 +337,16 @@ const mixColor = (from: string, to: string, amount: number): string => {
 
 /** Um knob das tabelas do céu (número ou cor CSS) a caminho de outro. */
 const mixValue = (from: number | string, to: number | string, amount: number): number | string => {
-  // Nas pontas, o valor da tabela ele mesmo: o meio-dia é o DAY_SKY ao pé da letra, sem o último bit da conta.
-  if (amount <= 0) return from;
+  // Nas pontas (e num patamar), o valor da tabela ele mesmo: o meio-dia é o DAY_SKY ao pé da letra, sem o último bit da conta.
+  if (amount <= 0 || from === to) return from;
   if (amount >= 1) return to;
   if (typeof from === 'number' && typeof to === 'number') return from + (to - from) * amount;
   if (typeof from === 'string' && typeof to === 'string') return mixColor(from, to, amount);
   return from;
 };
+
+/** O rascunho da mistura do split-tone (applySky). */
+const TINT = new THREE.Vector3();
 
 /** O que WorldLook usa de World3D. */
 export type WorldLookHost = Pick<World3D, 'camTarget' | 'moonCastRotY' | 'moonLight' | 'params' | 'screen' | 'tiles'>;
@@ -374,8 +364,11 @@ export class WorldLook {
   private appliedDaylightKnob = 0;
   /** Shadows are re-baked only at small solar-angle steps, never every rendered frame. */
   private appliedSolarShadowStep = -1;
-  /** Os dois pesos com que as tabelas do céu foram escritas por último (ver applySky). */
-  private readonly appliedSky = { daylight: -1, golden: -1 };
+  /** O passo do relógio (ou o patamar) com que os knobs do céu foram escritos por último (ver applySky). */
+  private appliedSkyKey = Number.NaN;
+  /** O par do split-tone da hora (o momento do dia, skyPreset.SKY_TRACK), antes de a lava puxar para o dela. */
+  private readonly gradeShadow = new THREE.Vector3(1, 1, 1);
+  private readonly gradeHigh = new THREE.Vector3(1, 1, 1);
   /** Last CSS string pushed into each live colour, so an unchanged knob costs nothing. */
   private readonly appliedColors: Record<string, string> = {};
 
@@ -396,19 +389,11 @@ export class WorldLook {
     // Ease toward the region's grade (a few tenths of a second), never snap.
     this.biomeHeat += (nearLava - this.biomeHeat) * Math.min(1, dt * 1.6);
 
-    // O bosque tem duas horas do dia; a bacia de lava não — pedra derretida é a mesma fornalha ao
-    // meio-dia e à meia-noite, e é ela que o grade está descrevendo ali.
+    // O bosque tem as horas do dia (o par vem do momento, applySky); a bacia de lava não — pedra derretida é a mesma
+    // fornalha ao meio-dia e à meia-noite, e é ela que o grade está descrevendo ali.
     const u = this.host.screen.finishPass.uniforms;
-    (u.uShadowTint.value as THREE.Vector3)
-      .copy(GRADE_WOOD_SHADOW)
-      .lerp(GRADE_DAY_SHADOW, this.host.params.daylight)
-      .lerp(GRADE_GOLD_SHADOW, this.host.params.golden)
-      .lerp(GRADE_LAVA_SHADOW, this.biomeHeat);
-    (u.uHighTint.value as THREE.Vector3)
-      .copy(GRADE_WOOD_HIGH)
-      .lerp(GRADE_DAY_HIGH, this.host.params.daylight)
-      .lerp(GRADE_GOLD_HIGH, this.host.params.golden)
-      .lerp(GRADE_LAVA_HIGH, this.biomeHeat);
+    (u.uShadowTint.value as THREE.Vector3).copy(this.gradeShadow).lerp(GRADE_LAVA_SHADOW, this.biomeHeat);
+    (u.uHighTint.value as THREE.Vector3).copy(this.gradeHigh).lerp(GRADE_LAVA_HIGH, this.biomeHeat);
   }
 
   /** Death fade (0 = normal, 1 = black): the world drains and sinks, in the post. */
@@ -433,8 +418,8 @@ export class WorldLook {
   }
 
   /**
-   * Applies a solar position, rather than a binary lighting preset. Dawn and dusk interpolate
-   * every visual contribution; only the expensive baked ground shadows move in 16 gentle steps.
+   * A HORA DO DIA. Os knobs do céu andam pela trilha de momentos (skyPreset.SKY_TRACK): entre os dois em que a hora
+   * está, cada número e cada cor vai de um ao outro em linha reta. Só a sombra assada no chão anda em degraus (16).
    */
   public applySky(time: number): void {
     if (Object.keys(this.nightSky).length === 0) {
@@ -442,31 +427,30 @@ export class WorldLook {
       // escrita. Ver o campo: é isto que impede a noite de existir duas vezes.
       const factory = this.nightSky as Record<string, number | string>;
       const current = this.host.params as unknown as Record<string, number | string>;
-      for (const key of [...Object.keys(DAY_SKY), ...Object.keys(GOLDEN_SKY)]) factory[key] = current[key];
+      for (const key of SKY_KEYS) factory[key] = current[key];
     }
-    // Midnight → sunrise → noon → sunset → midnight. A little twilight remains after the sun is
-    // geometrically below the horizon, which avoids an abrupt black-blue cut.
+    // O sol cruza o horizonte às 6h e às 18h. Os dois pesos abaixo NÃO escolhem mais os knobs (quem escolhe é a
+    // trilha): eles ficam para quem só precisa saber quanto de dia há (a poeira, a mortalha, a bruma do mar, o céu do
+    // mar), e são da altura do sol, simétricos de propósito.
     const elevation = Math.sin((time - 0.25) * Math.PI * 2);
     const daylight = smoothstep(-0.12, 0.22, elevation);
-    // A HORA DOURADA: sobe quando o sol encosta no horizonte e some com ele alto (ver GOLDEN_SKY).
-    // A descida é larga de propósito (o peso só zera com o sol a ~38°): a manhã e a tarde inteiras carregam um resto
-    // de ouro, e a luz do vale nunca fica parada — só o miolo do dia é branco.
-    const golden = smoothstep(-0.16, 0.02, elevation) * (1 - smoothstep(0.1, 0.62, elevation));
-    // Com o sol parado na conta (o dia cheio, a noite fechada) as tabelas dariam os mesmos valores: nada a escrever.
-    // É também o que deixa um knob do console durar enquanto a hora não muda.
-    if (daylight !== this.appliedSky.daylight || golden !== this.appliedSky.golden) {
-      this.appliedSky.daylight = daylight;
-      this.appliedSky.golden = golden;
+    // (O ouro começa com o sol ainda bem abaixo do horizonte, -0,24 ≈ 5h05 e 18h55: o céu do mar acende junto com a
+    // aurora do vale e guarda o arrebol depois do pôr. Com -0,16 ele ainda era noite preta com o vale já rosa.)
+    const golden = smoothstep(-0.24, 0.02, elevation) * (1 - smoothstep(0.1, 0.62, elevation));
+    const { from, to, mix } = skyMomentsAt(time);
+    // Num patamar (a noite fechada, o meio-dia) os knobs não mudam: nada a escrever depois da primeira vez. É também o
+    // que deixa um knob do console durar ali, e em qualquer hora com o relógio parado (`gameTime.scale(0)`).
+    const plateau = from.sky === to.sky && from.shadow === to.shadow && from.high === to.high;
+    const key = plateau ? -1 - from.at : Math.round(time * SKY_STEPS);
+    if (key !== this.appliedSkyKey) {
+      this.appliedSkyKey = key;
       const night = this.nightSky as Record<string, number | string>;
-      const day = DAY_SKY as Record<string, number | string>;
-      const gold = GOLDEN_SKY as Record<string, number | string>;
+      const a = from.sky as Record<string, number | string>;
+      const b = to.sky as Record<string, number | string>;
       const current = this.host.params as unknown as Record<string, number | string>;
-      for (const key of Object.keys(night)) {
-        let value = night[key];
-        if (key in day) value = mixValue(value, day[key], daylight);
-        if (golden > 0 && key in gold) value = mixValue(value, gold[key], golden);
-        current[key] = value;
-      }
+      for (const name of SKY_KEYS) current[name] = mixValue(a[name] ?? night[name], b[name] ?? night[name], mix);
+      this.gradeShadow.set(...from.shadow).lerp(TINT.set(...to.shadow), mix);
+      this.gradeHigh.set(...from.high).lerp(TINT.set(...to.high), mix);
     }
     this.host.params.golden = golden;
     // The shadow field is geometry, not a shader uniform. Quantising it prevents a full terrain

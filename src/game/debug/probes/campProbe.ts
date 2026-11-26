@@ -50,6 +50,8 @@ export const campProbe = (s: GameScene) => {
       const tuft = g['tuft'] as { state: string; count: number };
       return { tall: g.isTall, growing: g.isGrowing, level: g.growthLevel, blocking: g.blocking, drawn: tuft.state, quads: tuft.count };
     },
+    /** Abre a placa do nome como o Z nela faz (sem precisar pô-la no acampamento antes). */
+    openSign: (): void => s.camp.home.useSign(),
     /** Passa o relógio do mato do acampamento de uma vez (o painel de testes): todo cortado e sem uso volta já. */
     regrowCampGrass: (): void => { s.camp.home.campGrass?.regrowNow(); },
     /**

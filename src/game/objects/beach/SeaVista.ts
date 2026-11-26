@@ -44,6 +44,7 @@ const SEA_AIR = 0.85;
 /** A bruma do horizonte do mar em cada hora (WorldScreen.horizon), como se vê. */
 const HAZE_DAY = new THREE.Color('#bcd6e8');
 const HAZE_GOLD = new THREE.Color('#f2bc8c');
+const HAZE_DAWN = new THREE.Color('#f3c4b6');
 const HAZE_NIGHT = new THREE.Color('#0b1122');
 
 /** O rumo do astro na hora `time` do mostrador: o sol de dia, a lua de noite — a mesma conta que deita as sombras. */
@@ -93,7 +94,7 @@ export class SeaVista implements BeachSystem {
     this.air = Math.abs(airGap) <= airStep ? airGoal : this.air + Math.sign(airGap) * airStep;
     if (this.blend <= 0.002 || taken) {
       this.release();
-      this.setHorizon(w, this.air);
+      this.setHorizon(w, this.air, f.phase);
       return;
     }
     this.active = true;
@@ -106,22 +107,27 @@ export class SeaVista implements BeachSystem {
     w.cam.lens = this.lens;
     w.screen.fovExtra = k * FOV_EXTRA;
     w.screen.calm = k;
-    this.setHorizon(w, Math.max(k, this.air));
+    this.setHorizon(w, Math.max(k, this.air), f.phase);
     this.sky ??= seaSkyFor(w.scene);
     this.sky.show(true);
     const fog = (w.scene.fog as THREE.FogExp2 | null)?.color ?? (w.scene.background as THREE.Color);
     // as nuvens andam com o relógio do JOGO: sentado, o tempo corre e elas passam depressa sobre o mar (com teto, para
     // não virarem um borrão)
     this.drift += f.dt * Math.min(12, Math.max(1, getTimeScale() * 0.5));
-    this.sky.update(w.camera, Math.min(1, k * 1.6), fog, luminaryAt(f.phase, this.sun), w.params.daylight, w.params.golden, w.elapsed, this.drift);
+    // (a troca de manhã para tarde é ao meio-dia e à meia-noite, quando o peso do sol rente é zero: não se vê)
+    this.sky.update(
+      w.camera, Math.min(1, k * 1.6), fog, luminaryAt(f.phase, this.sun), w.params.daylight, w.params.golden, w.elapsed, this.drift,
+      f.phase < 0.5 ? 0 : 1,
+    );
   }
 
   /**
    * A bruma do horizonte (WorldScreen.horizon: o fog, o fundo e a névoa de distância do pós puxam para ela): clara de
-   * dia, pêssego na hora dourada, anil de noite — o ar do vale é poeira dourada, e sobre o mar ela lia como lama.
+   * dia, rosa ao nascer do sol, pêssego na hora dourada da tarde, anil de noite — o ar do vale é poeira dourada, e sobre
+   * o mar ela lia como lama.
    */
-  private setHorizon(w: ReturnType<typeof world3d>, amount: number): void {
-    w.screen.horizon.color.copy(HAZE_NIGHT).lerp(HAZE_DAY, w.params.daylight).lerp(HAZE_GOLD, w.params.golden);
+  private setHorizon(w: ReturnType<typeof world3d>, amount: number, phase: number): void {
+    w.screen.horizon.color.copy(HAZE_NIGHT).lerp(HAZE_DAY, w.params.daylight).lerp(phase < 0.5 ? HAZE_DAWN : HAZE_GOLD, w.params.golden);
     w.screen.horizon.amount = amount;
   }
 

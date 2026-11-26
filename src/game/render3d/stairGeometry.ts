@@ -44,6 +44,7 @@ const STEP_SPREAD = 0.05;
 const STAIR_WALL = 0.14;
 const STAIR_PARAPET = 0.3;
 const STAIR_POST = { len: 0.17, wide: 0.04, rise: 0.2 };
+const CROSSING_POST_STEP = 1 / 512;
 
 const hash = (x: number, z: number): number => {
   const s = Math.sin(x * 127.1 + z * 311.7) * 43758.5453;
@@ -100,6 +101,7 @@ export const buildStairGeometry = (
     const { x, z, ux, uz, base } = st;
     const vx = -uz;
     const vz = ux;
+    const postBias = (ux + 2 * uz) * CROSSING_POST_STEP;
     /** Um polígono convexo da escada, com a luz de cada canto; a arte na medida do mundo (ver `ArtMap`). */
     const face = (frame: number, map: ArtMap, poly: readonly P[], shade: (p: P) => number): void => {
       const f = tilesetFrameUv(frame);
@@ -169,7 +171,8 @@ export const buildStairGeometry = (
       const pOut = side === 0 ? -wide : 1 + wide;
       const pIn = side === 0 ? STAIR_WALL + wide : 1 - STAIR_WALL - wide;
       for (const [sa, sb, floor] of [[-wide, STAIR_POST.len, 0], [1 - STAIR_POST.len, 1 + wide, 1]] as const) {
-        const hTop = floor + STAIR_PARAPET + STAIR_POST.rise;
+        // Pilares de escadas perpendiculares podem se cruzar pelo canto.
+        const hTop = floor + STAIR_PARAPET + STAIR_POST.rise + postBias;
         const hBot = floor === 0 ? 0 : 0.5;
         const sideFace = (t: number): void => face(ashlar, 'side', [[sa, t, hBot], [sb, t, hBot], [sb, t, hTop], [sa, t, hTop]], flat(STAIR_SHADE.post));
         const endFace = (s: number): void => face(ashlar, 'front', [[s, pOut, hBot], [s, pIn, hBot], [s, pIn, hTop], [s, pOut, hTop]], flat(STAIR_SHADE.postEnd));

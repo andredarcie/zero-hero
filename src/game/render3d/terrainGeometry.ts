@@ -493,6 +493,17 @@ export const LAVA_SHORE: ShoreOptions = {
   min: 0.03, variance: 0.45, round: 0.22, corner: 0.8, wobble: 2.6, bands: LAVA_BANK_BANDS, mud: 0x2a1006, core: LAVA_CORE,
 };
 
+export const distanceToDryLand = (px: number, pz: number, wet: ReadonlySet<number>): number => {
+  const x = Math.round(px);
+  const z = Math.round(pz);
+  let distance = Infinity;
+  for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+    if (wet.has(tileKey(x + dx, z + dz))) continue;
+    distance = Math.min(distance, Math.hypot(Math.max(Math.abs(px - x - dx) - 0.5, 0), Math.max(Math.abs(pz - z - dz) - 0.5, 0)));
+  }
+  return distance;
+};
+
 /**
  * A SUPERFÍCIE DA LAVA, uma malha só e em células: `aShore` vale 1 na margem e 0 a meio tile dela. O canto por
  * vizinho que a água usa não serve aqui: num poço de um tile de largura todo canto encosta na terra, e a lava
@@ -511,13 +522,7 @@ export const buildLavaSurface = (lava: ReadonlySet<number>, tiles: ReadonlyArray
       for (let i = 0; i <= N; i++) {
         const px = x - 0.5 + i / N;
         const pz = z - 0.5 + j / N;
-        let d = Infinity;
-        for (let dz = -1; dz <= 1; dz++) {
-          for (let dx = -1; dx <= 1; dx++) {
-            if (lava.has(tileKey(x + dx, z + dz))) continue;
-            d = Math.min(d, Math.hypot(Math.max(Math.abs(px - x - dx) - 0.5, 0), Math.max(Math.abs(pz - z - dz) - 0.5, 0)));
-          }
-        }
+        const d = distanceToDryLand(px, pz, lava);
         pos.push(px, y, pz);
         uv.push(i / N, j / N);
         shore.push(1 - Math.min(1, d / 0.5));
@@ -666,11 +671,10 @@ export const buildShoreGeometry = (
         // A arte do chão de origem, pousada sobre o tile de água como se continuasse nele.
         const u = (px: number): number => f.u0 + (px - x0) * (f.u1 - f.u0);
         const v = (pz: number): number => f.v1 - (pz - z0) * (f.v1 - f.v0);
-        // Beiço erguido sobre o mesmo plano: sem esta sobra, a câmera vê por baixo da beira um fio do que ele cobre.
-        const g = opts.flatOnly ? 0.012 : 0;
-        lp.push(ax - g, lipY, az - g, bx + g, lipY, az - g, bx + g, lipY, bz + g, ax - g, lipY, bz + g);
+        // As faixas adjacentes compartilham só a aresta. Inflá-las faria suas texturas disputarem o mesmo plano.
+        lp.push(ax, lipY, az, bx, lipY, az, bx, lipY, bz, ax, lipY, bz);
         luv.push(u(ax), v(az), u(bx), v(az), u(bx), v(bz), u(ax), v(bz));
-        for (const [cx, cz] of [[ax - g, az - g], [bx + g, az - g], [bx + g, bz + g], [ax - g, bz + g]]) {
+        for (const [cx, cz] of [[ax, az], [bx, az], [bx, bz], [ax, bz]]) {
           lb.push(f.cu0, f.cv0, f.cu1, f.cv1);
           ln.push(0, 1, 0);
           const c = opts.shadeAt ? opts.shadeAt(cx, cz) : tint;
@@ -1181,11 +1185,12 @@ export const buildReliefContourGeometry = (
    */
   tintAt?: (x: number, z: number) => readonly [number, number, number],
   /** A BEIRADA no topo (reliefEdge.ts): o contorno escuro e o beiço aceso. Só o planalto de chão; a pedra tem a dela. */
-  opts: { rim?: boolean } = {},
+  opts: { rim?: boolean; raisedSurface?: number } = {},
 ): {
   tops: THREE.BufferGeometry; walls: THREE.BufferGeometry; vines: VineQuad[];
   whole: Array<{ x: number; z: number; frame: number }>; bases: Array<{ x: number; z: number; frame: number }>;
 } => {
+  const surfaceHeight = (level: number): number => level * RELIEF_HEIGHT + (level > 0 ? opts.raisedSurface ?? 0 : 0);
   const whole: Array<{ x: number; z: number; frame: number }> = [];
   const bases: Array<{ x: number; z: number; frame: number }> = [];
   const vines: VineQuad[] = [];
@@ -1239,13 +1244,35 @@ export const buildReliefContourGeometry = (
     // A BEIRADA (reliefEdge.rimClass): a classe de cada célula entra na chave da corrida, então o topo continua em
     // peças grandes e só a fita da beira sai em pedaços.
     const rimOf = new Int8Array(N * N);
+    const open = (i: number, j: number): boolean => !blocked(Math.round(x0 + (i + 0.5) * step), Math.round(z0 + (j + 0.5) * step));
+    const keep = (i: number, j: number): boolean => lipTuft(tx * N + i, tz * N + j);
     if (opts.rim && !far) {
-      const open = (i: number, j: number): boolean => !blocked(Math.round(x0 + (i + 0.5) * step), Math.round(z0 + (j + 0.5) * step));
-      const keep = (i: number, j: number): boolean => lipTuft(tx * N + i, tz * N + j);
       for (let j = 0; j < N; j++) {
         for (let i = 0; i < N; i++) rimOf[j * N + i] = rimClass(lv, open, keep, i, j);
       }
     }
+    const shadeStep = 1 / RELIEF_CELLS;
+    const fineLevel = (i: number, j: number): number => field(x0 + (i + 0.5) * shadeStep, z0 + (j + 0.5) * shadeStep);
+    const fineOpen = (i: number, j: number): boolean => !blocked(Math.round(x0 + (i + 0.5) * shadeStep), Math.round(z0 + (j + 0.5) * shadeStep));
+    const fineKeep = (i: number, j: number): boolean => lipTuft(tx * RELIEF_CELLS + i, tz * RELIEF_CELLS + j);
+    const rimShadeAt = (i: number, j: number, level: number): number => {
+      if (!opts.rim) return 1;
+      // Mesmo a malha distante usa a grade fina para a cor em uma divisa compartilhada.
+      const ratio = RELIEF_CELLS / N;
+      const cornerX = i * ratio;
+      const cornerZ = j * ratio;
+      let shade = 0;
+      let count = 0;
+      // Vértices compartilhados recebem a mesma cor, mesmo na divisa de duas faixas ou tiles.
+      for (let row = cornerZ - 1; row <= cornerZ; row++) for (let col = cornerX - 1; col <= cornerX; col++) {
+        if ((far ? fineLevel : lv)(col, row) !== level) continue;
+        const klass = far ? rimClass(fineLevel, fineOpen, fineKeep, col, row)
+          : col >= 0 && col < N && row >= 0 && row < N ? rimOf[row * N + col] : rimClass(lv, open, keep, col, row);
+        shade += RIM_SHADE[klass];
+        count++;
+      }
+      return count ? shade / count : 1;
+    };
     const kindAt = (i: number, j: number): number => at(i, j) * 4 + rimOf[j * N + i];
     // O beiço veste a arte do tile mais perto daquele nível.
     const artFor = (c: number): number => {
@@ -1283,7 +1310,6 @@ export const buildReliefContourGeometry = (
           }
           rows++;
         }
-        const rimShade = RIM_SHADE[rimOf[j * N + i]];
         for (let m = 0; m < rows; m++) used.fill(1, (j + m) * N + i, (j + m) * N + e + 1);
         const f = tilesetFrameUv(artFor(c));
         const ax = x0 + i * step;
@@ -1292,11 +1318,14 @@ export const buildReliefContourGeometry = (
         const bz = az + rows * step;
         const u = (px: number): number => f.u0 + (px - x0) * (f.u1 - f.u0);
         const v = (pz: number): number => f.v1 - (pz - z0) * (f.v1 - f.v0);
-        const y = c * RELIEF_HEIGHT;
+        const y = surfaceHeight(c);
         const b = tp.length / 3;
         tp.push(ax, y, az, bx, y, az, bx, y, bz, ax, y, bz);
         tuv.push(u(ax), v(az), u(bx), v(az), u(bx), v(bz), u(ax), v(bz));
-        for (const [cx, cz] of [[ax, az], [bx, az], [bx, bz], [ax, bz]]) {
+        for (const [col, row] of [[i, j], [e + 1, j], [e + 1, j + rows], [i, j + rows]]) {
+          const cx = x0 + col * step;
+          const cz = z0 + row * step;
+          const rimShade = rimShadeAt(col, row, c);
           tb.push(f.cu0, f.cv0, f.cu1, f.cv1);
           tn.push(0, 1, 0);
           const t = tintAt ? tintAt(cx, cz) : [1, 1, 1];
@@ -1317,8 +1346,8 @@ export const buildReliefContourGeometry = (
         // A rocha fraturada (cliffRock), não o calçamento em pé.
         const f = tilesetFrameUv(cliffFaceFrame(tx, tz, y));
         const base = wp.length / 3;
-        const y0 = y * RELIEF_HEIGHT;
-        const y1 = (y + 1) * RELIEF_HEIGHT;
+        const y0 = surfaceHeight(y);
+        const y1 = surfaceHeight(y + 1);
         wp.push(ax, y1, az, bx, y1, bz, bx, y0, bz, ax, y0, az);
         const u0 = f.u0 + s0 * (f.u1 - f.u0);
         const u1 = f.u0 + s1 * (f.u1 - f.u0);
@@ -1341,7 +1370,7 @@ export const buildReliefContourGeometry = (
       if (roll >= VINE_CHANCE) return;
       vines.push({
         x0: ax + nx * lip, z0: az + nz * lip, x1: bx + nx * lip, z1: bz + nz * lip,
-        top: high * RELIEF_HEIGHT, drop: (high - low) * RELIEF_HEIGHT,
+        top: surfaceHeight(high), drop: surfaceHeight(high) - surfaceHeight(low),
         variant: roll % VINE_VARIANTS, nx, nz, u0: s0, u1: s1,
       });
     };
@@ -1662,6 +1691,28 @@ export const buildUprightTileGeometry = (
   /** A cor do bioma no pé da árvore (ver `trees` em terrainMats); sem ela, a arte crua. */
   tintAt?: (x: number, z: number) => readonly [number, number, number],
 ): THREE.BufferGeometry => {
+  const parallelRows = new Map<number, Array<{ x: number; index: number }>>();
+  tiles.forEach(({ x, z, look }, index) => {
+    if (!look) return;
+    const depth = z + look.dz;
+    const row = parallelRows.get(depth) ?? [];
+    row.push({ x: x + look.dx, index });
+    parallelRows.set(depth, row);
+  });
+  const depthOffsets = new Float64Array(tiles.length);
+  for (const row of parallelRows.values()) {
+    const layerEnds: number[] = [];
+    for (const { x, index } of row.sort((a, b) => a.x - b.x)) {
+      // Reserve space beyond each quad for the sideways motion of its crown.
+      let layer = layerEnds.findIndex((end) => x >= end);
+      if (layer < 0) layer = layerEnds.length;
+      layerEnds[layer] = x + 2;
+      depthOffsets[index] = layer;
+    }
+    // Tree art places feet on a 1/16-tile grid. Keep the whole group between that row
+    // and the preceding row, behind independent sprites and their seams with the terrain.
+    for (const { index } of row) depthOffsets[index] = (5 + depthOffsets[index] / layerEnds.length) / 128;
+  }
   const pos: number[] = [];
   const uv: number[] = [];
   const bounds: number[] = [];
@@ -1677,7 +1728,7 @@ export const buildUprightTileGeometry = (
     const top = look?.tall ? tilesetFrameUv(look.topFrame) : f;
     const height = look?.tall ? 2 : 1;
     const fx = x + (look?.dx ?? 0);
-    const fz = z + (look?.dz ?? 0);
+    const fz = z + (look?.dz ?? 0) - depthOffsets[i];
     // O SUB-BOSQUE (forest.forestUnderstory) afunda a copa no chão — o chão esconde o tronco e sobra a moita — e espelha
     // a arte para a mesma forma não se repetir
     const lift = liftAt(x, z) - (look?.sink ?? 0);

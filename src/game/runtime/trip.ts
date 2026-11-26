@@ -15,7 +15,7 @@
 export const TRIP_S = 62;
 /** Quando a tela está toda escura no piscar: é aí que a câmera entra no elmo. */
 export const TRIP_EYE_AT_S = 1.2;
-/** Quando o clarão do fim do túnel cobre tudo: é aí que a câmera salta para o céu do vale. */
+/** A câmera salta para o céu do vale com a tela coberta. */
 export const TRIP_FLIGHT_AT_S = 37.5;
 /** O voo sobre o vale (o caminho de entities/TeaTrip vai de 0 a 1 entre estes dois instantes). */
 export const TRIP_FLIGHT_END_S = 57;
@@ -79,10 +79,11 @@ export const tripFrame = (t: number, reduced = false): TripFrame => {
     web: hold(t, 37.5, 40, 57, 61),
     webR: 70 * ramp(t, 39, 48),
     trail: (0.45 * ramp(t, 13, 18) - 0.1 * ramp(t, 38, 40)) * (1 - ramp(t, 55, 60)) * (reduced ? 0.5 : 1),
-    // A luz que invade quando o elmo abre, e o clarão do fim do túnel (com movimento reduzido, nunca a tela toda branca).
-    white: Math.min(reduced ? 0.5 : 1, 0.8 * hold(t, 21.5, 23.2, 23.4, 25) + hold(t, 35.5, 37.5, 37.5, 39.5)),
-    // O piscar ao beber; com movimento reduzido, o salto do túnel para o voo também passa pelo escuro.
-    dark: Math.max(hold(t, 0, TRIP_EYE_AT_S, TRIP_EYE_AT_S, 2.6), reduced ? hold(t, 35.5, 37.5, 37.5, 39.5) : 0),
+    white: (reduced ? 0.18 : 0.32) * hold(t, 21.5, 23.2, 23.4, 25),
+    dark: Math.max(
+      hold(t, 0, TRIP_EYE_AT_S, TRIP_EYE_AT_S, 2.6),
+      hold(t, 35.5, TRIP_FLIGHT_AT_S, TRIP_FLIGHT_AT_S, 39.5),
+    ),
     lens: eye ? 1 : flying ? 1 - ramp(t, 55, 61) : 0,
     view: eye ? 'eye' : flying ? 'flight' : 'game',
     flight: ramp(t, TRIP_FLIGHT_AT_S, TRIP_FLIGHT_END_S),

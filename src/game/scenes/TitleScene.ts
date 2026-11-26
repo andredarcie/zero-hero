@@ -187,9 +187,14 @@ export class TitleScene extends Engine.Scene {
     // Enter/espaco ativam o selecionado; 1 e sempre a porta principal. Setas so existem quando
     // ha um segundo botao (o Start over do save) — e "qualquer tecla" continua nao valendo, ou
     // um ESC de reflexo comecaria a aventura.
+    // O Z (e o J) é o confirmar do jogo inteiro, e é ele que o A do controle aperta (runtime/gamepad).
     switch (event.key) {
       case 'Enter':
       case ' ':
+      case 'z':
+      case 'Z':
+      case 'j':
+      case 'J':
         this.buttons[this.selected]?.activate();
         break;
       case '1':

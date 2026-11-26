@@ -8,6 +8,7 @@ import { groundFrameAt } from '@/game/constants';
 import { tilesetFrameUv } from '@/game/render3d/textures3d';
 import type { World3D } from '@/game/render3d/World3D';
 import type { GameScene } from '@/game/scenes/GameScene';
+import { terrainDepthAudit } from './terrainDepthAudit';
 
 const materialOf = (m: THREE.Mesh): THREE.Material => (Array.isArray(m.material) ? m.material[0] : m.material);
 
@@ -18,6 +19,7 @@ export const renderProbe = (s: GameScene) => {
   };
   const meshNamed = (name: string): THREE.Mesh | undefined => w3().tiles.terrainMeshes.find((m) => materialOf(m)?.name === name);
   return {
+    terrainDepthAudit: () => terrainDepthAudit(w3().scene),
     /** A textura `key` foi carregada? */
     textureLoaded: (key: string): boolean => s.textures.exists(key),
     /** Programas de shader compilados (um a mais no meio do jogo = um engasgo). */
@@ -74,24 +76,28 @@ export const renderProbe = (s: GameScene) => {
      * alto) dentro do vale.
      */
     groundSeams: () => {
-      const meshes = w3().tiles.terrainMeshes.filter((m) => {
-        const mat = materialOf(m) as THREE.MeshLambertMaterial;
-        return mat?.vertexColors && m.geometry.getAttribute('color') && m.geometry.getAttribute('normal');
-      });
-      const weight = new Map<THREE.Material, number>();
-      for (const m of meshes) weight.set(materialOf(m), (weight.get(materialOf(m)) ?? 0) + m.geometry.getAttribute('position').count);
-      const ground = [...weight.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+      const { terrainMats, terrainMeshes } = w3().tiles;
       const pts = new Map<string, { x: number; y: number; z: number; list: number[][] }>();
-      for (const m of meshes) {
-        if (materialOf(m) !== ground) continue;
+      for (const m of terrainMeshes) {
+        if (materialOf(m) !== terrainMats?.ground) continue;
         const pos = m.geometry.getAttribute('position');
         const col = m.geometry.getAttribute('color');
-        const nrm = m.geometry.getAttribute('normal');
-        for (let i = 0; i < pos.count; i += 1) {
-          if (nrm.getY(i) < 0.9) continue;
+        const index = m.geometry.getIndex();
+        if (!index) continue;
+        const horizontal = new Set<number>();
+        for (let k = 0; k < index.count; k += 3) {
+          const a = index.getX(k); const b = index.getX(k + 1); const c = index.getX(k + 2);
+          // A franja vertical usa uma normal apontada para cima só para fins de iluminação.
+          if (pos.getY(a) === pos.getY(b) && pos.getY(a) === pos.getY(c)) {
+            horizontal.add(a);
+            horizontal.add(b);
+            horizontal.add(c);
+          }
+        }
+        for (const i of horizontal) {
           const x = pos.getX(i); const y = pos.getY(i); const z = pos.getZ(i);
           if (x < -0.5 || x > 59.5 || z < -0.5 || z > 59.5) continue;
-          const k = `${Math.round(x * 1000)},${Math.round(y * 100)},${Math.round(z * 1000)}`;
+          const k = `${Math.round(x * 10000)},${Math.round(y * 10000)},${Math.round(z * 10000)}`;
           const at = pts.get(k) ?? { x, y, z, list: [] };
           at.list.push([col.getX(i), col.getY(i), col.getZ(i)]);
           pts.set(k, at);

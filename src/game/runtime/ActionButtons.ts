@@ -1,4 +1,5 @@
 import { getTextScale } from '@/game/runtime/accessibility';
+import { onPadModeChange, usingPad } from '@/game/runtime/gamepad';
 import { t } from '@/game/i18n/i18n';
 import { applyTouchSettings, haptic } from '@/game/runtime/touchSettings';
 import {
@@ -90,6 +91,7 @@ const CSS = `
 body.zh-left-hand #${ROOT_ID} {
   right: auto; left: calc(14px + env(safe-area-inset-left, 0px)); flex-direction: row-reverse;
 }
+#${ROOT_ID}.zh-pad-off { display: none !important; }
 body.zh-big-btns #${ROOT_ID} .zh-act { width: 80px; height: 80px; }
 body.zh-big-btns #${ROOT_ID} .zh-act img { width: 44px; height: 44px; }
 body.zh-big-btns #${ROOT_ID} .zh-act .zh-key { font-size: 11px; right: 9px; bottom: 9px; }
@@ -151,6 +153,7 @@ export class ActionButtons {
   private readonly root: HTMLDivElement;
   private readonly useBtn: HTMLButtonElement;
   private useIcon: string | null | undefined = undefined;
+  private readonly offPad: () => void;
 
   public constructor(cb: ActionButtonsCallbacks) {
     ensureStyle();
@@ -158,6 +161,10 @@ export class ActionButtons {
     this.root = document.createElement('div');
     this.root.id = ROOT_ID;
     this.root.setAttribute('data-zh-ui', '');
+    // Com um controle na mão (um tablet com controle, por exemplo) os botões de vidro só cobrem o mundo: somem até o
+    // dedo voltar à tela. É uma classe, e não o `display` de `setVisible`, para as duas regras não brigarem.
+    this.root.classList.toggle('zh-pad-off', usingPad());
+    this.offPad = onPadModeChange((pad) => this.root.classList.toggle('zh-pad-off', pad));
 
     this.useBtn = this.button('B', 'zh-act zh-b', t('controls.useTitle'), EMPTY_USE_SVG, cb.onUse);
     this.root.appendChild(this.useBtn);
@@ -221,6 +228,7 @@ export class ActionButtons {
   }
 
   public destroy(): void {
+    this.offPad();
     this.root.remove();
   }
 }

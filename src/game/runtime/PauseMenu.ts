@@ -4,6 +4,7 @@ import { getJukebox } from '@/game/audio/Jukebox';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import { getLang, setLang, t, type Lang } from '@/game/i18n/i18n';
 import { getTextScale, isBindableKey, isCalmGames, isInstantText, isReducedMotion, setCalmGames, setInstantText, setKeyCapture, setReducedMotion, setTextScale, TEXT_SCALES } from '@/game/runtime/accessibility';
+import { hasPadRumble, padConnected, setPadRumble } from '@/game/runtime/gamepad';
 import {
   getCameraZoom, getDaylight, getDofIntensity, isThriftyPixels, setDaylight, setDofIntensity, setThriftyPixels,
 } from '@/game/runtime/graphicsSettings';
@@ -272,6 +273,8 @@ const optionSections = (cb: PauseMenuCallbacks): OptionSection[] => {
           { kind: 'key', label: 'pause.keyHand', action: 'hand' },
           { kind: 'key', label: 'pause.keyUse', action: 'use' },
         ] as OptionDef[]),
+        // O controle vibra nos golpes (runtime/gamepad). A linha só existe com um controle conectado.
+        ...(padConnected() ? [{ kind: 'choice', label: 'pause.padRumble', values: onOff(hasPadRumble, setPadRumble) }] as OptionDef[] : []),
       ],
     },
   ];
@@ -540,11 +543,13 @@ export class PauseMenu {
     const left = code === 'ArrowLeft' || code === 'KeyA';
     const right = code === 'ArrowRight' || code === 'KeyD';
     const accept = code === 'Enter' || code === 'NumpadEnter' || code === 'Space' || code === 'KeyZ' || code === 'KeyJ';
-    if (!(code === 'Escape' || up || down || left || right || accept)) return;
+    // O X volta, como em toda tela do jogo (e é ele que o B do controle aperta).
+    const back = code === 'Escape' || code === 'KeyX' || code === 'KeyK';
+    if (!(back || up || down || left || right || accept)) return;
     event.preventDefault();
     // Andar pela lista com a seta segurada é bom; confirmar e sair segurando, nunca.
     if (event.repeat && !(up || down || left || right)) return;
-    if (code === 'Escape') {
+    if (back) {
       if (this.page !== 'main') this.showPage('main');
       else this.cb.onResume();
     } else if (up || down) {

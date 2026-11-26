@@ -1,4 +1,5 @@
 import { localStore } from '@/game/platform/platform';
+import { padGlyph, usingPad } from '@/game/runtime/gamepad';
 /**
  * AS OPÇÕES DE ACESSIBILIDADE, todas num lugar só: quem desenha ou reage pergunta aqui.
  *
@@ -93,8 +94,29 @@ if (bindings.hand === bindings.use) {
 /** Letras e números, menos os de andar: setas, Enter e Esc têm dono fixo. */
 export const isBindableKey = (code: string): boolean => bindable(code);
 export const getKeyCode = (action: BoundAction): string => bindings[action];
-/** A letra que aparece nas teclas desenhadas e nos textos. */
-export const getKeyLetter = (action: BoundAction): string => bindings[action].replace(/^(Key|Digit)/u, '');
+/** A letra da TECLA escolhida para o gesto (a linha de trocar tecla, no menu, mostra esta). */
+export const getBoundKeyLetter = (action: BoundAction): string => bindings[action].replace(/^(Key|Digit)/u, '');
+/**
+ * O que aparece nas teclas desenhadas e nos textos para o gesto: a tecla escolhida — ou, com o jogador no controle
+ * (runtime/gamepad), o botão dele como está impresso (A, ✕…).
+ */
+export const getKeyLetter = (action: BoundAction): string => (usingPad() ? padGlyph(action) : getBoundKeyLetter(action));
+
+/**
+ * As palavras de tecla dos textos de AJUDA, trocadas pelos botões do controle. Só em texto de ajuda (o que tem o "·" que
+ * separa os gestos, ou a tecla entre chaves dos minijogos): numa fala, "Enter" poderia ser só uma palavra.
+ */
+const PAD_WORDS: ReadonlyArray<readonly [RegExp, () => string]> = [
+  [/(^|[^\p{L}])Esc(?![\p{L}])/gu, () => padGlyph('pause')],
+  [/(^|[^\p{L}])Enter(?![\p{L}])/gu, () => padGlyph('finish')],
+  [/(^|[^\p{L}])Delete(?![\p{L}])/gu, () => padGlyph('extra')],
+  [/(^|[^\p{L}])PgUp(?![\p{L}])/gu, () => padGlyph('prev')],
+  [/(^|[^\p{L}])PgDn(?![\p{L}])/gu, () => padGlyph('next')],
+  [/(^|[^\p{L}])Setas(?![\p{L}])/gu, () => 'Direcional'],
+  [/(^|[^\p{L}])setas(?![\p{L}])/gu, () => 'direcional'],
+  [/(^|[^\p{L}])Arrows(?![\p{L}])/gu, () => 'D-pad'],
+  [/(^|[^\p{L}])arrows(?![\p{L}])/gu, () => 'd-pad'],
+];
 
 /** Trocar para uma tecla que o outro gesto já usa inverte as duas, para nenhum gesto ficar sem tecla. */
 export const setKeyCode = (action: BoundAction, code: string): void => {
@@ -109,14 +131,20 @@ export const setKeyCode = (action: BoundAction, code: string): void => {
 };
 
 /**
- * O texto do jogo diz "Z" e "X" como letra solta: é o nome das teclas, e ele acompanha a troca. No toque os
- * textos são outros e nada muda.
+ * O texto do jogo diz "Z" e "X" como letra solta: é o nome das teclas, e ele acompanha a troca — e o controle, que
+ * também troca "Esc", "Enter", "Delete" e "Setas" pelos botões dele (nos textos de ajuda). No toque os textos são outros
+ * e nada muda. O texto é montado quando a tela abre: quem passa a usar o controle com ela aberta vê a troca na próxima.
  */
 export const withKeyNames = (text: string): string => {
-  if (bindings.hand === GAME_CODE.hand && bindings.use === GAME_CODE.use) return text;
-  return text.replace(/(^|[^\p{L}])([ZX])(?![\p{L}])/gu, (_, before: string, letter: string) => (
+  const pad = usingPad();
+  if (!pad && bindings.hand === GAME_CODE.hand && bindings.use === GAME_CODE.use) return text;
+  let out = text.replace(/(^|[^\p{L}])([ZX])(?![\p{L}])/gu, (_, before: string, letter: string) => (
     before + getKeyLetter(letter === 'Z' ? 'hand' : 'use')
   ));
+  if (pad && /[·{]/u.test(text)) {
+    for (const [pattern, glyph] of PAD_WORDS) out = out.replace(pattern, (_, before: string) => before + glyph());
+  }
+  return out;
 };
 
 let capturing = false;

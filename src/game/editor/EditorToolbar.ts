@@ -77,6 +77,9 @@ export class EditorToolbar {
       ui.button('Falas&#8230;', 'Editor das falas dos personagens (pt e en, com o verso conferido)', () => { openDialogEditor(ui); }),
       ui.button('Cor e voz&#8230;', 'Cor do nome e voz de cada NPC (no world.json)', () => ui.modals.openDialogModal()),
     );
+    // `/editor?falas` já abre nas falas (o endereço direto para quem só vai escrever): depois que o painel terminou de
+    // montar, como o clique no botão.
+    if (new URLSearchParams(window.location.search).has('falas')) window.setTimeout(() => { openDialogEditor(ui); }, 0);
     this.undoBtn = ui.button('&#8630; Desfazer', 'Ctrl+Z', () => ui.cb.onUndo());
     this.redoBtn = ui.button('&#8631; Refazer', 'Ctrl+Y', () => ui.cb.onRedo());
     actions.append(

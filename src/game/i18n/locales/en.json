@@ -126,6 +126,7 @@
     "reduceMotion": "Reduce motion and flashes",
     "instantText": "Instant text",
     "calmGames": "Unhurried mini-games",
+    "padRumble": "Controller vibration",
     "keyHand": "Hand key",
     "keyUse": "Use key",
     "pressKey": "Press a key",
@@ -725,13 +726,15 @@
       },
       "clean": {
         "keys": "Move the sponge over the mushroom with the mouse to clean off the dirt.",
-        "touch": "Drag the sponge over the mushroom to clean it."
+        "touch": "Drag the sponge over the mushroom to clean it.",
+        "pad": "Move the sponge over the mushroom with the d-pad to clean off the dirt."
       }
     },
     "sketch": {
       "draw": {
         "keys": "Hold {Z} (or the mouse button) to draw. When the animal lifts its head, let go, or it runs away  ·  {X} closes",
-        "touch": "Hold your finger on the screen to draw. When the animal lifts its head, let go, or it runs away  ·  the × closes"
+        "touch": "Hold your finger on the screen to draw. When the animal lifts its head, let go, or it runs away  ·  the × closes",
+        "pad": "Hold {Z} to draw. When the animal lifts its head, let go, or it runs away  ·  {X} closes"
       },
       "done": {
         "keys": "Drawing done: it went into the field notebook. Press {Z} to close.",
@@ -764,15 +767,18 @@
     },
     "lens": {
       "keys": "Hold the mouse button and rub the lens to polish it (or press {Z}).",
-      "touch": "Rub the lens with your finger to polish it."
+      "touch": "Rub the lens with your finger to polish it.",
+      "pad": "Press {Z} several times to polish the lens."
     },
     "sky": {
       "keys": "Use {←} {↑} {↓} {→} or drag the sky with the mouse to find the planets.",
-      "touch": "Drag the sky with your finger to find the planets."
+      "touch": "Drag the sky with your finger to find the planets.",
+      "pad": "Move the sight with the d-pad to find the planets."
     },
     "paint": {
-      "keys": "Pick a paint ({1} to {4} or click a pot) and paint by dragging the mouse. {Enter} finishes.",
-      "touch": "Tap a pot and paint by dragging your finger."
+      "keys": "Paint by dragging the mouse, or with the arrows and {Z} held  ·  paint: {1} to {4}  ·  {Enter} finishes",
+      "touch": "Tap a pot and paint by dragging your finger.",
+      "pad": "Move the brush with the d-pad and hold {Z} to paint  ·  {PgUp} {PgDn} change the paint  ·  {Enter} finishes  ·  {X} leaves"
     }
   },
   "home": {
@@ -797,7 +803,14 @@
       "write": "Write",
       "cancel": "Leave it",
       "keys": "Enter writes  ·  Esc leaves it",
-      "keysTouch": "Write, then tap Write"
+      "keysTouch": "Write, then tap Write",
+      "keysPad": "Z adds the letter  ·  Delete erases  ·  Enter writes it  ·  X leaves it",
+      "pad": {
+        "shift": "Aa",
+        "space": "space",
+        "erase": "erase",
+        "done": "write"
+      }
     },
     "sundial": {
       "clock": "12",

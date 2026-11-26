@@ -36,6 +36,10 @@ export const sceneProbe = (s: GameScene) => ({
   cameraCentreX: (): number | null => s.camera?.screenCenterX ?? null,
   /** Onde a câmera do mundo está, em tiles (ela anda junto com o desenho do herói). */
   camera: () => ({ x: s.camera?.camX ?? 0, y: s.camera?.camY ?? 0 }),
+  screenEffects: () => ({
+    fade: s.cameras.main.fadeEffect.alpha,
+    flashing: s.cameras.main.flashEffect.isRunning,
+  }),
   /**
    * Chama `fn(time, delta)` no fim de cada quadro da cena, DEPOIS do passo do jogo (de fora, um requestAnimationFrame
    * leria a câmera e o relógio ora antes ora depois do passo). Devolve como desligar.

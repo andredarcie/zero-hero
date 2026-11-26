@@ -6,6 +6,7 @@ import { t, tLines } from '@/game/i18n/i18n';
 import { canStep } from '@/game/world/relief';
 import { isTouchDevice } from '@/game/runtime/PauseMenu';
 import { ActionButtons, ControlsHint } from '@/game/runtime/ActionButtons';
+import { usingPad } from '@/game/runtime/gamepad';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import type { GameScene } from '../GameScene';
 import { ITEM_VISUAL_2D, SWORD_PLANTED_ELEV, USE_COOLDOWN_MS } from './sceneDefs';
@@ -67,10 +68,10 @@ export class ActionInput {
     if (this.host.arc.has('intro') && !this.host.intro.openingTalk) this.showControlsHint();
   }
 
-  /** A tarja dos controles: as teclas no teclado, o gesto e os botoes no toque (no alto da tela). */
+  /** A tarja dos controles: as teclas no teclado (ou os botões do controle), o gesto e os botoes no toque (no alto da tela). */
   public showControlsHint(): void {
     this.controlsHint?.destroy();
-    const touch = isTouchDevice();
+    const touch = isTouchDevice() && !usingPad();
     this.controlsHint = new ControlsHint(
       t(touch ? 'controls.touchHint' : 'controls.hint'), touch ? 8000 : 6500, touch,
     );

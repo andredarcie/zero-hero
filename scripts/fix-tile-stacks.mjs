@@ -92,18 +92,20 @@ const occupantsOf = (world) => {
   return at;
 };
 
-const paintedCollisionAt = (world, x, y) => {
+const chunkAt = (world, x, y) => {
   const { chunkColumns: cols, chunkRows: rows } = world.meta;
-  const chunk = (world.chunks ?? []).find(
+  return (world.chunks ?? []).find(
     (c) => c.cx === Math.floor(x / cols) && c.cy === Math.floor(y / rows),
   );
-  return chunk ? Boolean(chunk.collisions?.[y % rows]?.[x % cols]) : false;
 };
 
-const insideWorld = (world, x, y) => {
-  const { worldChunksX, worldChunksY, chunkColumns, chunkRows } = world.meta;
-  return x >= 0 && y >= 0 && x < worldChunksX * chunkColumns && y < worldChunksY * chunkRows;
+const paintedCollisionAt = (world, x, y) => {
+  const { chunkColumns: cols, chunkRows: rows } = world.meta;
+  const chunk = chunkAt(world, x, y);
+  return Boolean(chunk?.collisions?.[y - chunk.cy * rows]?.[x - chunk.cx * cols]);
 };
+
+const insideWorld = (world, x, y) => Boolean(chunkAt(world, x, y));
 
 const fixWorld = (world, name, log) => {
   const at = occupantsOf(world);

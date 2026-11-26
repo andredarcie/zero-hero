@@ -2,14 +2,13 @@
 
 import { HERO_FRAMES } from '@/game/constants';
 import { Billboard3D } from '@/game/render3d/Billboard3D';
-import { isReducedMotion } from '@/game/runtime/accessibility';
 import { getSoundManager } from '@/game/audio/SoundManager';
 import type { GameScene } from '../GameScene';
 import { BACK_ITEM_VISUAL_3D, SWORD_PLANTED_ELEV } from './sceneDefs';
 
 /** O que SwordPlanting usa de GameScene. */
 export type SwordPlantingHost = Pick<GameScene,
-  'camera' | 'cameras' | 'carry' | 'cinema' | 'debris' | 'dialogCam' | 'hero' | 'heroBillboard' | 'save'
+  'camera' | 'carry' | 'cinema' | 'debris' | 'dialogCam' | 'hero' | 'heroBillboard' | 'save'
   | 'sparkle' | 'tileSize' | 'time' | 'tweens' | 'verbs' | 'world3d'
 >;
 
@@ -48,7 +47,7 @@ export class SwordPlanting {
    *   3. ERGUER: ela sobe girando para ficar de PONTA PARA BAIXO; a camera avanca, faiscas sobem,
    *      e no alto o tempo desacelera em rampa enquanto as bordas escurecem.
    *   4. CRAVAR: um mergulho seco com rastro e assobio; no impacto o mundo CONGELA um instante,
-   *      a tela pisca, o chao racha, faiscas quentes e torroes voam, duas ondas de poeira correm e
+   *      o chao racha, faiscas quentes e torroes voam, duas ondas de poeira correm e
    *      os vaga-lumes se espantam.
    *   5. ASSENTAR: a lamina vibra e para; a lua desce sobre ela; o cavaleiro baixa a cabeca, fica
    *      um instante assim — e da um passo para tras sem tirar os olhos dela.
@@ -113,7 +112,6 @@ export class SwordPlanting {
     this.host.tweens.timeScale = 0; // hitstop: o mundo segura o quadro do golpe
     sound.ui.playTitleImpact();
     sound.work.playRockSmash();
-    if (!isReducedMotion()) this.host.cameras.main.flash(150, 255, 246, 220);
     this.host.world3d?.cam.shake(420, 0.17, 0, 1);
     this.host.cinema.crackGroundAt(front.x, front.y, false);
     await new Promise<void>((resolve) => { window.setTimeout(resolve, 120); });

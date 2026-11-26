@@ -156,6 +156,10 @@ export default defineConfig({
     setupFiles: ['src/test-support/setup.ts'],
     // O jsdom carrega imagem (de data URL) e desenha nos canvas pelo pacote `canvas`.
     environmentOptions: { jsdom: { resources: 'usable', pretendToBeVisual: true } },
+    // 20 s e não os 5 s de fábrica: o PRIMEIRO canvas desenhado num arquivo de teste (o pacote `canvas` subindo) leva
+    // segundos com a máquina ocupada, e três testes diferentes já caíram por tempo assim, um de cada vez e nunca o mesmo
+    // (NameCard, DyeCard, homeArt). Um teste vermelho por pressa do relógio trava o deploy sem ter achado defeito.
+    testTimeout: 20000,
     // A cobertura (`npm run test:coverage`) mede TODO o src — inclusive o arquivo que nenhum teste carrega, que entra
     // com 0% — para a porcentagem dizer quanto do jogo de verdade os testes passam. Relatório em coverage/index.html.
     coverage: {

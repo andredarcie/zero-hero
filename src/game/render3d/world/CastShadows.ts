@@ -63,10 +63,12 @@ export class CastShadows {
     // shadows" but only ever moved the LIGHT. Normalized so the tuned default (2.2) is
     // exactly the old behaviour.
     const heightScale = 2.2 / Math.max(0.5, this.host.params.shadowHeight);
-    // Live tuning (window.hd3d): the statics' moon field is baked, so a knob move re-bakes it.
-    if (moonAlpha !== this.host.appliedMoonShadow.alpha || moonLength !== this.host.appliedMoonShadow.length
-      || this.host.moonCastRotY !== this.host.appliedMoonShadow.rotY) {
+    // Live tuning (window.hd3d): the statics' moon field is baked, so a knob move re-bakes it. Só o comprimento e o
+    // rumo mexem na geometria; a escuridão sozinha só reescreve o alfa (a hora do dia mexe nela sem parar).
+    if (moonLength !== this.host.appliedMoonShadow.length || this.host.moonCastRotY !== this.host.appliedMoonShadow.rotY) {
       this.host.terrain.fillMoonCastField();
+    } else if (moonAlpha !== this.host.appliedMoonShadow.alpha) {
+      this.host.terrain.fadeMoonCastField();
     }
     // A barra dos maciços tem os MESMOS dois knobs, e re-assa junto: se ela ficasse para trás, o
     // dia clarearia a sombra de uma árvore e deixaria a do muro ao lado na noite.

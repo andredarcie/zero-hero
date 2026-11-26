@@ -22,6 +22,9 @@ const EARTH_FRAMES: ReadonlySet<number> = new Set(GROUND_DETAIL_FRAMES);
 /** O raio da quina da água, em tiles, e quanto a beira ondula além do mínimo (ver bakeGroundAndWater). */
 const WATER_CORNER = 0.42;
 const WATER_SHORE_VAR = 0.26;
+// A borda da areia, a da terra e a da pedra às vezes cobrem o mesmo ponto.
+const SAND_EDGE_HEIGHT = STONE_LIP_Y / 2;
+const EARTH_EDGE_HEIGHT = STONE_LIP_Y * 0.75;
 
 /** O que TerrainGround usa de World3D. */
 export type TerrainGroundHost = Pick<World3D,
@@ -227,7 +230,7 @@ export class TerrainGround {
         return frame !== undefined && reliefLevelAt(x, z) === 0 && !STONE_FLOOR_FRAMES.has(frame) ? frame : null;
       }, 0,
       {
-        min: 0.06, variance: 0.42, round: 0.22, wobble: 2.1, y: STONE_LIP_Y, flatOnly: true, sourceOnly: true,
+        min: 0.06, variance: 0.42, round: 0.22, wobble: 2.1, y: SAND_EDGE_HEIGHT, flatOnly: true, sourceOnly: true,
         keep: (px, pz) => !field || field(px, pz) === 0, shadeAt: groundShadeAt(solidSet, treeSet),
       },
     );
@@ -308,7 +311,7 @@ export class TerrainGround {
         new Set(earth.map((g) => tileKey(g.x, g.z))), earth,
         (x, z) => (frames.get(tileKey(x, z)) === GROUND_TILE_FRAME ? GROUND_TILE_FRAME : null), 0,
         {
-          min: 0.05, variance: 0.3, round: 0.2, wobble: 2.4, y: level * RELIEF_HEIGHT + STONE_LIP_Y, flatOnly: true,
+          min: 0.05, variance: 0.3, round: 0.2, wobble: 2.4, y: level * RELIEF_HEIGHT + EARTH_EDGE_HEIGHT, flatOnly: true,
           keep: (px, pz) => !field || field(px, pz) === level, shadeAt: groundShadeAt(solidSet, treeSet),
         },
       );

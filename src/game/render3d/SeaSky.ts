@@ -6,7 +6,8 @@
 //
 //   · de DIA, o azul que clareia até a bruma do horizonte, com cúmulos baixos sobre o mar;
 //   · na HORA DOURADA, o azul fundo no alto, o rosa no meio e o pêssego embaixo, e as nuvens acesas por baixo;
-//   · de NOITE, o anil quase preto, as estrelas e a lua;
+//   · de NOITE, o MESMO céu estrelado da primeira noite no acampamento (StarDome.STAR_SKY_GLSL: o ar azul junto do
+//     horizonte, a Via Láctea e as três camadas de estrelas — pedido do autor, 2026-11-20), mais a lua e as nuvens daqui;
 //   · e o ASTRO: o sol nasce no MAR (neste vale o sol nasce ao norte e se põe ao sul, atrás de quem olha — é a mesma
 //     conta que deita as sombras, WorldLook.applySky), e a lua mergulha nele antes do amanhecer.
 //
@@ -17,6 +18,7 @@
 // nuvens em três tons chapados, o sol num disco de borda dura com dois anéis. Nada de degradê liso.
 
 import * as THREE from 'three';
+import { STAR_SKY_GLSL } from './StarDome';
 
 /** Dentro do plano distante da câmera (120), como a cúpula de estrelas. */
 const RADIUS = 92;
@@ -38,14 +40,17 @@ const FRAGMENT = /* glsl */ `
   uniform vec3 uSun;        // o rumo do astro (unitário); y < 0 = abaixo do horizonte
   uniform float uDay;       // 0 noite … 1 dia
   uniform float uGolden;    // 1 com o sol rente ao horizonte
+  uniform float uEve;       // 0 de manhã, 1 de tarde: o sol rente da manhã é rosa, o da tarde é pêssego e fogo
   uniform float uTime;
   uniform float uDrift;     // o quanto as nuvens já andaram (corre junto com o tempo do jogo: sentado, depressa)
   uniform vec3 uZenDay; uniform vec3 uMidDay; uniform vec3 uLowDay;
   uniform vec3 uZenGold; uniform vec3 uMidGold; uniform vec3 uLowGold;
-  uniform vec3 uZenNight; uniform vec3 uMidNight;
+  uniform vec3 uZenDawn; uniform vec3 uMidDawn; uniform vec3 uLowDawn;
   uniform vec3 uCloudLit; uniform vec3 uCloudGold; uniform vec3 uCloudShade; uniform vec3 uCloudDusk; uniform vec3 uCloudNight;
-  uniform vec3 uSunDay; uniform vec3 uSunLow; uniform vec3 uMoon;
+  uniform vec3 uCloudDawn; uniform vec3 uCloudDawnShade;
+  uniform vec3 uSunDay; uniform vec3 uSunLow; uniform vec3 uSunDawn; uniform vec3 uMoon;
   varying vec3 vDir;
+  ${STAR_SKY_GLSL}
 
   float zkHash(vec2 p) {
     vec3 p3 = fract(vec3(p.xyx) * 0.1031);
@@ -92,37 +97,44 @@ const FRAGMENT = /* glsl */ `
   void main() {
     vec3 d = normalize(vDir);
     float e = d.y;
+    // o tamanho de um pixel na direção: é ele que dá o tamanho das estrelas (medido aqui, fora de qualquer desvio)
+    float pix = max(length(fwidth(d)), 1e-5);
     float dither = zkBayer(gl_FragCoord.xy);
     float night = (1.0 - uDay) * (1.0 - uGolden);
     float day = uDay * (1.0 - uGolden);
+    // O SOL RENTE TEM DUAS CARAS (os momentos do dia, skyPreset.SKY_TRACK): de manhã o céu é rosa e lilás, de tarde é
+    // pêssego e fogo. As cores "Gold" daqui para baixo são as da hora que é.
+    vec3 zenGold = mix(uZenDawn, uZenGold, uEve);
+    vec3 midGold = mix(uMidDawn, uMidGold, uEve);
+    vec3 lowGold = mix(uLowDawn, uLowGold, uEve);
+    vec3 cloudGold = mix(uCloudDawn, uCloudGold, uEve);
+    vec3 cloudDusk = mix(uCloudDawnShade, uCloudDusk, uEve);
 
     // ── o degradê, em faixas: do horizonte (a cor do fog) ao alto ──
     // O quadro só mostra uns quinze graus de céu acima do mar: o degradê inteiro cabe neles. (Esticado até o zênite, a
     // tela ficava só com o pé dele — a bruma dourada do horizonte de ponta a ponta, e nenhum azul: a foto do playtest.)
     float h = clamp(e / 0.24, 0.0, 1.0);
     float band = clamp(floor(h * 10.0 + 0.5 + dither * 0.9) / 10.0, 0.0, 1.0);
-    vec3 zen = uZenDay * day + uZenGold * uGolden + uZenNight * night;
-    vec3 mid = uMidDay * day + uMidGold * uGolden + uMidNight * night;
-    vec3 low = uLowDay * day + uLowGold * uGolden + uMidNight * night;
-    vec3 col = band < 0.14 ? mix(uFog, low, band / 0.14)
+    // A NOITE É O CÉU DA PRIMEIRA NOITE NO ACAMPAMENTO (StarDome): o mesmo ar azul subindo do horizonte até o quase
+    // preto do alto, liso como lá (as faixas com retícula são do dia e da hora dourada).
+    vec3 nightAir = zhNightAir(uFog, e);
+    vec3 zen = uZenDay * day + zenGold * uGolden + nightAir * night;
+    vec3 mid = uMidDay * day + midGold * uGolden + nightAir * night;
+    vec3 low = uLowDay * day + lowGold * uGolden + nightAir * night;
+    // (rente ao horizonte o dia começa na cor do fog; a noite começa no próprio ar dela, que já é o fog mais o azul —
+    // com o fog puro ali ficava uma faixa preta entre o mar e as estrelas que a cúpula do acampamento não tem)
+    vec3 foot = mix(uFog, nightAir, night);
+    vec3 col = band < 0.14 ? mix(foot, low, band / 0.14)
       : band < 0.48 ? mix(low, mid, (band - 0.14) / 0.34)
       : mix(mid, zen, (band - 0.48) / 0.52);
 
-    // ── as estrelas, de noite: uma por célula, poucas, cada uma piscando no seu tempo ──
-    if (night > 0.02 && e > 0.03) {
-      vec2 sg = d.xz / (e + 0.35) * 46.0;
-      vec2 sc = floor(sg);
-      float sr = zkHash(sc);
-      vec2 si = abs(fract(sg) - 0.5);
-      float star = step(0.972, sr) * step(max(si.x, si.y), 0.2 + 0.2 * fract(sr * 31.0));
-      float tw = 0.6 + 0.4 * sin(uTime * (1.1 + sr * 2.7) + sr * 40.0);
-      col += vec3(0.75, 0.84, 1.0) * star * tw * night * smoothstep(0.03, 0.2, e) * 0.9;
-    }
+    // ── as estrelas e a Via Láctea: as MESMAS de quando o herói dorme e a câmera sobe (a mesma função, no mesmo céu) ──
+    if (night > 0.02 && e > 0.0) col += zhStarSky(d, pix, uTime) * night;
 
     // ── o astro: o sol (ou a lua), um disco de borda dura com dois anéis de clarão ──
     float sunUp = smoothstep(-0.07, 0.02, uSun.y);
     float sd = distance(d, normalize(uSun));
-    vec3 sunCol = mix(uMoon, mix(uSunDay, uSunLow, uGolden), uDay);
+    vec3 sunCol = mix(uMoon, mix(uSunDay, mix(uSunDawn, uSunLow, uEve), uGolden), uDay);
     float disc = step(sd, 0.05);
     float ring1 = step(sd, 0.085 + dither * 0.012) * (1.0 - disc);
     float ring2 = step(sd, 0.16 + dither * 0.03) * (1.0 - disc) * (1.0 - ring1);
@@ -136,8 +148,9 @@ const FRAGMENT = /* glsl */ `
       float wisp = zkFbm(hp * vec2(0.6, 3.4) + vec2(0.0, zkNoise(hp * 0.8) * 1.6));
       float high = smoothstep(0.08, 0.2, e) * (wisp - 0.6) * 2.4;
       float streak = step(0.18 + dither * 0.22, high);
-      vec3 cirrus = uCloudLit * day + uCloudGold * uGolden + uCloudNight * night * 1.8;
-      col = mix(col, cirrus, streak * (0.42 - 0.22 * night));
+      vec3 cirrus = uCloudLit * day + cloudGold * uGolden + uCloudNight * night * 1.8;
+      // (de noite quase somem: o céu é das estrelas — ver os cúmulos, logo abaixo)
+      col = mix(col, cirrus, streak * (0.42 - 0.37 * night));
     }
 
     // ── os cúmulos: as nuvens baixas sobre o mar, com volume ──
@@ -157,19 +170,23 @@ const FRAGMENT = /* glsl */ `
         float base = body * (1.0 - step(cut + 0.03, below));
         float top = body * (1.0 - step(cut + 0.04, above));
         float lit = body * clamp((cBody - sunward) * 9.0 + 0.35 + 0.35 * top, 0.0, 1.0);
-        vec3 cHi = uCloudLit * day + uCloudGold * uGolden + uCloudNight * night * 2.2;
-        vec3 cMid = mix(uCloudShade, uCloudLit, 0.55) * day + mix(uCloudDusk, uCloudGold, 0.5) * uGolden + uCloudNight * night * 1.5;
-        vec3 cLow = uCloudShade * day + uCloudDusk * uGolden + uCloudNight * night;
-        vec3 cBelly = uCloudShade * 0.78 * day + uCloudDusk * 0.72 * uGolden + uCloudNight * night * 0.7;
+        vec3 cHi = uCloudLit * day + cloudGold * uGolden + uCloudNight * night * 2.2;
+        vec3 cMid = mix(uCloudShade, uCloudLit, 0.55) * day + mix(cloudDusk, cloudGold, 0.5) * uGolden + uCloudNight * night * 1.5;
+        vec3 cLow = uCloudShade * day + cloudDusk * uGolden + uCloudNight * night;
+        vec3 cBelly = uCloudShade * 0.78 * day + cloudDusk * 0.72 * uGolden + uCloudNight * night * 0.7;
         // o tom: a barriga, o corpo, o aceso e o realce — escolhidos em degraus, com a retícula decidindo a fronteira
         float tone = base > 0.5 ? 0.0 : (lit + dither * 0.3 > 0.72 ? 3.0 : lit + dither * 0.3 > 0.42 ? 2.0 : 1.0);
         vec3 cloud = tone < 0.5 ? cBelly : tone < 1.5 ? cLow : tone < 2.5 ? cMid : cHi;
         // na hora dourada o sol baixo acende a nuvem POR BAIXO: a barriga fica rosa-dourada, não cinza
-        cloud = mix(cloud, uCloudGold, base * uGolden * 0.55);
+        cloud = mix(cloud, cloudGold, base * uGolden * 0.55);
         // perto do horizonte a nuvem some na bruma, como o mar
         float haze = 1.0 - smoothstep(0.008, 0.07, e);
         cloud = mix(cloud, uFog, haze * 0.75);
-        col = mix(col, cloud, body * (0.96 - 0.3 * night));
+        // DE NOITE A NUVEM É UM VÉU, não uma tampa: o céu da noite é o estrelado da primeira noite no acampamento
+        // (pedido do autor), e com a nuvem a 66% as estrelas e a Via Láctea ficavam escondidas atrás dela em quase
+        // toda a faixa de céu que a praia mostra. A 16% ela ainda passa (uma sombra mais escura que apaga um fio as
+        // estrelas por trás), e o céu é o mesmo.
+        col = mix(col, cloud, body * (0.96 - 0.8 * night));
       }
     }
 
@@ -199,18 +216,21 @@ export class SeaSky {
     uSun: { value: new THREE.Vector3(0, 1, -1) },
     uDay: { value: 1 },
     uGolden: { value: 0 },
+    uEve: { value: 1 },
     uTime: { value: 0 },
     uDrift: { value: 0 },
     // de dia: o azul do alto, o azul claro do meio e a claridade logo acima da bruma do horizonte
     uZenDay: C('#2f6fc8'), uMidDay: C('#6ea9e6'), uLowDay: C('#b9d8ee'),
-    // na hora dourada: o azul fundo, o rosa e o pêssego
+    // na hora dourada da tarde: o azul fundo, o rosa e o pêssego
     uZenGold: C('#34467f'), uMidGold: C('#b97f9a'), uLowGold: C('#f0aa72'),
-    // de noite
-    uZenNight: C('#04060e'), uMidNight: C('#0a1026'),
+    // ao nascer do sol (o sol nasce NESTE mar): mais frio e mais claro — o azul da manhã, o lilás-rosa e o rosa-pêssego
+    uZenDawn: C('#3d5697'), uMidDawn: C('#c493b8'), uLowDawn: C('#f7c3aa'),
+    // (a noite não tem cor daqui: é o céu estrelado do StarDome sobre a cor do fog)
     // as nuvens: a luz e a sombra de cada hora
     uCloudLit: C('#f6f8fb'), uCloudGold: C('#ffc98e'), uCloudShade: C('#9db3cf'), uCloudDusk: C('#7d5f8e'), uCloudNight: C('#141b30'),
+    uCloudDawn: C('#ffd2c4'), uCloudDawnShade: C('#8b7aa8'),
     // o astro
-    uSunDay: C('#fff6d8'), uSunLow: C('#ffb86a'), uMoon: C('#dfe8ff'),
+    uSunDay: C('#fff6d8'), uSunLow: C('#ffb86a'), uSunDawn: C('#ffd2a6'), uMoon: C('#dfe8ff'),
   };
 
   public constructor(scene: THREE.Scene) {
@@ -237,11 +257,14 @@ export class SeaSky {
 
   /**
    * O céu deste quadro: a cúpula acompanha a câmera; `level` é o quanto dele aparece (0 = só a cor do fog); `fog` a cor
-   * do horizonte; `sun` o rumo do astro; `day` e `golden` a hora (WorldLook.applySky).
+   * do horizonte; `sun` o rumo do astro; `day` e `golden` a hora (WorldLook.applySky); `eve` diz se o sol rente é o da
+   * tarde (1) ou o da manhã (0).
    */
   public update(
     camera: THREE.Camera, level: number, fog: THREE.Color, sun: THREE.Vector3, day: number, golden: number, timeS: number, drift = timeS,
+    eve = 1,
   ): void {
+    this.uniforms.uEve.value = eve;
     this.mesh.position.copy(camera.position);
     this.uniforms.uLevel.value = Math.min(1, Math.max(0, level));
     this.uniforms.uFog.value.copy(fog);

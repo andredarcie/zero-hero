@@ -42,7 +42,7 @@ export interface ZoomSetupCallbacks {
 
 const UP = new Set(['ArrowUp', 'KeyW', 'Equal', 'NumpadAdd']);
 const DOWN = new Set(['ArrowDown', 'KeyS', 'Minus', 'NumpadSubtract']);
-const DONE = new Set(['Enter', 'NumpadEnter', 'Escape', 'Space', 'KeyZ', 'KeyJ']);
+const DONE = new Set(['Enter', 'NumpadEnter', 'Escape', 'Space', 'KeyZ', 'KeyJ', 'KeyX', 'KeyK']);
 
 export class ZoomSetup {
   public readonly slider: ZoomSlider;

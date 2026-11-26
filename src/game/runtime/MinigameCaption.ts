@@ -1,11 +1,13 @@
-import { t } from '@/game/i18n/i18n';
+import { hasText, t } from '@/game/i18n/i18n';
+import { onPadModeChange, usingPad } from '@/game/runtime/gamepad';
 import { isTouchDevice } from '@/game/runtime/PauseMenu';
 import { KEY_BG, KEY_BORDER, KEY_GLYPH, PIXEL_FONT, WOOD_PANEL } from '@/game/runtime/uiStyle';
 
 /**
  * A LEGENDA DOS MINIGAMES (pedido do autor): em todo minigame, no rodapé, uma frase curta diz o que fazer e com
  * que tecla — no computador, a tecla ou o mouse; no celular, o toque. O texto mora no locale, em
- * `minigame.<id>.keys` e `minigame.<id>.touch`; uma tecla no texto vai entre chaves (`{Z}`) e vira a plaquinha de
+ * `minigame.<id>.keys` e `minigame.<id>.touch` (e `.pad`, o do controle, onde o do teclado fala do mouse); uma tecla no
+ * texto vai entre chaves (`{Z}`) e vira a plaquinha de
  * tecla do jogo. Cada minigame troca o `id` conforme a etapa (cortar, limpar, ler a ficha…), ou some com `null`.
  *
  * Mora no `body`, por cima do minigame: o papel da ficha rola, e a legenda não pode rolar junto.
@@ -30,6 +32,7 @@ const CSS = `
 
 export class MinigameCaption {
   private readonly el: HTMLDivElement;
+  private readonly offPadMode: () => void;
   private current: string | null = null;
 
   public constructor() {
@@ -44,17 +47,25 @@ export class MinigameCaption {
     this.el.setAttribute('data-zh-ui', '');
     this.el.style.display = 'none';
     document.body.appendChild(this.el);
+    this.offPadMode = onPadModeChange(() => this.render());
   }
 
   /** A frase da etapa (`minigame.<id>`), ou nenhuma. Chamar de novo com o mesmo id não faz nada. */
   public show(id: string | null): void {
     if (id === this.current) return;
     this.current = id;
+    this.render();
+  }
+
+  private render(): void {
+    const id = this.current;
     if (!id) {
       this.el.style.display = 'none';
       return;
     }
-    const text = t(`minigame.${id}.${isTouchDevice() ? 'touch' : 'keys'}`);
+    // No controle, a variante `pad` quando o texto do teclado fala do mouse; sem ela, o do teclado com os botões dele.
+    const variant = usingPad() ? (hasText(`minigame.${id}.pad`) ? 'pad' : 'keys') : isTouchDevice() ? 'touch' : 'keys';
+    const text = t(`minigame.${id}.${variant}`);
     this.el.replaceChildren(...text.split(/(\{[^}]+\})/u).filter(Boolean).map((part) => {
       const key = /^\{([^}]+)\}$/u.exec(part);
       if (!key) return document.createTextNode(part);
@@ -72,6 +83,7 @@ export class MinigameCaption {
   }
 
   public destroy(): void {
+    this.offPadMode();
     this.el.remove();
   }
 }

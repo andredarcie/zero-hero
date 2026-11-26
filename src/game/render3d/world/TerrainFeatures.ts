@@ -11,7 +11,7 @@ import { SolidCastField } from '../CastShadow3D';
 import { FOREST_FLOOR_REACH, forestUnderstory, treeLookAt, type TreeLook } from '../forest';
 import { buildShadowBlobGeometry } from '../groundShadow';
 import { getBaseTexture3D } from '../textures3d';
-import { bucketKey, buildBankGeometry, buildFlatTileGeometry, buildLavaSurface, buildScorchGeometry, buildShoreGeometry, buildUprightTileGeometry, CLIFF_WALL_SET, DUNGEON_WALL_SET, groundShadeAt, LAVA_DEPTH_TILES, LAVA_LIP_SHADE, LAVA_SHORE, tileKey } from '../terrainGeometry';
+import { bucketKey, buildBankGeometry, buildFlatTileGeometry, buildLavaSurface, buildScorchGeometry, buildShoreGeometry, buildUprightTileGeometry, CLIFF_WALL_SET, distanceToDryLand, DUNGEON_WALL_SET, groundShadeAt, LAVA_DEPTH_TILES, LAVA_LIP_SHADE, LAVA_SHORE, tileKey } from '../terrainGeometry';
 import { buildMistCurtainGeometry, type MistUniforms } from '../glowMaterials';
 import type { TerrainMaterials } from '../terrainMaterials';
 import type { TerrainTile, TerrainSort } from './TerrainSorter';
@@ -24,6 +24,7 @@ import { decorShown } from './decorScatter';
 const VOID_MIST_HEIGHT = 1.3;
 /** As plantas do sub-bosque balançam como o pinheiro (o quadro que o vento lê). */
 const PLANT_WIND_FRAME = 4;
+const LAVA_SCORCH_FADE = 1 / 8;
 /**
  * O POÇO DA ESCADA: um buraco DE VERDADE no chão da superfície, pelo mesmo caminho do rio — o
  * quad de chão daquele tile desce, e paredes fecham o vão onde ele encontra a terra.
@@ -84,7 +85,9 @@ export class TerrainFeatures {
           ...LAVA_SHORE,
           shadeAt: (x, z) => {
             const [r, g, b] = shade(x, z);
-            return [r * LAVA_LIP_SHADE, g * LAVA_LIP_SHADE, b * LAVA_LIP_SHADE] as const;
+            const fade = Math.min(1, distanceToDryLand(x, z, lavaKeys) / LAVA_SCORCH_FADE);
+            const scorch = THREE.MathUtils.lerp(1, LAVA_LIP_SHADE, fade);
+            return [r * scorch, g * scorch, b * scorch] as const;
           },
         },
       );

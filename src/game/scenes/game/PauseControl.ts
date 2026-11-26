@@ -6,7 +6,7 @@ import { TalkLogOverlay } from '@/game/runtime/TalkLogOverlay';
 import { ZoomSetup } from '@/game/runtime/ZoomSetup';
 import { adventureState } from '@/game/runtime/adventureState';
 import { getSoundManager } from '@/game/audio/SoundManager';
-import type * as Engine from '@/game/engine';
+import * as Engine from '@/game/engine';
 import type { GameScene } from '../GameScene';
 import { PauseTouchButton } from '@/game/runtime/PauseMenu';
 
@@ -42,21 +42,23 @@ export class PauseControl {
     const canQuit = Boolean(this.host.scene.get('title'));
     this.pauseMenu = new PauseMenu(this.host, {
       onResume: () => this.closePauseMenu(),
-      onQuit: canQuit
-        ? () => {
-          this.closePauseMenu();
-          getSoundManager().music.stopMusic();
-          getSoundManager().ambience.stopAmbience();
-          // Sair pelo menu GUARDA: o retrato fecha aqui e o titulo passa a oferecer Continue.
-          this.host.save.persistAdventure();
-          this.host.scene.start('title');
-        }
-        : undefined,
+      onQuit: canQuit ? () => this.quitToTitle() : undefined,
       onZoom: () => this.openZoomSetup(),
       onTalks: this.host.adventure ? () => this.openTalkLog() : undefined,
     });
     this.host.actions.useBufferMs = 0;
     this.host.scene.pause();
+  }
+
+  private quitToTitle(): void {
+    this.closePauseMenu();
+    this.host.cutsceneActive = true;
+    getSoundManager().music.stopMusic();
+    getSoundManager().ambience.stopAmbience();
+    this.host.save.persistAdventure();
+    const camera = this.host.cameras.main;
+    camera.once(Engine.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.host.scene.start('title'));
+    camera.fadeOut(400, 0, 0, 0);
   }
 
   /**

@@ -12,9 +12,7 @@ import { getCoconutPalms } from '@/game/world/WorldData';
 import { paint, TILESET as P, type Put } from './nature/kit';
 
 /**
- * OS COQUEIROS DA PRAIA DO NORTE (pedido do autor, 2026-11-19: "árvores, coqueiros... tudo com alta qualidade de pixel
- * art"). São props do world.json (`coconutPalm`), como as árvores do bosque (objects/BigTrees): o editor põe, move e
- * apaga, e o pé de cada um bloqueia o tile pelo próprio prop, sem colisão pintada.
+ * Os coqueiros da praia do norte são props do world.json (`coconutPalm`). Cada pé bloqueia o próprio tile.
  *
  * O ESTILO É O DO TILESET, o mesmo das árvores do bosque: a paleta da casa (a oliva da folha, a ardósia da sombra, a
  * madeira do tronco), textura granulada (cada pixel sorteado entre dois ou três tons da faixa de luz em que está),
@@ -198,6 +196,10 @@ interface Palm { x: number; y: number; kind: PalmKind; variant: number; phase: n
 
 /** Antes da silhueta do herói, como as árvores do bosque (BigTrees.TREE_RENDER_ORDER): ele aparece por trás dela. */
 const PALM_RENDER_ORDER = -2;
+// Nenhuma copa alcança a de um coqueiro a quatro colunas de distância. Alternar o plano
+// nessas quatro colunas impede que copas vizinhas disputem a mesma profundidade.
+const PALM_DEPTH_COLUMNS = 4;
+const PALM_DEPTH_STEP = 1 / 128;
 /** O balanço das palmas: de quanto em quanto tempo o quadro troca, na brisa e no auge da rajada (ms). */
 const SWAY_MS = 1100;
 const GUST_SWAY_MS = 420;
@@ -220,6 +222,9 @@ export class CoconutPalms {
       })
         .setDisplaySize(s.w / 16, s.h / 16)
         .setPosition(x + (s.lean * 0.5) / 16, y);
+      const depthColumn = THREE.MathUtils.euclideanModulo(x, PALM_DEPTH_COLUMNS);
+      // Desloca só o quad. O pé usado pelas sombras e pela colisão fica no tile original.
+      bb.mesh.geometry.translate(0, 0, -(depthColumn + 1) * PALM_DEPTH_STEP);
       const [r, g, b] = biomeTreeWashAt(x, y);
       (bb.mesh.material as THREE.MeshLambertMaterial).color.setRGB(r, g, b);
       this.palms.push({ x, y, kind, variant, phase: hash(x, y, 2) * 4, bb });

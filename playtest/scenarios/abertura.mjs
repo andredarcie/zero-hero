@@ -24,9 +24,17 @@ export default {
 
     // O instante do golpe: a espada esta nas maos, a caminho do chao.
     await page.waitForFunction(() => window.gameDebug.scene.sword().inHands === true, null, { timeout: 20000 });
+    await page.evaluate(() => {
+      window.__swordFlashed = false;
+      const stop = window.gameDebug.scene.onFrame(() => {
+        window.__swordFlashed ||= window.gameDebug.scene.screenEffects().flashing;
+        if (!window.gameDebug.scene.sword().inHands) stop();
+      });
+    });
     await sleep(2600);
     await shot('erguida', { note: 'A espada no alto, em camera lenta' });
     await page.waitForFunction(() => { const sw = window.gameDebug.scene.sword(); return sw.planted && sw.inHands === false; }, null, { timeout: 15000 });
+    assert('A espada finca sem clarão de tela inteira', await page.evaluate(() => window.__swordFlashed === false), '');
     await shot('fincada', { note: 'A espada fincada, a fenda no chao' });
 
     const planted = await page.evaluate(() => {

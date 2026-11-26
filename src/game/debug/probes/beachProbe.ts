@@ -48,6 +48,12 @@ export const beachProbe = (s: GameScene) => ({
   bodies: () => standActorsUniform.value.slice(0, 3).map((v) => [v.x, v.y, v.z, v.w]),
   /** Os coqueiros do mapa. */
   palms: () => [...(s.valley.palms?.list ?? [])].map((p) => ({ x: p.x, y: p.y, kind: p.kind })),
+  palmPlanes: () => world3d().casts.castCasters.filter(({ bb }) => bb.texKey.startsWith('palm-')).map(({ bb }) => {
+    bb.mesh.geometry.computeBoundingBox();
+    const bounds = bb.mesh.geometry.boundingBox!;
+    const { position, scale } = bb.mesh;
+    return { left: position.x + bounds.min.x * scale.x, right: position.x + bounds.max.x * scale.x, depth: position.z + bounds.min.z };
+  }),
   /** O mato da trilha que a foice já abriu (o save). */
   trailCut: () => [...adventureState().trailCut],
   /** Os montinhos de areia (em pé ou já recolhidos) e quantos o balde já levou. */

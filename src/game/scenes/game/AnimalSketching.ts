@@ -11,6 +11,7 @@ import { framePixelReader, frameSize } from '@/game/render3d/textures3d';
 import { INK_ZOOM, artBox, inkStrokes, inkUrl, zoomed, type Box, type InkStroke, type Rgba } from '@/game/runtime/inkSketch';
 import { noteSketch, sketchProgress, type AnimalKind } from '@/game/runtime/sketches';
 import { getKeyLetter } from '@/game/runtime/accessibility';
+import { usingPad } from '@/game/runtime/gamepad';
 import { isTouchDevice } from '@/game/runtime/PauseMenu';
 import { SketchCue } from '@/game/runtime/SketchCue';
 import { SketchOverlay } from '@/game/runtime/SketchOverlay';
@@ -72,7 +73,7 @@ export class AnimalSketching {
     if (spot) {
       this.cueLost = 0;
       this.cueKind = spot.kind;
-      this.cue ??= new SketchCue(t('actions.sketch'), isTouchDevice() ? 'A' : getKeyLetter('hand'));
+      this.cue ??= new SketchCue(t('actions.sketch'), isTouchDevice() && !usingPad() ? 'A' : getKeyLetter('hand'));
       this.cue.show();
       const front = this.host.verbs.facingTile();
       this.cue.busy(this.host.verbs.handVerbAt(front.x, front.y) !== null || Boolean(this.host.itemManager?.kindAt(front.x, front.y)));

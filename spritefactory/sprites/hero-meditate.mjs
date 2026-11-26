@@ -1,6 +1,6 @@
 // ⚠ HISTÓRICO — NÃO REINSTALAR. Desde 2026-11-19 o herói é outro (o cavaleiro sem rosto de elmo redondo, viseira em T,
 // armadura de aço e capa índigo), e a folha inteira dele, com a meditação nos quadros 7 e 8, sai de
-// docs/heroi-cozy/gerar_heroi_cozy.py (`hero-v8`). Instalar este arquivo poria o cavaleiro azul-marinho antigo sentado
+// docs/heroi-cozy/gerar_heroi_cozy.py (`hero-v9`). Instalar este arquivo poria o cavaleiro azul-marinho antigo sentado
 // no meio do herói novo. Fica aqui pelo registro.
 //
 // O HERÓI MEDITANDO (pedido do autor, 2026-11-12: o minijogo de meditação na pedra da colina). Antes ele sentava com o

@@ -22,6 +22,9 @@ export default {
     await driver.open('/?play');
     await page.waitForFunction(() => window.gameDebug?.getState()?.scene === 'game', null, { timeout: 30000 });
     await sleep(1500);
+    const depth = await page.evaluate(() => window.gameDebug.render.terrainDepthAudit());
+    assert('Árvores, chão, rocha e escada sem faces sobrepostas no mesmo plano',
+      depth.faces > 0 && Object.keys(depth.overlaps).length === 0, JSON.stringify(depth));
 
     // As emendas da malha de chão, vértice a vértice (ver gameDebug.render.groundSeams).
     const seams = await page.evaluate(() => window.gameDebug.render.groundSeams());
@@ -54,8 +57,10 @@ export default {
     assert('2. Nenhum tile de grama ou terra ilhado no meio do outro tipo', tiles.isolated.length === 0, JSON.stringify(tiles.isolated.slice(0, 10)));
     assert('3. Nenhum tile de chão inteiro posto como enfeite', tiles.decorGround.length === 0, JSON.stringify(tiles.decorGround));
 
-    // As fotos: o lago de lava (os selos verdes), a borda de um planalto com escada e o jardim do fim.
-    for (const [name, x, y] of [['lago-de-lava', 6, 6], ['planalto-e-escada', 6, 46], ['jardim-alto', 30, 33]]) {
+    for (const [name, x, y] of [
+      ['lago-de-lava', 6, 6], ['planalto-e-escada', 6, 46], ['jardim-alto', 30, 33],
+      ['praia-e-rocha', 4, -15], ['escadas-no-canto', 17, 56], ['carvalho', 38, 50],
+    ]) {
       await page.evaluate(([px, py]) => {
         const g = window.gameDebug; window.gameTime.set(0.5);
         g.hero.teleport(px, py);

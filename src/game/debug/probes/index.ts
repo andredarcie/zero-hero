@@ -21,6 +21,7 @@ import { beachProbe } from './beachProbe';
 import { heroProbe } from './heroProbe';
 import { itemProbe } from './itemProbe';
 import { minigameProbe } from './minigameProbe';
+import { padProbe } from './padProbe';
 import { propProbe } from './propProbe';
 import { questProbe } from './questProbe';
 import { referenceProbe } from './referenceProbe';
@@ -49,6 +50,7 @@ export const buildProbes = (s: GameScene) => ({
   fire: fireProbe(s),
   forage: forageProbe(s),
   minigames: minigameProbe(),
+  pad: padProbe(),
   render: renderProbe(s),
   shadows: shadowProbe(s),
   reference: referenceProbe(s),

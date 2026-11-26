@@ -42,8 +42,9 @@ export const fenceTiles = () => {
 /** Quem alcança o quê, a partir do início do herói (o que bloqueia no jogo: colisão, quadros sólidos, props, NPCs). */
 export const reachable = (world) => {
   const { chunkColumns: CW, chunkRows: CH } = world.meta;
+  const local = (coordinate, size) => ((coordinate % size) + size) % size;
   const chunkOf = (x, y) => world.chunks.find((c) => c.cx === Math.floor(x / CW) && c.cy === Math.floor(y / CH));
-  const relief = (x, y) => chunkOf(x, y)?.relief?.[y % CH]?.[x % CW] ?? 0;
+  const relief = (x, y) => chunkOf(x, y)?.relief?.[local(y, CH)]?.[local(x, CW)] ?? 0;
   const canStep = makeCanStep(relief);
   const taken = new Set();
   for (const p of world.props) {
@@ -54,8 +55,8 @@ export const reachable = (world) => {
   const blocked = (x, y) => {
     const c = chunkOf(x, y);
     if (!c) return true;
-    const lx = x % CW;
-    const ly = y % CH;
+    const lx = local(x, CW);
+    const ly = local(y, CH);
     return c.collisions[ly][lx] || SOLID_GROUND.has(c.ground[ly][lx]) || SOLID_UPPER.has(c.upper[ly][lx]) || taken.has(`${x},${y}`);
   };
   const start = world.meta.playerStart;

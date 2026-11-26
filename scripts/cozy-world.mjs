@@ -12,13 +12,14 @@
 //   • os COGUMELOS do bosque: sete, espalhados na sombra das arvores, longe uns dos outros.
 //
 // IDEMPOTENTE: rodar duas vezes da o mesmo arquivo (cada passo mira o estado final, nao um delta),
-// e DETERMINISTICO (zero Math.random). `--check` falha se o disco nao for o ponto fixo.
+// e DETERMINISTICO (zero Math.random). A auditoria confere o jardim autorado com as regras atuais de relevo.
 //
 //   node scripts/cozy-world.mjs           # aplica
 //   node scripts/cozy-world.mjs --check   # so confere
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { reachable } from './cerca-do-lenhador.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const worldPath = path.resolve(here, '../public/world.json');
@@ -26,9 +27,30 @@ const check = process.argv.includes('--check');
 
 const raw = fs.readFileSync(worldPath, 'utf8');
 const world = JSON.parse(raw);
-const { worldChunksX, worldChunksY, chunkColumns: CW, chunkRows: CH } = world.meta;
-const W = worldChunksX * CW;
-const H = worldChunksY * CH;
+
+if (check) {
+  const [hearth, extraHearth] = world.props.filter((prop) => prop.type === 'hearth');
+  const [gate, extraGate] = world.props.filter((prop) => prop.type === 'gardenGate');
+  if (!hearth || extraHearth || !gate || extraGate) {
+    throw new Error('O vale deve ter uma fogueira final e um portão do jardim.');
+  }
+  const hearthApproach = `${hearth.worldX},${hearth.worldY + 1}`;
+  if (reachable(world).has(hearthApproach)) {
+    throw new Error('A entrada do jardim é alcançável com o portão fechado.');
+  }
+  const openGarden = { ...world, props: world.props.filter((prop) => prop !== gate) };
+  if (!reachable(openGarden).has(hearthApproach)) {
+    throw new Error('A entrada do jardim é inacessível com o portão aberto.');
+  }
+  console.log('world.json OK: o jardim só é alcançável com o portão aberto.');
+  process.exit(0);
+}
+
+const { worldChunksX, worldChunksY, originCx = 0, originCy = 0, chunkColumns: CW, chunkRows: CH } = world.meta;
+const minX = originCx * CW;
+const minY = originCy * CH;
+const maxX = minX + worldChunksX * CW;
+const maxY = minY + worldChunksY * CH;
 
 // The frames that stand up and block (constants.SOLID_UPPER_FRAMES), and the pines among them.
 const SOLID_UPPER = new Set([3, 4, 14, 15, 16, 17, 18, 21, 22, 25, 36, 37, 39, 40, 73, 74]);
@@ -39,6 +61,7 @@ const chunkAt = (x, y) => world.chunks.find((c) => c.cx === Math.floor(x / CW) &
 const local = (x, y) => [((y % CH) + CH) % CH, ((x % CW) + CW) % CW];
 const cell = (x, y) => {
   const c = chunkAt(x, y);
+  if (!c) return undefined;
   const [r, col] = local(x, y);
   return {
     get ground() { return c.ground[r][col]; },
@@ -134,9 +157,9 @@ const existingGate = world.props.find((p) => p.type === 'gardenGate');
 if (existingGate) {
   gateY = existingGate.worldY;
 } else {
-  while (gateY < H && !SOLID_UPPER.has(cell(HEARTH.x, gateY).upper ?? -1)) gateY += 1;
+  while (gateY < maxY && !SOLID_UPPER.has(cell(HEARTH.x, gateY)?.upper ?? -1)) gateY += 1;
   // A sebe do sul tem DUAS fileiras em alguns pontos: o portao fica na de fora, e a de dentro abre.
-  while (gateY + 1 < H && SOLID_UPPER.has(cell(HEARTH.x, gateY + 1).upper ?? -1)) {
+  while (gateY + 1 < maxY && SOLID_UPPER.has(cell(HEARTH.x, gateY + 1)?.upper ?? -1)) {
     cell(HEARTH.x, gateY).upper = null;
     cell(HEARTH.x, gateY).collision = false;
     gateY += 1;
@@ -149,10 +172,9 @@ world.props = world.props.filter((p) => p.type !== 'gardenGate');
 world.props.push({ type: 'gardenGate', worldX: GATE.x, worldY: GATE.y });
 
 const blocked = (x, y, gateClosed = true) => {
-  if (x < 0 || y < 0 || x >= W || y >= H) return true;
   if (gateClosed && x === GATE.x && y === GATE.y) return true;
   const c = cell(x, y);
-  if (c.collision || c.ground === SEA || SOLID_UPPER.has(c.upper ?? -1)) return true;
+  if (!c || c.collision || c.ground === SEA || SOLID_UPPER.has(c.upper ?? -1)) return true;
   const prop = propAt(x, y);
   return Boolean(prop && prop.type !== 'plantSpot' && prop.type !== 'moonflower' && prop.type !== 'gardenGate');
 };
@@ -184,9 +206,8 @@ for (const key of inside) {
   for (let dy = -1; dy <= 1; dy += 1) {
     for (let dx = -1; dx <= 1; dx += 1) {
       const nx = x + dx; const ny = y + dy;
-      if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
       const c = cell(nx, ny);
-      if (TREE_UPPER.has(c.upper ?? -1) && !c.collision) { c.collision = true; hedge += 1; }
+      if (c && TREE_UPPER.has(c.upper ?? -1) && !c.collision) { c.collision = true; hedge += 1; }
     }
   }
 }
@@ -240,7 +261,7 @@ const shady = (x, y) => {
 const wild = allPickups().filter((p) => isFungus(p.type) && !inside.has(`${p.worldX},${p.worldY}`));
 const candidates = [...reach]
   .map((k) => k.split(',').map(Number))
-  .filter(([x, y]) => x > 0 && y > 0 && x < W - 1 && y < H - 1 && !occupied(x, y) && shady(x, y) >= 3)
+  .filter(([x, y]) => x > minX && y > minY && x < maxX - 1 && y < maxY - 1 && !occupied(x, y) && shady(x, y) >= 3)
   // o oeste primeiro: e o bosque da coletora — e, dentro dele, uma ordem fixa
   .sort((a, b) => (a[0] + a[1] * 0.35) - (b[0] + b[1] * 0.35) || a[1] - b[1]);
 for (const [x, y] of candidates) {
@@ -267,12 +288,6 @@ for (const p of allPickups()) if (isFungus(p.type) && inside.has(`${p.worldX},${
 const open = flood(start.worldX, start.worldY, false);
 if (!open.has(`${GATE.x},${GATE.y - 1}`)) throw new Error('o portao nao leva a lugar nenhum');
 
-const out = `${JSON.stringify(world, null, 2)}\n`;
-if (check) {
-  if (out !== raw) { console.error('world.json NAO e o ponto fixo de cozy-world.mjs'); process.exit(1); }
-  console.log('world.json ok (ponto fixo)');
-} else {
-  fs.writeFileSync(worldPath, out);
-  console.log(`world.json: fogueira ${HEARTH.x},${HEARTH.y} · portao ${GATE.x},${GATE.y} · sebe +${hedge} · `
-    + `cogumelos ${wild.length} · interior ${inside.size} tiles · paredes invisiveis -${invisibleWalls} · cemiterio ${graves}`);
-}
+fs.writeFileSync(worldPath, `${JSON.stringify(world, null, 2)}\n`);
+console.log(`world.json: fogueira ${HEARTH.x},${HEARTH.y} · portao ${GATE.x},${GATE.y} · sebe +${hedge} · `
+  + `cogumelos ${wild.length} · interior ${inside.size} tiles · paredes invisiveis -${invisibleWalls} · cemiterio ${graves}`);

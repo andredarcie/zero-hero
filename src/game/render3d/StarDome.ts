@@ -23,15 +23,14 @@ const VERTEX = /* glsl */ `
   }
 `;
 
-const FRAGMENT = /* glsl */ `
-  uniform float uLevel;
-  uniform vec3 uSky;
-  uniform float uTime;
-  uniform vec3 uMeteorA;
-  uniform vec3 uMeteorB;
-  uniform float uMeteorT;
-  varying vec3 vDir;
-
+/**
+ * O CÉU ESTRELADO, em GLSL: a Via Láctea e as três camadas de estrelas na direção `d`, mais o azul do ar da noite
+ * (`zhNightAir`). É UM SÓ para o jogo inteiro (pedido do autor, 2026-11-20: "o céu estrelado na praia tem que ser o
+ * mesmo de quando o herói dorme e a câmera sobe"): a cúpula da primeira noite (aqui embaixo) e o céu do mar
+ * (render3d/SeaSky) chamam as MESMAS funções — as mesmas estrelas nos mesmos lugares, a mesma faixa da Via Láctea.
+ * Estrela nova, cor ou cintilação se muda AQUI, nunca numa cópia.
+ */
+export const STAR_SKY_GLSL = /* glsl */ `
   vec4 zhHash43(vec3 p) {
     vec4 p4 = fract(vec4(p.xyzx) * vec4(0.1031, 0.1030, 0.0973, 0.1099));
     p4 += dot(p4, p4.wzxy + 33.33);
@@ -69,7 +68,7 @@ const FRAGMENT = /* glsl */ `
 
   // Uma camada de estrelas: no máximo uma por célula de uma grade de cubo, longe da borda da célula (a estrela nunca
   // é cortada por ela). 'pix' é o tamanho de um pixel em unidades da face.
-  vec3 starLayer(vec3 d, float cells, float density, float bright, float seed, float pix) {
+  vec3 starLayer(vec3 d, float cells, float density, float bright, float seed, float pix, float time) {
     vec3 a = abs(d);
     vec2 uv;
     float face;
@@ -82,7 +81,7 @@ const FRAGMENT = /* glsl */ `
     if (h.x > density) return vec3(0.0);
     vec2 q = (g - cell - 0.2 - 0.6 * h.yz) / max(pix * (1.0 + dot(uv, uv)) * cells * 0.5, 1e-5);
     float m = pow(h.w, 5.0);
-    float tw = 1.0 + (0.35 - 0.2 * m) * sin(uTime * (1.3 + 3.6 * h.y) + h.z * 41.0);
+    float tw = 1.0 + (0.35 - 0.2 * m) * sin(time * (1.3 + 3.6 * h.y) + h.z * 41.0);
     float sigma = 0.42 + 0.6 * m;
     float glow = exp(-dot(q, q) / (2.0 * sigma * sigma));
     if (m > 0.3) {
@@ -93,18 +92,19 @@ const FRAGMENT = /* glsl */ `
     return starTint(fract(h.y * 7.31 + h.w * 3.7)) * bright * (0.1 + 0.9 * m) * tw * glow;
   }
 
-  void main() {
-    vec3 d = normalize(vDir);
-    float pix = max(length(fwidth(d)), 1e-5);
-    float e = d.y;
+  // O AR DA NOITE sobre a cor do horizonte ('base', a do fog): junto dele, o brilho do ar (um azul fundo, o mesmo da
+  // névoa da beira do mundo); no zênite, quase preto. 'e' é a altura da direção (d.y).
+  vec3 zhNightAir(vec3 base, float e) {
+    vec3 horizon = base + vec3(0.012, 0.02, 0.05);
+    vec3 zenith = base + vec3(0.0015, 0.002, 0.007);
+    return e < 0.0 ? horizon : mix(horizon, zenith, smoothstep(0.0, 0.35, e));
+  }
 
-    // O céu: no horizonte, o brilho do ar (um azul fundo, o mesmo da névoa da beira do mundo); no zênite, quase preto.
-    vec3 horizon = uSky + vec3(0.012, 0.02, 0.05);
-    vec3 zenith = uSky + vec3(0.0015, 0.002, 0.007);
-    vec3 col = e < 0.0 ? horizon : mix(horizon, zenith, smoothstep(0.0, 0.35, e));
-
+  // A luz das estrelas na direção 'd' (soma-se ao céu): a Via Láctea e as três camadas. 'pix' é o tamanho de um pixel
+  // (o fwidth da direção, medido por quem chama, fora de qualquer desvio) e 'time' o relógio da cintilação.
+  vec3 zhStarSky(vec3 d, float pix, float time) {
     // A Via Láctea: uma faixa larga e fraca, um miolo mais claro, nuvens, e a fenda de poeira correndo no meio. Ela
-    // atravessa o quadro de baixo à esquerda para cima à direita.
+    // sobe do horizonte norte, de baixo à esquerda para cima à direita.
     vec3 bandN = normalize(vec3(0.637, -0.704, -0.314));
     float bl = dot(d, bandN);
     float clouds = zhFbm(d * 5.0 + 3.1);
@@ -112,15 +112,36 @@ const FRAGMENT = /* glsl */ `
     float rift = smoothstep(0.4, 0.7, zhFbm(d * 9.0 + 9.7)) * exp(-(bl + 0.01) * (bl + 0.01) / 0.0022);
     float band = (exp(-bl * bl / 0.06) * 0.35 + exp(-bl * bl / 0.008) * 0.65) * (0.25 + clouds * 0.9 + knots * 0.35);
     band *= 1.0 - 0.85 * rift;
-    float sky = smoothstep(0.0, 0.16, e);
-    col += mix(vec3(0.36, 0.4, 0.55), vec3(0.66, 0.58, 0.48), clouds) * band * 0.2 * sky;
+    // O ar apaga as estrelas só bem rente ao horizonte (cheias a ~5° de altura; eram ~9°): a praia só enxerga os
+    // primeiros 16° de céu acima do mar, e com o apagado largo metade dessa faixa saía quase vazia.
+    float sky = smoothstep(0.0, 0.09, d.y);
+    vec3 light = mix(vec3(0.36, 0.4, 0.55), vec3(0.66, 0.58, 0.48), clouds) * band * 0.2;
 
     // As estrelas: a poeira das fracas mora quase toda na faixa; as médias e as fortes, pelo céu inteiro. Perto do
     // horizonte o ar apaga as fracas.
-    vec3 stars = starLayer(d, 300.0, 0.06 + 0.7 * band, 0.14, 1.0, pix)
-      + starLayer(d, 120.0, 0.13, 0.5, 2.0, pix)
-      + starLayer(d, 36.0, 0.11, 1.45, 3.0, pix);
-    col += stars * sky;
+    light += starLayer(d, 300.0, 0.06 + 0.7 * band, 0.14, 1.0, pix, time)
+      + starLayer(d, 120.0, 0.13, 0.5, 2.0, pix, time)
+      + starLayer(d, 36.0, 0.11, 1.45, 3.0, pix, time);
+    return light * sky;
+  }
+`;
+
+const FRAGMENT = /* glsl */ `
+  uniform float uLevel;
+  uniform vec3 uSky;
+  uniform float uTime;
+  uniform vec3 uMeteorA;
+  uniform vec3 uMeteorB;
+  uniform float uMeteorT;
+  varying vec3 vDir;
+  ${STAR_SKY_GLSL}
+
+  void main() {
+    vec3 d = normalize(vDir);
+    float pix = max(length(fwidth(d)), 1e-5);
+    float e = d.y;
+
+    vec3 col = zhNightAir(uSky, e) + zhStarSky(d, pix, uTime);
 
     // A estrela cadente: a cabeça percorre o arco de A a B (uMeteorT de 0 a 1), acende e se apaga no caminho.
     if (uMeteorT >= 0.0) {

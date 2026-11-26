@@ -154,6 +154,9 @@ export const t = (key: string): string => {
   return typeof value === 'string' ? withKeyNames(value) : key;
 };
 
+/** Existe um texto nesta chave (na língua do jogo ou no inglês)? Para quem tem uma variante opcional (a do controle). */
+export const hasText = (key: string): boolean => typeof find(key) === 'string';
+
 // Structured lookup (arrays/objects).
 const tRaw = <T>(key: string): T | undefined => {
   const value = find(key);

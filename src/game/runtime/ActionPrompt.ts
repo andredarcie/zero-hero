@@ -3,6 +3,7 @@ import * as Engine from '@/game/engine';
 import { FONT_FAMILY, SCENE_DEPTHS } from '@/game/constants';
 import { keycapTexture } from '@/game/render3d/placementTexture';
 import { getKeyLetter, getTextScale, isReducedMotion } from '@/game/runtime/accessibility';
+import { usingPad } from '@/game/runtime/gamepad';
 import { KEY_BG, KEY_BORDER, KEY_GLYPH } from '@/game/runtime/uiStyle';
 import type { WorldCamera } from '@/game/runtime/WorldCamera';
 
@@ -83,9 +84,9 @@ export class ActionPrompt {
       .setVisible(false);
   }
 
-  /** No toque os botões têm nome fixo; no teclado a tecla é a que a pessoa escolheu. */
+  /** No toque os botões têm nome fixo; no teclado a tecla é a que a pessoa escolheu; no controle, o botão dele. */
   private letterOf(key: PromptRow['key']): string {
-    if (this.touch) return key === 'hand' ? 'A' : 'B';
+    if (this.touch && !usingPad()) return key === 'hand' ? 'A' : 'B';
     return getKeyLetter(key);
   }
 

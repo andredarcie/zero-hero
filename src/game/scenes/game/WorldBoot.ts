@@ -333,6 +333,9 @@ export class WorldBoot {
     else if (this.host.intro.openingTalk) void this.host.intro.playOpeningTalk();
     // Depois dos créditos: a manhã no acampamento (MorningAfter).
     else if (this.host.morning.pending) void this.host.morning.play();
-    else if (skipIntro) this.host.actions.showControlsHint();
+    else {
+      if (this.host.adventure) this.host.cameras.main.fadeIn(500, 0, 0, 0);
+      if (skipIntro) this.host.actions.showControlsHint();
+    }
   }
 }

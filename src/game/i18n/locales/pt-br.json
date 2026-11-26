@@ -126,6 +126,7 @@
     "reduceMotion": "Reduzir movimento e clarões",
     "instantText": "Texto instantâneo",
     "calmGames": "Minijogos sem pressa",
+    "padRumble": "Vibração do controle",
     "keyHand": "Tecla da mão",
     "keyUse": "Tecla de usar",
     "pressKey": "Aperte uma tecla",
@@ -725,13 +726,15 @@
       },
       "clean": {
         "keys": "Passe a bucha no cogumelo com o mouse para limpar a terra.",
-        "touch": "Arraste a bucha no cogumelo para limpar."
+        "touch": "Arraste a bucha no cogumelo para limpar.",
+        "pad": "Passe a bucha no cogumelo com o direcional para limpar a terra."
       }
     },
     "sketch": {
       "draw": {
         "keys": "Segure {Z} (ou o botão do mouse) para desenhar. Quando o bicho levantar a cabeça, solte, senão ele foge  ·  {X} fecha",
-        "touch": "Segure o dedo na tela para desenhar. Quando o bicho levantar a cabeça, solte, senão ele foge  ·  o × fecha"
+        "touch": "Segure o dedo na tela para desenhar. Quando o bicho levantar a cabeça, solte, senão ele foge  ·  o × fecha",
+        "pad": "Segure {Z} para desenhar. Quando o bicho levantar a cabeça, solte, senão ele foge  ·  {X} fecha"
       },
       "done": {
         "keys": "Desenho pronto: foi para o caderno de campo. Aperte {Z} para fechar.",
@@ -764,15 +767,18 @@
     },
     "lens": {
       "keys": "Segure o botão do mouse e esfregue a lente para polir (ou aperte {Z}).",
-      "touch": "Esfregue a lente com o dedo para polir."
+      "touch": "Esfregue a lente com o dedo para polir.",
+      "pad": "Aperte {Z} várias vezes para polir a lente."
     },
     "sky": {
       "keys": "Use {←} {↑} {↓} {→} ou arraste o céu com o mouse para encontrar os planetas.",
-      "touch": "Arraste o céu com o dedo para encontrar os planetas."
+      "touch": "Arraste o céu com o dedo para encontrar os planetas.",
+      "pad": "Mova a mira com o direcional para encontrar os planetas."
     },
     "paint": {
-      "keys": "Escolha a tinta ({1} a {4} ou clique no pote) e pinte arrastando o mouse. {Enter} termina.",
-      "touch": "Toque num pote e pinte arrastando o dedo."
+      "keys": "Pinte arrastando o mouse, ou com as setas e {Z} segurado  ·  tinta: {1} a {4}  ·  {Enter} termina",
+      "touch": "Toque num pote e pinte arrastando o dedo.",
+      "pad": "Mova o pincel com o direcional e segure {Z} para pintar  ·  {PgUp} {PgDn} trocam a tinta  ·  {Enter} termina  ·  {X} sai"
     }
   },
   "home": {
@@ -797,7 +803,14 @@
       "write": "Escrever",
       "cancel": "Deixar",
       "keys": "Enter escreve  ·  Esc deixa",
-      "keysTouch": "Escreva e toque em Escrever"
+      "keysTouch": "Escreva e toque em Escrever",
+      "keysPad": "Z põe a letra  ·  Delete apaga  ·  Enter escreve na placa  ·  X deixa",
+      "pad": {
+        "shift": "Aa",
+        "space": "espaço",
+        "erase": "apagar",
+        "done": "escrever"
+      }
     },
     "sundial": {
       "clock": "24",

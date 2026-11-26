@@ -5,6 +5,7 @@ import { ZeroTheHeroGame } from '@/game/ZeroTheHeroGame';
 import { installDevLauncher } from '@/game/debug/DevLauncher';
 import { applyHtmlLang } from '@/game/i18n/i18n';
 import { installKeyRemap } from '@/game/runtime/accessibility';
+import { installGamepad } from '@/game/runtime/gamepad';
 import { warmPaper } from '@/game/runtime/uiStyle';
 
 // DUAS ROTAS, e só: `/` é o jogo e `/editor` é o editor do mundo aberto — os DOIS andares dele
@@ -16,6 +17,8 @@ const appMode = pathname.endsWith('/editor') ? 'editor' : 'game';
 // Reflect the detected/saved locale on <html lang> before the game boots (the language screen
 // updates it again once the player picks).
 applyHtmlLang();
+// O controle (Xbox, PlayStation, Switch…): cada botão vira a tecla que o jogo já escuta (ver runtime/gamepad).
+installGamepad();
 installKeyRemap();
 
 declare global {

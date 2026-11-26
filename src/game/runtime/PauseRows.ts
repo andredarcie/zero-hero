@@ -2,7 +2,7 @@
 // uiStyle). Quem decide o que cada linha muda é o PauseMenu.
 
 import { t } from '@/game/i18n/i18n';
-import { getKeyLetter, setKeyCapture, setKeyCode, type BoundAction } from '@/game/runtime/accessibility';
+import { getBoundKeyLetter, setKeyCapture, setKeyCode, type BoundAction } from '@/game/runtime/accessibility';
 import type { PauseMenu } from './PauseMenu';
 
 const SLIDER_STEPS = 10;
@@ -131,7 +131,8 @@ export class PauseRows {
           this.host.rows.forEach((r) => r.refresh());
         };
       },
-      refresh: () => { value.textContent = getKeyLetter(def.action); },
+      // A linha de trocar TECLA mostra a tecla, mesmo com o jogador no controle.
+      refresh: () => { value.textContent = getBoundKeyLetter(def.action); },
     };
     el.addEventListener('click', () => row.activate());
     el.style.cursor = 'pointer';

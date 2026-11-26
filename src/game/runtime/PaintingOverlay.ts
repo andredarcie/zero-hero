@@ -1,6 +1,7 @@
 import { DYE_COLORS, DYE_KINDS, type DyeKind } from '@/game/quests/dyePlants';
 import { t } from '@/game/i18n/i18n';
 import { MinigameCaption } from '@/game/runtime/MinigameCaption';
+import { PaintKeyBrush } from '@/game/runtime/PaintKeyBrush';
 import { KEY_BORDER, KEY_GLYPH, PIXEL_FONT } from '@/game/runtime/uiStyle';
 import { createCanvas } from '@/game/platform/platform';
 
@@ -110,6 +111,8 @@ export class PaintingOverlay {
   private strokeSteps = 0;
   private hasPaint = false;
   private destroyed = false;
+  /** O pincel das setas e do controle (ver PaintKeyBrush). */
+  private readonly brush: PaintKeyBrush;
 
   public constructor(private readonly cb: PaintingOverlayCallbacks, earlier?: HTMLCanvasElement) {
     if (!document.getElementById(STYLE_ID)) {
@@ -177,9 +180,15 @@ export class PaintingOverlay {
     this.canvas.addEventListener('pointerup', this.handleUp);
     this.canvas.addEventListener('pointercancel', this.handleUp);
     document.body.appendChild(this.root);
+    this.brush = new PaintKeyBrush({
+      canvas: this.canvas, width: PAINT_W, height: PAINT_H,
+      paint: (from, to) => this.brushStroke(from, to),
+      cycle: (delta) => this.pick(DYE_KINDS[(DYE_KINDS.indexOf(this.color) + delta + DYE_KINDS.length) % DYE_KINDS.length]),
+    }, this.root);
     this.layout();
     window.addEventListener('resize', this.layout);
     window.addEventListener('keydown', this.handleKey, true);
+    window.addEventListener('keyup', this.handleKeyUp, true);
     this.caption.show('paint');
   }
 
@@ -188,6 +197,8 @@ export class PaintingOverlay {
     this.destroyed = true;
     window.removeEventListener('resize', this.layout);
     window.removeEventListener('keydown', this.handleKey, true);
+    window.removeEventListener('keyup', this.handleKeyUp, true);
+    this.brush.destroy();
     this.root.remove();
     this.caption.destroy();
   }
@@ -295,9 +306,20 @@ export class PaintingOverlay {
     if (!this.destroyed) this.cb.onCancel(this.canvas);
   }
 
+  /** Um traço do pincel das setas (PaintKeyBrush): o mesmo carimbo e a mesma linha do mouse. */
+  private brushStroke(from: { x: number; y: number } | undefined, to: { x: number; y: number }): void {
+    if (from) this.line(from, to);
+    else { this.stamp(to.x, to.y); this.cb.onStroke(); }
+    this.hasPaint = true;
+    this.doneBtn.disabled = false;
+  }
+
   private readonly handleKey = (event: KeyboardEvent): void => {
+    // As setas, o Z segurado e a troca de tinta são do pincel; nenhuma delas chega ao jogo.
+    if (this.brush.keyDown(event)) { event.preventDefault(); event.stopPropagation(); return; }
     if (event.repeat) return;
-    if (event.code === 'Escape') {
+    // Esc ou X saem (o que já foi pintado fica para a próxima); é o X que o B do controle aperta.
+    if (event.code === 'Escape' || event.code === 'KeyX' || event.code === 'KeyK') {
       event.preventDefault();
       this.cancel();
     } else if (event.code === 'Enter' || event.code === 'NumpadEnter') {
@@ -308,4 +330,6 @@ export class PaintingOverlay {
       this.pick(DYE_KINDS[Number(event.code.slice(5)) - 1]);
     }
   };
+
+  private readonly handleKeyUp = (event: KeyboardEvent): void => this.brush.keyUp(event);
 }

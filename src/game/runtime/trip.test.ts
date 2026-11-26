@@ -18,17 +18,17 @@ describe('a viagem do chá da Shui (pedido do autor)', () => {
     }
   });
 
-  it('a câmera entra no elmo com a tela toda escura, e salta para o voo debaixo do clarão', () => {
+  it('as duas trocas de câmera ficam cobertas sem clarão branco', () => {
     expect(tripFrame(TRIP_EYE_AT_S - 0.01).view).toBe('game');
     expect(tripFrame(TRIP_EYE_AT_S).view).toBe('eye');
     expect(tripFrame(TRIP_EYE_AT_S).dark).toBeGreaterThan(0.99);
     expect(tripFrame(TRIP_EYE_AT_S).visor).toBe(1);
     expect(tripFrame(TRIP_FLIGHT_AT_S - 0.01).view).toBe('eye');
     expect(tripFrame(TRIP_FLIGHT_AT_S).view).toBe('flight');
-    expect(tripFrame(TRIP_FLIGHT_AT_S).white).toBeGreaterThan(0.99);
-    // Com movimento reduzido, a tela nunca fica toda branca: o salto passa pelo escuro.
-    expect(tripFrame(TRIP_FLIGHT_AT_S, true).white).toBeLessThanOrEqual(0.5);
+    expect(tripFrame(TRIP_FLIGHT_AT_S).dark).toBeGreaterThan(0.99);
+    expect(tripFrame(TRIP_FLIGHT_AT_S).white).toBe(0);
     expect(tripFrame(TRIP_FLIGHT_AT_S, true).dark).toBeGreaterThan(0.99);
+    expect(tripFrame(23.2).white).toBeLessThan(0.35);
   });
 
   it('as etapas vêm na ordem do pedido: pontos pretos, cores, o elmo abrindo, o túnel, e depois o voo', () => {

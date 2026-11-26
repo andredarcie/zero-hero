@@ -17,7 +17,7 @@ export default {
       if (sessionStorage.getItem('praia')) return;
       sessionStorage.setItem('praia', '1');
       localStorage.setItem('zh.cozy.v1', JSON.stringify({
-        started: true, introSeen: true, day: 2, clock: 0.45, respawn: { worldX: 43, worldY: 5 }, mistCleared: true,
+        started: true, introSeen: true, day: 2, clock: 0.45, respawn: { worldX: 43, worldY: 5 },
       }));
     });
     await driver.open('/?play');
@@ -56,20 +56,35 @@ export default {
     const relief = [];
     for (const [x, y] of [[42, -1], [42, -2], [41, -4], [41, -5], [45, -6], [45, -7], [45, -8]]) relief.push((await at(x, y)).relief);
     assert('A trilha sobe em dois lances e desce em dois (escadas 2, 9, 11 e 4)', JSON.stringify(relief) === JSON.stringify([2, 1, 9, 8, 11, 1, 4]), JSON.stringify(relief));
-    await teleport(42, -2);
+    await teleport(42, 0);
+    await driver.walk('up', 2);
     await hide();
     await sleep(900);
     await shot('02-terraco', { note: 'O terraço, no alto da primeira escada' });
-    await teleport(42, -5);
+    await driver.walk('up');
+    await driver.walk('left');
+    await driver.walk('up', 2);
+    const atLookout = await g(() => ({
+      hero: window.gameDebug.hero.at(),
+      cutscene: window.gameDebug.getState().cutsceneActive,
+      mist: window.gameDebug.valley.gardenMist()?.count ?? 0,
+    }));
+    assert('Subir ao mirante da praia mantém a névoa no jardim e não dispara cena',
+      atLookout.hero.x === 41 && atLookout.hero.y === -5 && !atLookout.cutscene && atLookout.mist > 0, JSON.stringify(atLookout));
+    if (atLookout.cutscene) return;
     await hide();
-    await sleep(3200);
     // a câmera não baixa mais sozinha (o autor, 2026-11-19: "a câmera fica como é padrão mesmo, fixa")
     let v = await vista();
     assert('No mirante a câmera continua a de sempre', v.blend < 0.05 && !v.lens && v.fovExtra === 0, JSON.stringify(v));
     await shot('03-mirante', { note: 'O mirante, com a câmera de sempre' });
-    await teleport(45, -11);
+    await driver.walk('right', 4);
+    await driver.walk('up', 6);
     await hide();
-    await sleep(3200);
+    const atDune = await g(() => ({
+      hero: window.gameDebug.hero.at(), cutscene: window.gameDebug.getState().cutsceneActive,
+    }));
+    assert('O herói chega a pé à duna sem perder o controle', atDune.hero.x === 45 && atDune.hero.y === -11
+      && !atDune.cutscene, JSON.stringify(atDune));
     v = await vista();
     assert('Na duna a câmera volta a ser a de sempre', v.blend < 0.05 && !v.lens && v.fovExtra === 0, JSON.stringify(v));
     await shot('04-pe-da-descida', { note: 'O pé da descida, na duna' });
@@ -79,6 +94,12 @@ export default {
     const palm = palms[0];
     assert('Há coqueiros de vários portes, e o pé de cada um barra', palms.length >= 40 && new Set(palms.map((p) => p.kind)).size >= 3
       && (await at(palm.x, palm.y)).solid, `${palms.length} coqueiros`);
+    const palmPlanes = await g(() => window.gameDebug.beach.palmPlanes());
+    const overlappingPlanes = palmPlanes.flatMap((a, index) => palmPlanes.slice(index + 1)
+      .filter((b) => a.depth === b.depth && a.left < b.right && b.left < a.right));
+    assert('Coqueiros vizinhos que se sobrepõem têm profundidades distintas',
+      palmPlanes.length === palms.length && overlappingPlanes.length === 0,
+      `${overlappingPlanes.length} pares coplanares em ${palmPlanes.length} coqueiros`);
     await teleport(30, -12);
     await hide();
     await sleep(900);

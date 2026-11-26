@@ -21,6 +21,9 @@ import { WaterRipples } from '../waterRipples';
 import type { World3D } from '../World3D';
 import { MIN_CAST_LEN } from './worldDefs';
 
+// A rocha fica acima do encontro com o gramado. A base das faces continua no chão.
+const ROCK_SURFACE_LIFT = 1 / 128;
+
 /** O que TerrainBaker usa de World3D. */
 export type TerrainBakerHost = Pick<World3D,
   'appliedMoonShadow' | 'camTarget' | 'elapsed' | 'emit' | 'features' | 'ground' | 'mirror' | 'moonCastRotY' | 'moonDimmed' | 'params' | 'probe'
@@ -170,7 +173,7 @@ export class TerrainBaker {
       // o tom da pedra em manchas (rockToneAt): o mesmo no topo inteiro e no beiço, para a borda não saltar
       // O topo vai no material da PEDRA, não no do chão: o do chão troca a rampa da folha pelo capim do bioma, e a
       // laje de rocha (cliffRock, cinza neutro) passava por folha e saía verde.
-      const contour = buildReliefContourGeometry(rock.near, rock.frameOf, rock.field, rock.levelAt, stairSet, rock.blocked, rockTopToneAt);
+      const contour = buildReliefContourGeometry(rock.near, rock.frameOf, rock.field, rock.levelAt, stairSet, rock.blocked, rockTopToneAt, { raisedSurface: ROCK_SURFACE_LIFT });
       const tops = new THREE.Mesh(contour.tops, mats.rock);
       tops.userData.flatTop = true; // é chão: na água ele seria verso, e o espelho pagaria por nada
       push(tops);
@@ -179,7 +182,7 @@ export class TerrainBaker {
       const highWhole = contour.whole.filter((t) => rock.levelAt(t.x, t.z) > 0);
       if (highWhole.length > 0) {
         const whole = new THREE.Mesh(
-          buildFlatTileGeometry(highWhole, (x, z) => rock.levelAt(x, z) * RELIEF_HEIGHT, undefined, undefined, rockTopToneAt),
+          buildFlatTileGeometry(highWhole, (x, z) => rock.levelAt(x, z) * RELIEF_HEIGHT + ROCK_SURFACE_LIFT, undefined, undefined, rockTopToneAt),
           mats.rock,
         );
         whole.userData.flatTop = true;
@@ -278,6 +281,27 @@ export class TerrainBaker {
     this.host.appliedMoonShadow.alpha = alpha;
     this.host.appliedMoonShadow.length = length;
     this.host.appliedMoonShadow.rotY = this.host.moonCastRotY;
+  }
+
+  /**
+   * SÓ A ESCURIDÃO mudou (o comprimento e o rumo são os mesmos): reescreve o alfa de cada sombra no lugar, sem refazer
+   * nem reordenar o campo. É o caso do amanhecer e do entardecer, em que a sombra de sol nasce e some em dezenas de
+   * degraus seguidos (skyPreset.SKY_TRACK). Medido na mata: o assado inteiro leva 0,5 a 0,9 ms; isto, menos de 0,1.
+   */
+  public fadeMoonCastField(): void {
+    const alpha = bakedShadowAlpha(this.host.params.moonShadowAlpha);
+    // O campo fica vazio abaixo de 0,02 (fillMoonCastField): cruzar essa linha é montar ou esvaziar, não tingir.
+    if (alpha <= 0.02 || this.host.appliedMoonShadow.alpha <= 0.02) {
+      this.fillMoonCastField();
+      return;
+    }
+    const field = this.host.tiles.moonCastField;
+    for (const tile of this.host.tiles.castableSolids) {
+      if (tile.moonSlot !== undefined) field.setInstanceAlpha(tile.moonSlot, alpha);
+    }
+    // Toda sombra voltou ao alfa cheio, como num assado: nada está atenuado.
+    this.host.moonDimmed.length = 0;
+    this.host.appliedMoonShadow.alpha = alpha;
   }
 
   /**

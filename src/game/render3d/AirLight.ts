@@ -40,7 +40,7 @@ const MASK_RES = 16;
  * Centrada no alvo, a máscara acabava antes do alto da tela, e o que estava lá ficava sem sombra e sem ar aceso.
  */
 const MASK_NORTH = 6;
-/** Passos do raio dentro da camada de ar. O passo é sorteado por pixel (e desmanchado no acabamento). */
+/** Passos do raio dentro da camada de ar. O passo é sorteado numa grade presa ao mundo (ver zhAirJitter). */
 const STEPS = 8;
 /** Quantas chamas acendem o ar ao mesmo tempo: as mais perto da câmera, mais a tocha. */
 const FIRES = 5;
@@ -72,6 +72,7 @@ const FRAGMENT = /* glsl */ `
   uniform vec3 uSunAir;
   uniform vec3 uSunDir;
   uniform vec2 uHazeDrift;
+  uniform float uJitterRes;
   uniform vec4 uFirePos[${FIRES}];
   uniform vec3 uFireCol[${FIRES}];
   uniform float uHeat;
@@ -79,6 +80,16 @@ const FRAGMENT = /* glsl */ `
 
   // Ruído de gradiente intercalado (Jimenez): uma média de 3×3 dele é quase lisa, que é o que o acabamento faz.
   float zhIgn(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
+
+  // O SORTEIO DO PASSO, PRESO AO MUNDO. Ele era lido em gl_FragCoord, o pixel da TELA: parado, a suavização o apagava;
+  // andando, o mundo deslizava por baixo de um pontilhado que ficava parado na tela, e a bruma inteira tremia — um
+  // ruído "andando com a tela" (o autor achou no celular, 2026-11-20; medido na bruma da manhã: o ruído ficava em (0,0)
+  // na tela enquanto o chão andava 3–6 px por quadro). Agora é sorteado numa grade DO MUNDO no ponto que o raio acerta:
+  // o que sobra do pontilhado anda junto com o chão. A célula da grade tem ~1 pixel do alvo do ar (uJitterRes, por tile,
+  // em potência de 2: muda com o zoom, nunca com o passo) — célula maior que o pixel a suavização não desmancha (na grade
+  // da arte, 16 por tile, o ruído parado saía 2,4× mais forte), e menor ela volta a serrilhar.
+  // (x, y − z) serve ao chão deitado (varia em x e z) e ao que está em pé (varia em x e y), que é tudo o que o raio acerta.
+  float zhAirJitter(vec3 p) { return zhIgn(floor(vec2(p.x, p.y - p.z) * uJitterRes)); }
 
   vec2 zhMaskUv(vec2 xz) {
     return vec2((xz.x - uMaskRect.x) / uMaskRect.z, (uMaskRect.y - xz.y) / uMaskRect.w);
@@ -107,7 +118,7 @@ const FRAGMENT = /* glsl */ `
         float cover = clamp((1.0 - textureLod(tMask, guv, 5.0).r) * uMaskGain * 2.4, 0.0, 1.0);
         float bank = 0.5 + texture2D(uSkyNoise, P.xz * 0.04 + uHazeDrift).b;
         float body = mix(uOpenAir, 1.0, cover) * bank;
-        float jitter = zhIgn(gl_FragCoord.xy);
+        float jitter = zhAirJitter(P);
         float acc = 0.0;
         for (int i = 0; i < ${STEPS}; i++) {
           vec3 p = uCamPos + D * (tIn + seg * (float(i) + jitter) / ${STEPS.toFixed(1)});
@@ -160,7 +171,7 @@ const FRAGMENT = /* glsl */ `
 
 /**
  * A SUAVIZAÇÃO do ar: uma tenda de 3×3 texels (quatro leituras bilineares nos cantos do texel). O passo do raio é
- * sorteado por pixel, e esse sorteio é feito para sumir exatamente numa média de 3×3; somar o ar cru ao quadro deixava
+ * sorteado numa grade do mundo do tamanho de um pixel (zhAirJitter), e a média de 3×3 desmancha esse sorteio; somar o ar cru ao quadro deixava
  * o pontilhado à vista onde ele varia mais — o corpo do herói saía riscado de listras.
  */
 const SMOOTH_FRAGMENT = /* glsl */ `
@@ -194,7 +205,9 @@ export class AirLight {
   private readonly uniforms: Record<string, THREE.IUniform>;
   /** A lista de filhos da passada da máscara: as luzes (todas, pela lei do pool) e as sombras. */
   private readonly kept: THREE.Object3D[] = [];
-  private readonly scratch = { clear: new THREE.Color(), tint: new THREE.Color(), fire: new THREE.Color() };
+  private readonly scratch = {
+    clear: new THREE.Color(), tint: new THREE.Color(), fire: new THREE.Color(), a: new THREE.Vector3(), b: new THREE.Vector3(),
+  };
   /** O ar foi desenhado neste quadro? (O acabamento só o soma se sim.) */
   public live = false;
   /** O contador de quadros: a máscara é refeita nos ímpares (ver render). */
@@ -237,6 +250,7 @@ export class AirLight {
       uSunAir: { value: new THREE.Color(0, 0, 0) },
       uSunDir: skyUniforms.uSunDir,
       uHazeDrift: { value: new THREE.Vector2() },
+      uJitterRes: { value: 32 },
       uFirePos: { value: new Float32Array(FIRES * 4) },
       uFireCol: { value: new Float32Array(FIRES * 3) },
       uHeat: { value: 1 },
@@ -426,9 +440,25 @@ export class AirLight {
     u.uAirTop.value = Math.max(0.5, params.airHeight);
     u.uOpenAir.value = Math.min(1, Math.max(0, params.airOpen));
     (u.uHazeDrift.value as THREE.Vector2).copy(skyUniforms.uCloudDrift.value).multiplyScalar(0.11);
+    u.uJitterRes.value = this.jitterRes();
     // O tremor do ar quente é movimento de tela: com "reduzir movimento" ligado ele não acontece.
     u.uHeat.value = isReducedMotion() ? 0 : 1;
     this.draw();
+  }
+
+  /**
+   * A grade do sorteio do passo (zhAirJitter), em células por tile: quantos pixels do alvo do ar um tile ocupa na
+   * horizontal, no chão do alvo da câmera, arredondado a uma potência de 2. Medido na bruma da manhã: célula de ~1 pixel
+   * é a que a suavização mais desmancha. A potência de 2 a deixa parada enquanto o herói anda (só o zoom a muda).
+   */
+  private jitterRes(): number {
+    const { camera, camTarget } = this.host;
+    const { a, b } = this.scratch;
+    a.copy(camTarget).project(camera);
+    b.set(camTarget.x + 1, camTarget.y, camTarget.z).project(camera);
+    const px = Math.abs(b.x - a.x) * 0.5 * this.raw.width;
+    if (!Number.isFinite(px) || px <= 0) return 32;
+    return Math.min(256, Math.max(8, 2 ** Math.round(Math.log2(px))));
   }
 
   /** Desenha a máscara e o ar uma vez no carregamento: o ANGLE só termina um programa no primeiro draw. */

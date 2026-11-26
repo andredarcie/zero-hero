@@ -10,7 +10,7 @@ import { createCanvas } from '@/game/platform/platform';
 /**
  * A NÉVOA DO JARDIM ALTO (pedido do autor: a mata mais antiga do vale guarda um mistério, com a neblina das
  * florestas antigas). Ela cobre o jardim inteiro até o herói pisar no cume pela primeira vez; então um vento
- * passa e a leva embora (GameScene.playMistClearing), e o save lembra (`mistCleared`).
+ * passa e a leva embora (GardenUnlock.playMistClearing), e o save lembra (`mistCleared`).
  *
  * Duas camadas: NUVENS em pé (billboards macios espalhados pelo jardim e pela sebe, em alturas diferentes, que
  * derivam devagar e respiram) e LENÇÓIS deitados rente ao chão do planalto. Não é luz: a névoa é um véu
@@ -171,7 +171,7 @@ export class GardenMist {
 
   public constructor(
     private readonly scene: Engine.Scene,
-    center: { x: number; y: number },
+    private readonly center: { x: number; y: number },
     /** Onde o herói está, em tiles (a névoa se abre em volta dele); sem ele, a névoa não se abre. */
     private readonly heroAt: () => { x: number; y: number } | null = () => null,
   ) {
@@ -210,6 +210,12 @@ export class GardenMist {
     this.tick(0);
     // No fim de cada quadro, e não no update da cena: numa cena (a do vento, inclusive) o update para.
     scene.events.on(Engine.Scenes.Events.POST_UPDATE, this.onFrame, this);
+  }
+
+  public coversTile(wx: number, wy: number): boolean {
+    const x = wx - this.center.x;
+    const y = wy - this.center.y;
+    return x >= REACH.x0 && x <= REACH.x1 && y >= REACH.y0 && y <= REACH.y1;
   }
 
   /** O quadro, medido (debug/Profiler: seção `life.gardenMist`; desligado, não custa nada). */

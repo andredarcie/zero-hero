@@ -58,7 +58,13 @@ export default {
     await shot('title', { state: {} });
 
     log('Enter → o mundo, direto (a intro nao entra no meio)');
-    await driver.press('Enter', { count: 1, delay: 400, holdMs: 80 });
+    await Promise.all([
+      driver.page.waitForFunction(() => {
+        const fade = window.gameDebug?.scene.screenEffects().fade;
+        return fade > 0.15 && fade < 0.85;
+      }, null, { timeout: 30000 }),
+      driver.page.keyboard.press('Enter'),
+    ]);
     await driver.page.waitForFunction(() => window.gameDebug?.getState()?.scene === 'game', null, { timeout: 14000 });
     await driver.settle(600);
     const scenes = await activeScenes(driver);
@@ -80,5 +86,14 @@ export default {
     assert('A pausa tem cinco saidas e mais nada', visible.length === 5 && /Conversas|Conversations/.test(visible[1]), JSON.stringify(visible));
     assert('E nenhuma delas e idioma nem levels', !visible.some((t) => /idioma|language|level/i.test(t)), JSON.stringify(visible));
     await shot('pause-adventure', { note: 'A pausa: retornar, conversas, opcoes, musicas, sair', state: {} });
+    await Promise.all([
+      driver.page.waitForFunction(() => {
+        const fade = window.gameDebug?.scene.screenEffects().fade;
+        return fade > 0.15 && fade < 0.85;
+      }),
+      driver.page.locator('#zh-pause-root .zh-main .zh-pause-btn').last().click(),
+    ]);
+    await waitScene(driver, 'title');
+    assert('Voltar ao título passa pelo escurecimento', !(await activeScenes(driver)).includes('game'), '');
   },
 };

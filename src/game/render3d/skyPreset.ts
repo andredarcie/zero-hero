@@ -225,11 +225,11 @@ export const DAY_SKY: Partial<World3DParams> = {
 };
 
 /**
- * A HORA DOURADA — o que o nascer e o pôr do sol põem POR CIMA do que a noite e o dia já decidiram.
+ * A HORA DOURADA — o que o sol baixo põe POR CIMA do que o dia já decidiu. É a BASE dos momentos de sol rente da
+ * trilha lá embaixo (`SKY_TRACK`): o nascer do sol, a hora dourada da tarde e o pôr do sol partem dela, cada um com a sua cor.
  *
  * Ela não existia. O relógio ia da noite ao dia misturando as duas tabelas, e o meio do caminho entre "noite cinza" e
- * "dia dourado" é lama: o entardecer saía como um dia apagado, a hora mais bonita do dia era a mais feia do jogo. Agora
- * ela tem tabela própria, pesada por `params.golden` (1 com o sol rente ao horizonte, 0 ao meio-dia e na noite fechada).
+ * "dia dourado" é lama: o entardecer saía como um dia apagado, a hora mais bonita do dia era a mais feia do jogo.
  *
  * O que ela diz, na ordem do que mais se vê:
  *   · o SOL fica laranja e forte (ele bate de raspão: a força compensa o ângulo), e a sombra fica COMPRIDA e violeta;
@@ -279,4 +279,362 @@ export const GOLDEN_SKY: Partial<World3DParams> = {
   waterCloudColor: '#ffd9ae',
   stars: 0.08,
   glintColor: '#ffd9a6',
+};
+
+// ── OS MOMENTOS DO DIA (2026-11-20, pedido do autor: "cada momento do dia bem claro e observável") ─────────────────
+//
+// O céu tinha TRÊS roupas (a noite, o dia, a hora dourada) pesadas pela ALTURA do sol, e a altura é simétrica: o
+// amanhecer era o entardecer, a manhã era a tarde, e das 9h às 15h o quadro não mudava um pixel. Medido nas fotos hora a
+// hora: o nascer do sol estourava a tela de laranja (o sol nasce ao norte, DE FRENTE para a câmera, e o ar aceso espalha
+// para a frente: ~15× mais que com ele às costas), o pôr do sol era um dia um pouco mais quente, e o dia virava noite em
+// meia hora de relógio — oito segundos de jogo.
+//
+// Agora o dia é uma TRILHA de momentos com HORA MARCADA. Cada momento é o quadro inteiro daquela hora (os knobs e o par
+// do split-tone), e o relógio anda de um ao seguinte em linha reta. Não há mais simetria: manhã e tarde são tabelas
+// diferentes. O que cada um conta, do jeito que o céu de verdade conta:
+//
+//   · a MADRUGADA esfria e clareia um fio (a lua se apaga, o azul sobe do horizonte, a bruma engrossa);
+//   · a AURORA é rosa e lilás, e SEM SOMBRA: o sol ainda não saiu, quem ilumina é o céu inteiro;
+//   · o NASCER DO SOL é ouro-rosa, de raspão, com a sombra comprida — mais frio e mais limpo que o pôr (ar da manhã);
+//   · a MANHÃ é a hora mais limpa: luz branca, sombra azul, pouco pó no ar, o verde mais vivo do dia;
+//   · o MEIO-DIA é o `DAY_SKY` ao pé da letra: sol a pino, sombra curta e dura;
+//   · a TARDE esquenta e empoeira: o ouro volta à luz e à distância;
+//   · a HORA DOURADA e o PÔR DO SOL são o fogo: laranja fundo, sombra violeta muito comprida, o longe em brasa;
+//   · o CREPÚSCULO é o arrebol: o sol já foi e o céu fica magenta — de novo sem sombra, e mais escuro a cada minuto;
+//   · a HORA AZUL é o anil saturado em que as janelas e os vaga-lumes acendem; e então a NOITE.
+//
+// AS LEIS QUE VALEM AQUI (além das três lá de cima):
+//  · "Laranja saturado na LUZ × verde do capim = marrom": a cor forte de cada hora vem do AR, da DISTÂNCIA
+//    (`skyColor` + `haze`), da sombra e do split-tone. A luz só esquenta ou esfria.
+//  · Sol abaixo do horizonte = sombra de sol quase nenhuma (`moonShadowAlpha` baixo) e a AMBIENTE mandando: a aurora e o
+//    crepúsculo são chapados de propósito, é a luz difusa do céu.
+//  · O lago devolve o céu DO ALTO, não o do horizonte: ao nascer e ao pôr ele é lilás com nuvem acesa, nunca laranja
+//    chapado (o "piso de barro" que a hora dourada antiga fazia).
+//  · O `air` dos dois sóis rentes NÃO é o mesmo número: de manhã o sol está de frente (pouco ar já acende a tela), de
+//    tarde está às costas (precisa de muito mais para aparecer). Se o caminho do sol mudar, estes dois trocam.
+//  · O relógio corre devagar de 4h30 a 19h45 (runtime/timeOfDay): os dois crepúsculos duram o bastante para serem vistos.
+
+/** O par do split-tone de um momento: por quanto a sombra e a alta-luz multiplicam cada canal (finishShader). */
+export type SkyTint = readonly [number, number, number];
+
+export interface SkyMoment {
+  readonly name: string;
+  /** A hora do relógio (0 a 24) em que o quadro é exatamente este. */
+  readonly at: number;
+  /** Os knobs deste momento. O que ele não diz vale o da NOITE: o valor de fábrica do `World3DParams`. */
+  readonly sky: Partial<World3DParams>;
+  readonly shadow: SkyTint;
+  readonly high: SkyTint;
+}
+
+// A noite longe do fogo puxa para o AZUL FRIO de pouca cor — pelo grade, nunca pela luz: uma luz azul forte já pintou as
+// árvores de turquesa (relato do autor, ver ambientColor). Só a sombra esfria; o fogo fica quente por contraste.
+const NIGHT_SHADOW: SkyTint = [0.84, 0.9, 1.22];
+const NIGHT_HIGH: SkyTint = [1.12, 1.02, 0.86];
+// O meio-dia precisa de par próprio: o que enche a sombra de um dia de sol é o CÉU (azul) e o que bate no alto é o SOL
+// (ouro). O alto puxa forte porque a CURVA come tinta (uma razão de 1,24× chega à tela como ~1,15×).
+const NOON_SHADOW: SkyTint = [0.84, 0.93, 1.2];
+const NOON_HIGH: SkyTint = [1.24, 1.06, 0.72];
+
+/** A noite fechada: nada escrito, tudo de fábrica. */
+const NIGHT: Partial<World3DParams> = {};
+
+/** A MADRUGADA (a hora azul da manhã): a noite esfriando e clareando um fio, antes de qualquer cor quente. */
+const BLUE_DAWN: Partial<World3DParams> = {
+  lift: 0.93,
+  ambient: 8.8,
+  ambientColor: '#a9b8d8',
+  moon: 2.4,
+  moonColor: '#9db0d2',
+  moonShadowAlpha: 0.12,
+  skyColor: '#17203c',
+  haze: 0.62,
+  air: 1.3,
+  airColor: '#86a2dc',
+  airOpen: 0.1,
+  mist: 2.7,
+  fireflies: 1.4,
+  stars: 0.55,
+  waterSkyColor: '#3b5182',
+  waterCloudColor: '#6c7a9c',
+  grade: 0.4,
+  saturation: 0.97,
+  heroSight: 0.2,
+  heroSightGlow: 0.15,
+};
+
+/** A AURORA: o céu rosa e lilás antes do sol. Luz difusa, sem sombra; a distância acende primeiro. */
+const AURORA: Partial<World3DParams> = {
+  lift: 0.85,
+  ambient: 8.8,
+  ambientColor: '#d2bcd4',
+  moon: 1.6,
+  moonColor: '#ffc8b4',
+  lightCap: 2.1,
+  moonShadowAlpha: 0.07,
+  moonShadowLength: 2.4,
+  shadowTint: '#3b3a7a',
+  skyColor: '#8a5f86',
+  haze: 0.85,
+  air: 1.1,
+  airColor: '#eaa8c2',
+  airOpen: 0.14,
+  mist: 2.5,
+  fireflies: 0.25,
+  stars: 0.12,
+  clouds: 0.4,
+  waterSkyColor: '#8672a6',
+  waterCloudColor: '#f5b6b4',
+  glintColor: '#f0cfe0',
+  grade: 0.52,
+  saturation: 1.0,
+  contrast: 1.05,
+  shadeSat: 0.15,
+  vignette: 0.2,
+  bloomStrength: 0.26,
+  bloomThreshold: 1.1,
+  heroSight: 0.06,
+  heroSightGlow: 0.05,
+  heroLight: 8,
+  fireIntensity: 220,
+  fireGlowStrength: 0.5,
+};
+
+/** O NASCER DO SOL: ouro-rosa de raspão. Parte da hora dourada, mais fria e mais limpa (e com bem menos ar: o sol está de frente). */
+const SUNRISE: Partial<World3DParams> = {
+  ...DAY_SKY,
+  ...GOLDEN_SKY,
+  moonColor: '#ffcdae',
+  moon: 10.5,
+  ambientColor: '#dccbd8',
+  lightCap: 3.0,
+  shadowTint: '#8a88d0',
+  moonShadowAlpha: 0.6,
+  moonShadowLength: 2.5,
+  skyColor: '#e8a99c',
+  haze: 0.84,
+  air: 0.95,
+  airColor: '#ffbc9c',
+  airOpen: 0.1,
+  mist: 1.7,
+  stars: 0.03,
+  waterSkyColor: '#b3a0d2',
+  waterCloudColor: '#ffd3c0',
+  glintColor: '#ffe0d0',
+  grade: 0.62,
+  saturation: 1.04,
+  contrast: 1.15,
+};
+
+/** A MANHÃ CEDO: o ouro clareando, a sombra ainda comprida e já azul, um resto de bruma. */
+const EARLY: Partial<World3DParams> = {
+  ...DAY_SKY,
+  moonColor: '#ffe3b2',
+  moon: 8.6,
+  ambient: 6.9,
+  ambientColor: '#c8cfe0',
+  lightCap: 3.05,
+  shadowTint: '#8298d0',
+  moonShadowAlpha: 0.66,
+  moonShadowLength: 1.85,
+  skyColor: '#d4c4a8',
+  haze: 0.82,
+  air: 0.9,
+  airColor: '#ffe6b8',
+  airOpen: 0.08,
+  mist: 0.9,
+  clouds: 1.1,
+  waterSkyColor: '#8db6ea',
+  waterCloudColor: '#fff2e0',
+  grade: 0.6,
+  saturation: 1.06,
+};
+
+/** A MANHÃ: a hora mais limpa do dia. Luz branca, sombra azul, pouco pó, o verde mais vivo. */
+const MORNING: Partial<World3DParams> = {
+  ...DAY_SKY,
+  moonColor: '#fff1d2',
+  ambientColor: '#bfcee4',
+  shadowTint: '#7092d6',
+  moonShadowLength: 1.5,
+  skyColor: '#bcc6ba',
+  haze: 0.68,
+  air: 0.6,
+  airColor: '#fff6dc',
+  waterSkyColor: '#6cb2f6',
+  grade: 0.6,
+  saturation: 1.1,
+};
+
+/** A TARDE: a luz esquenta, o pó dourado volta ao ar e a sombra começa a crescer para o outro lado. */
+const AFTERNOON: Partial<World3DParams> = {
+  ...DAY_SKY,
+  moonColor: '#ffcd7c',
+  moon: 7.8,
+  ambientColor: '#c8c6cc',
+  shadowTint: '#8290c6',
+  moonShadowLength: 1.65,
+  skyColor: '#d2ae76',
+  haze: 0.95,
+  air: 1.4,
+  airColor: '#ffdc98',
+  airOpen: 0.1,
+  mist: 0.7,
+  waterSkyColor: '#86b2e2',
+  waterCloudColor: '#fff0d2',
+  grade: 0.7,
+  saturation: 1.05,
+};
+
+/** A HORA DOURADA DA TARDE: o `GOLDEN_SKY`, com o ar reforçado (o sol está às costas da câmera) e o lago ainda azul. */
+const GOLDEN_HOUR: Partial<World3DParams> = {
+  ...DAY_SKY,
+  ...GOLDEN_SKY,
+  moonColor: '#ffc88c',
+  moon: 12,
+  moonShadowLength: 2.05,
+  skyColor: '#dfa468',
+  air: 3.4,
+  airOpen: 0.18,
+  waterSkyColor: '#93a4d0',
+  waterCloudColor: '#ffdcae',
+  grade: 0.68,
+  saturation: 1.07,
+};
+
+/** O PÔR DO SOL: o fogo. Laranja fundo, sombra violeta muito comprida, o longe em brasa, o lago lilás com nuvem acesa. */
+const SUNSET: Partial<World3DParams> = {
+  ...DAY_SKY,
+  ...GOLDEN_SKY,
+  // (O laranja fundo mora no AR, na distância e no split-tone. Na primeira prova o ar ia a 7 e a luz a #ffb27a: o capim
+  // virava ferrugem e a mata, um bloco marrom — a lei do "laranja × verde = marrom", de novo.)
+  moonColor: '#ffba88',
+  moon: 12.5,
+  ambient: 6.8,
+  ambientColor: '#d8c4d0',
+  lightCap: 3.1,
+  shadowTint: '#8676c8',
+  // (0,6 e não os 0,66 da hora dourada: com a sombra tão comprida a mata inteira fica debaixo dela, e saía um bloco escuro.)
+  moonShadowAlpha: 0.6,
+  moonShadowLength: 2.6,
+  skyColor: '#e2875a',
+  haze: 1.0,
+  air: 3.6,
+  airColor: '#ffa25e',
+  airOpen: 0.16,
+  mist: 1.5,
+  lift: 0.77,
+  contrast: 1.17,
+  saturation: 1.05,
+  grade: 0.72,
+  vignette: 0.24,
+  bloomStrength: 0.26,
+  bloomThreshold: 1.5,
+  stars: 0.05,
+  waterSkyColor: '#8c7ec2',
+  waterCloudColor: '#ffb48c',
+  glintColor: '#ffc89a',
+};
+
+/** O CREPÚSCULO (o arrebol): o sol já foi e o céu fica magenta. Luz difusa, sem sombra, mais escura a cada minuto. */
+const AFTERGLOW: Partial<World3DParams> = {
+  lift: 0.86,
+  ambient: 8.5,
+  ambientColor: '#cdb4d6',
+  moon: 1.8,
+  moonColor: '#ffa08c',
+  lightCap: 2.1,
+  moonShadowAlpha: 0.08,
+  moonShadowLength: 2.6,
+  shadowTint: '#3e3478',
+  skyColor: '#93527e',
+  haze: 0.95,
+  air: 3.2,
+  airColor: '#e88cac',
+  airOpen: 0.16,
+  mist: 1.8,
+  fireflies: 0.8,
+  stars: 0.18,
+  clouds: 0.4,
+  waterSkyColor: '#72609f',
+  waterCloudColor: '#f29ca4',
+  glintColor: '#f0b8cc',
+  grade: 0.56,
+  saturation: 1.02,
+  contrast: 1.06,
+  shadeSat: 0.2,
+  vignette: 0.22,
+  bloomStrength: 0.28,
+  bloomThreshold: 1.05,
+  heroSight: 0.05,
+  heroSightGlow: 0.04,
+  heroLight: 6,
+  fireIntensity: 230,
+  fireGlowStrength: 0.5,
+};
+
+/** A HORA AZUL: o anil saturado depois do arrebol. As primeiras estrelas; as janelas e os vaga-lumes acendem. */
+const BLUE_DUSK: Partial<World3DParams> = {
+  // Mais clara que a noite (o céu ainda dá luz) e bem mais azul: o azul vem do split-tone e da distância, nunca de uma
+  // luz azul forte (ela pinta as árvores de turquesa).
+  lift: 0.9,
+  ambient: 8.6,
+  ambientColor: '#9fb1e2',
+  moon: 2.6,
+  moonColor: '#8ea2d2',
+  moonShadowAlpha: 0.12,
+  skyColor: '#1b2a5e',
+  haze: 0.78,
+  air: 2.6,
+  airColor: '#7088e0',
+  airOpen: 0.1,
+  fireflies: 2.4,
+  stars: 0.7,
+  waterSkyColor: '#364c84',
+  waterCloudColor: '#62729e',
+  grade: 0.58,
+  saturation: 1.0,
+  heroSight: 0.2,
+  heroSightGlow: 0.15,
+};
+
+/**
+ * A TRILHA DO DIA, em ordem de hora. Entre dois momentos o quadro anda em linha reta; dois iguais seguidos são um
+ * patamar (a noite fechada, o meio-dia). O sol cruza o horizonte às 6h e às 18h (WorldLook.applySky).
+ */
+export const SKY_TRACK: readonly SkyMoment[] = [
+  { name: 'noite', at: 0, sky: NIGHT, shadow: NIGHT_SHADOW, high: NIGHT_HIGH },
+  { name: 'noite', at: 4.25, sky: NIGHT, shadow: NIGHT_SHADOW, high: NIGHT_HIGH },
+  { name: 'madrugada', at: 5.1, sky: BLUE_DAWN, shadow: [0.8, 0.92, 1.28], high: [0.98, 1.02, 1.1] },
+  { name: 'aurora', at: 5.7, sky: AURORA, shadow: [0.86, 0.87, 1.26], high: [1.16, 0.98, 1.04] },
+  { name: 'nascer do sol', at: 6.25, sky: SUNRISE, shadow: [0.86, 0.87, 1.22], high: [1.24, 1.02, 0.86] },
+  { name: 'manhã cedo', at: 7.5, sky: EARLY, shadow: [0.84, 0.92, 1.21], high: [1.2, 1.06, 0.82] },
+  { name: 'manhã', at: 9.5, sky: MORNING, shadow: [0.81, 0.94, 1.24], high: [1.14, 1.07, 0.88] },
+  { name: 'meio-dia', at: 12, sky: DAY_SKY, shadow: NOON_SHADOW, high: NOON_HIGH },
+  { name: 'meio-dia', at: 13, sky: DAY_SKY, shadow: NOON_SHADOW, high: NOON_HIGH },
+  { name: 'tarde', at: 15.25, sky: AFTERNOON, shadow: [0.86, 0.92, 1.18], high: [1.27, 1.05, 0.68] },
+  { name: 'hora dourada', at: 16.75, sky: GOLDEN_HOUR, shadow: [0.86, 0.88, 1.2], high: [1.26, 1.04, 0.72] },
+  { name: 'pôr do sol', at: 17.8, sky: SUNSET, shadow: [0.9, 0.84, 1.2], high: [1.27, 1.02, 0.7] },
+  { name: 'crepúsculo', at: 18.4, sky: AFTERGLOW, shadow: [0.88, 0.84, 1.28], high: [1.2, 0.96, 1.02] },
+  { name: 'hora azul', at: 19.2, sky: BLUE_DUSK, shadow: [0.78, 0.9, 1.34], high: [0.93, 1.0, 1.2] },
+  { name: 'noite', at: 20.25, sky: NIGHT, shadow: NIGHT_SHADOW, high: NIGHT_HIGH },
+];
+
+/** Todo knob que algum momento escreve: é o que a noite de fábrica precisa guardar (WorldLook.applySky). */
+export const SKY_KEYS: ReadonlyArray<keyof World3DParams> = [
+  ...new Set(SKY_TRACK.flatMap((m) => Object.keys(m.sky))),
+] as Array<keyof World3DParams>;
+
+/**
+ * Entre quais dois momentos a hora `time` (0..1 do mostrador) está, e o quanto já andou do primeiro ao segundo (0..1).
+ * Depois do último momento a trilha dá a volta ao primeiro do dia seguinte.
+ */
+export const skyMomentsAt = (time: number): { from: SkyMoment; to: SkyMoment; mix: number } => {
+  const hour = (((time % 1) + 1) % 1) * 24;
+  let i = SKY_TRACK.length - 1;
+  while (i > 0 && SKY_TRACK[i].at > hour) i -= 1;
+  const from = SKY_TRACK[i];
+  const to = SKY_TRACK[(i + 1) % SKY_TRACK.length];
+  const span = (i + 1 < SKY_TRACK.length ? to.at : to.at + 24) - from.at;
+  return { from, to, mix: span > 0 ? Math.min(1, Math.max(0, (hour - from.at) / span)) : 0 };
 };

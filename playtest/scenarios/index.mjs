@@ -67,6 +67,7 @@ import fonte from './fonte.mjs';
 import praiaEditor from './praia-editor.mjs';
 import cameraHd2d from './camera-hd2d.mjs';
 import pegadas from './pegadas.mjs';
+import controle from './controle.mjs';
 
 export const scenarios = {
   smoke,
@@ -138,6 +139,7 @@ export const scenarios = {
   fonte,
   'camera-hd2d': cameraHd2d,
   pegadas,
+  controle,
 };
 
 // What `npm run playtest` runs when no scenario is named.

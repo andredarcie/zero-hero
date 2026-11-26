@@ -1,5 +1,5 @@
-# O HERÓI DO ZERO THE HERO (2026-11-19): começou como hipótese de um herói mais "cozy" e, em oito rodadas julgadas no
-# jogo (capturar.mjs, medir.py, montar_comparacao.py; README.md conta), virou o definitivo: a folha `hero-v8.png`
+# O HERÓI DO ZERO THE HERO (2026-11-19): começou como hipótese de um herói mais "cozy" e, em nove rodadas julgadas no
+# jogo (capturar.mjs, medir.py, montar_comparacao.py; README.md conta), virou o definitivo: a folha `hero-v9.png`
 # é a public/assets/characters/player/hero.png. Para mudar o herói, mude AQUI e copie a folha para lá (a antiga está em
 # hero-antigo.png). A capa usa só os três tons de runtime/homeState.CAPE_COLORS: é o pano que a tina tinge.
 #
@@ -309,14 +309,15 @@ CAPA_GOLPE_BRACOS = [
 ]
 
 
-def gerar_capa_bracos(nome, cor):
-    """A folha do herói de capa e braços (mesma ordem de quadros), nesta paleta."""
+def gerar_capa_bracos(nome, cor, passos=None):
+    """A folha do herói de capa e braços (mesma ordem de quadros), nesta paleta. `passos` = (corpo do passo E, pernas
+    do passo E, corpo do passo D, pernas do passo D): o andar com braço e perna de verdade; sem ele, o andar antigo."""
     CORES.clear()
     CORES.update({**COR, 'G': '#d8a838', 'B': '#5a6a86', 'b': '#414d66', 'd': '#323c52', **cor})
 
     def frente(pernas, sobe=0, corpo=CAPA_FRENTE_BRACOS):
         topo = quadro(ELMO_VISEIRA + ELMO_FECHADO + corpo + ['................', '................'], sobe)
-        linhas = PERNAS_CAPA[pernas]
+        linhas = PERNAS_CAPA[pernas] if isinstance(pernas, str) else pernas
         if sobe:
             linhas = [linhas[0]] + linhas
         topo.alpha_composite(quadro(['................'] * (16 - len(linhas)) + linhas))
@@ -326,8 +327,9 @@ def gerar_capa_bracos(nome, cor):
         return quadro(ELMO + NUCA_FECHADA + corpo + [BARRA, "....OvvOOvvO...."])
 
     folha = Image.new('RGBA', (80, 32), (0, 0, 0, 0))
-    quadros = [
-        frente('passoE', 1), frente('meio'), frente('passoD', 1), frente('parado'),
+    andar = ([frente(passos[1], corpo=passos[0]), frente('meio'), frente(passos[3], corpo=passos[2]), frente('parado')]
+             if passos else [frente('passoE', 1), frente('meio'), frente('passoD', 1), frente('parado')])
+    quadros = andar + [
         costas(), frente('parado', corpo=CAPA_GOLPE_BRACOS), costas(CAPA_COSTAS_GOLPE),
         quadro(MEDITA_CAPA), quadro(MEDITA_CAPA[1:] + ['................']),
     ]
@@ -359,4 +361,17 @@ CAPA_GOLPE_BRACOS[:] = [
     ".OqqOdWWWWdOqqO.",
 ]
 gerar_capa_bracos('hero-v8', {'R': '#2c4287', 'r': '#223467', 'q': '#1b284f'})
+
+# ── A 9ª (o autor: "o herói antigo quando andava mexia as pernas e braços, esse atual não"). O andar da 8ª só trocava
+# um pixel da bota e subia o corpo inteiro: lia como um boneco quicando. Agora cada passo tem:
+#  - A PERNA: o pé de trás sobe do chão (a bota um pixel acima, com o contorno embaixo); o outro fica plantado.
+#  - O BRAÇO: o do lado do pé plantado vai à frente (a mão entra na frente do cinto), o outro vai atrás (a mão sai para
+#    fora, sobre a capa). O ombro fica onde está, então o braço fino se inclina.
+# O corpo não sobe mais no quadro: o jogo já balança o herói a cada passo (HeroView.bobLift), e os dois juntos tremiam.
+PASSO_E_CORPO = CAPA_FRENTE_BRACOS[:3] + [".OHhOdWWWWdHhqO."]  # mão esquerda atrás (fora), direita à frente (dentro)
+PASSO_E_PERNAS = [".OqqOdbOOvvOqqO.", "....OvvOOOO....."]  # pé esquerdo plantado, o direito no ar
+PASSO_D_CORPO = CAPA_FRENTE_BRACOS[:3] + [".OqhHdWWWWdOhHO."]  # o espelho
+PASSO_D_PERNAS = [".OqqOvvOObdOqqO.", ".....OOOOvvO...."]
+gerar_capa_bracos('hero-v9', {'R': '#2c4287', 'r': '#223467', 'q': '#1b284f'},
+                  passos=(PASSO_E_CORPO, PASSO_E_PERNAS, PASSO_D_CORPO, PASSO_D_PERNAS))
 print('ok')

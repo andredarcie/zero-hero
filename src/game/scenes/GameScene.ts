@@ -321,8 +321,9 @@ export class GameScene extends Engine.Scene {
    * trouxe o herói até aqui — zero quando alguém chamou isto de fora do andar (o debug).
    */
   public handleTileEntered(wx: number, wy: number, _dx = 0, _dy = 0): void {
-    // O CUME DO JARDIM ALTO, pela primeira vez: o vento leva a névoa.
-    if (this.valley.gardenMist && !this.cutsceneActive && reliefAt(wx, wy) === RELIEF_PEAK) void this.gardenUnlock.playMistClearing();
+    if (this.valley.gardenMist?.coversTile(wx, wy) && reliefAt(wx, wy) === RELIEF_PEAK) {
+      void this.gardenUnlock.playMistClearing();
+    }
     // O fog of war do mapa: o chunk pisado entra no save (176 chaves no maximo, um evento raro).
     if (this.adventure) {
       const chunkKey = `${Math.floor(wx / CHUNK_COLUMNS)},${Math.floor(wy / CHUNK_ROWS)}`;

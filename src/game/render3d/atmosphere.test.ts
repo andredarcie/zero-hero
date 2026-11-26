@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { skyNoiseTexture } from './atmosphere';
-import { GOLDEN_SKY, DAY_SKY } from './skyPreset';
+import { DAY_SKY, SKY_KEYS, SKY_TRACK, skyMomentsAt } from './skyPreset';
 import { defaultWorld3DParams } from './worldParams';
 import { WorldLook, type World3DParams } from './world/WorldLook';
 import { WaterIndex } from './waterIndex';
@@ -36,13 +36,16 @@ describe('o ruído do céu', () => {
   });
 });
 
-describe('a hora do dia (noite, dia e hora dourada)', () => {
+describe('a hora do dia (a trilha de momentos)', () => {
   const skyAt = (time: number): World3DParams => {
     const params = defaultWorld3DParams();
     const host = { params, moonLight: new THREE.DirectionalLight(), moonCastRotY: 0 };
     new WorldLook(host as never).applySky(time);
     return params;
   };
+  /** O céu numa hora do relógio (0 a 24). */
+  const at = (hour: number): World3DParams => skyAt(hour / 24);
+  const blue = (css: string): number => new THREE.Color(css).b;
   const factory = defaultWorld3DParams();
 
   it('a meia-noite é a tabela de fábrica, sem dia e sem ouro', () => {
@@ -62,18 +65,18 @@ describe('a hora do dia (noite, dia e hora dourada)', () => {
     expect(noon.stars).toBe(0);
   });
 
-  it('com o sol rente ao horizonte a hora dourada manda, de manhã e de tarde', () => {
+  it('com o sol rente ao horizonte a sombra é comprida e o ar acende, de manhã e de tarde', () => {
     for (const time of [0.26, 0.74]) {
-      const gold = skyAt(time);
-      expect(gold.golden).toBeGreaterThan(0.95);
-      expect(gold.moonShadowLength).toBeCloseTo(GOLDEN_SKY.moonShadowLength as number, 1);
-      expect(gold.air).toBeGreaterThan(noonAir() * 2);
+      const low = skyAt(time);
+      expect(low.golden).toBeGreaterThan(0.95);
+      expect(low.moonShadowLength).toBeGreaterThan(2);
+      expect(low.air).toBeGreaterThan(noonAir() * 1.5);
       // A vista do herói é um desenho do escuro: com o sol no céu ela não existe.
-      expect(gold.heroSight).toBeLessThan(0.02);
+      expect(low.heroSight).toBeLessThan(0.02);
     }
   });
 
-  it('o ouro sobe e desce sem degrau: a manhã inteira carrega um resto dele', () => {
+  it('o peso do ouro sobe e desce sem degrau (é dele a bruma do mar e o céu do mar)', () => {
     let prev = skyAt(0.27).golden;
     for (let t = 0.28; t <= 0.5; t += 0.01) {
       const g = skyAt(t).golden;
@@ -83,6 +86,58 @@ describe('a hora do dia (noite, dia e hora dourada)', () => {
     }
     expect(skyAt(0.33).golden).toBeGreaterThan(0.05);
     expect(skyAt(0.42).golden).toBe(0);
+  });
+
+  it('a manhã não é a tarde, e o amanhecer não é o entardecer', () => {
+    // 9h30 e 14h30 têm o sol na MESMA altura: era o mesmo quadro. Agora a manhã é mais fria (mais azul na luz).
+    const morning = at(9.5);
+    const afternoon = at(14.5);
+    expect(blue(morning.moonColor)).toBeGreaterThan(blue(afternoon.moonColor) + 0.1);
+    expect(morning.haze).toBeLessThan(afternoon.haze);
+    // O sol rente das duas pontas: o nascer é rosa, o pôr é fogo; e o lago não é o mesmo.
+    const sunrise = at(6.25);
+    const sunset = at(17.8);
+    expect(blue(sunrise.airColor)).toBeGreaterThan(blue(sunset.airColor) + 0.1);
+    expect(sunrise.waterSkyColor).not.toBe(sunset.waterSkyColor);
+    // E os dois crepúsculos: a aurora e o arrebol têm cada um a sua distância.
+    expect(at(5.7).skyColor).not.toBe(at(18.4).skyColor);
+  });
+
+  it('com o sol abaixo do horizonte quase não há sombra de sol: a aurora e o crepúsculo são luz do céu', () => {
+    for (const hour of [5.7, 18.4]) {
+      const sky = at(hour);
+      expect(sky.moonShadowAlpha).toBeLessThan(0.1);
+      expect(sky.ambient).toBeGreaterThan(sky.moon * 3);
+    }
+  });
+
+  it('a trilha está em ordem de hora, começa e acaba na noite, e só escreve knob e cor que existem', () => {
+    const knobs = factory as unknown as Record<string, number | string>;
+    for (let i = 1; i < SKY_TRACK.length; i++) expect(SKY_TRACK[i].at).toBeGreaterThan(SKY_TRACK[i - 1].at);
+    expect(SKY_TRACK[0].at).toBe(0);
+    expect(Object.keys(SKY_TRACK[0].sky)).toHaveLength(0);
+    expect(Object.keys(SKY_TRACK[SKY_TRACK.length - 1].sky)).toHaveLength(0);
+    for (const moment of SKY_TRACK) {
+      for (const [key, value] of Object.entries(moment.sky)) {
+        expect(typeof value, `${moment.name}.${key}`).toBe(typeof knobs[key]);
+        if (typeof value === 'string') expect(value, `${moment.name}.${key}`).toMatch(/^#[0-9a-f]{6}$/);
+      }
+    }
+    // O meio-dia da trilha é a tabela do dia ela mesma; e a volta da meia-noite cai no patamar da noite.
+    expect(skyMomentsAt(0.5).from.sky).toBe(DAY_SKY);
+    expect(skyMomentsAt(0.99).to).toBe(SKY_TRACK[0]);
+  });
+
+  it('o quadro anda sem degrau: em um minuto de relógio nenhum knob salta', () => {
+    const numeric = SKY_KEYS.filter((key) => typeof factory[key] === 'number');
+    const sky = Array.from({ length: 1441 }, (_, minute) => skyAt(minute / 1440) as unknown as Record<string, number>);
+    for (const key of numeric) {
+      const values = sky.map((s) => s[key]);
+      const range = Math.max(...values) - Math.min(...values);
+      for (let i = 1; i < values.length; i++) {
+        expect(Math.abs(values[i] - values[i - 1]), `${key} às ${(i / 60).toFixed(2)}h`).toBeLessThanOrEqual(range * 0.05 + 1e-9);
+      }
+    }
   });
 
   const noonAir = (): number => skyAt(0.5).air;

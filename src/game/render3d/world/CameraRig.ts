@@ -1,6 +1,7 @@
 // A CÂMERA DO MUNDO 3D: seguir o alvo, o balanço de mão, o tremor, e o encaixe no pixel (a câmera de pixel suave).
 
 import { isReducedMotion } from '@/game/runtime/accessibility';
+import { padRumble } from '@/game/runtime/gamepad';
 import { getCameraZoom } from '@/game/runtime/graphicsSettings';
 import * as THREE from 'three';
 import { platform } from '@/game/platform/platform';
@@ -273,6 +274,10 @@ export class CameraRig {
   }
 
   public shake(durationMs: number, amplitudeTiles: number, dirX = 0, dirY = 0): void {
+    // O CONTROLE SENTE O BAQUE (runtime/gamepad): todo golpe que chacoalha a câmera dá um tranco na mão, na força dele
+    // (um golpe firme, 0,1 tile, é pouco mais da metade da força). Vem antes do "reduzir movimento": tremor de mão não é
+    // movimento de tela, e a vibração tem a sua própria chave (pausa → opções).
+    padRumble(Math.min(1, amplitudeTiles / 0.18), Math.min(240, durationMs));
     if (isReducedMotion()) return;
     // A landed hit during a fading shake must not cut it short — keep the stronger kick.
     if (this.shakeMs > 0 && amplitudeTiles < this.shakeAmp * (this.shakeMs / this.shakeDurMs)) return;
