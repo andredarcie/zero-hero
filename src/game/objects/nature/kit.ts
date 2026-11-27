@@ -173,7 +173,7 @@ export interface NatureHost {
   busy(): boolean;
   /**
    * Quanto deste ponto é LAR deste sistema (0..1, world/biomeLife). Cada sistema recebe o seu host: `isFree`,
-   * `isWater` e `treesNear` já respondem só dentro do lar dele; quem segue o herói (sementes, névoa, arco-íris)
+   * `isWater` e `treesNear` já respondem só dentro do lar dele; quem segue o herói (sementes, arco-íris)
    * multiplica a força por isto.
    */
   home(x: number, y: number): number;

@@ -71,9 +71,13 @@ describe('a hora do dia (a trilha de momentos)', () => {
       expect(low.golden).toBeGreaterThan(0.95);
       expect(low.moonShadowLength).toBeGreaterThan(2);
       expect(low.air).toBeGreaterThan(noonAir() * 1.5);
-      // A vista do herói é um desenho do escuro: com o sol no céu ela não existe.
-      expect(low.heroSight).toBeLessThan(0.02);
     }
+  });
+
+  it('nenhuma hora do dia acende uma auréola presa ao herói', () => {
+    const power = Array.from({ length: 96 }, (_, i) => skyAt(i / 96))
+      .map(({ heroLight, heroSight, heroSightGlow }) => Math.max(heroLight, heroSight, heroSightGlow));
+    expect(Math.max(...power)).toBe(0);
   });
 
   it('o peso do ouro sobe e desce sem degrau (é dele a bruma do mar e o céu do mar)', () => {

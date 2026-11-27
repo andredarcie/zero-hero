@@ -258,7 +258,7 @@ export class World3D {
     registerTexture3D(FX_DOT_TEXTURE, dot);
     registerTexture3D(FX_RING_TEXTURE, makeRingTexture());
     registerTexture3D(FX_PUFF_TEXTURE, makePuffTexture());
-    this.particles = new AmbientParticles(this.scene, dot, this.tiles.greenTiles);
+    this.particles = new AmbientParticles(this.scene, dot, { greenTiles: this.tiles.greenTiles, litFires: this.lights.litFires });
   }
 
   // ── static terrain ───────────────────────────────────────────────────────────

@@ -49,6 +49,7 @@ import cachoeira from './cachoeira.mjs';
 import chuva from './chuva.mjs';
 import bosque from './bosque.mjs';
 import natureza from './natureza.mjs';
+import neblina from './neblina.mjs';
 import cerca from './cerca.mjs';
 import forja from './forja.mjs';
 import biomas from './biomas.mjs';
@@ -121,6 +122,7 @@ export const scenarios = {
   chuva,
   bosque,
   natureza,
+  neblina,
   cerca,
   forja,
   biomas,

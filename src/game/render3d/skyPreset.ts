@@ -359,8 +359,6 @@ const BLUE_DAWN: Partial<World3DParams> = {
   waterCloudColor: '#6c7a9c',
   grade: 0.4,
   saturation: 0.97,
-  heroSight: 0.2,
-  heroSightGlow: 0.15,
 };
 
 /** A AURORA: o céu rosa e lilás antes do sol. Luz difusa, sem sombra; a distância acende primeiro. */
@@ -393,9 +391,6 @@ const AURORA: Partial<World3DParams> = {
   vignette: 0.2,
   bloomStrength: 0.26,
   bloomThreshold: 1.1,
-  heroSight: 0.06,
-  heroSightGlow: 0.05,
-  heroLight: 8,
   fireIntensity: 220,
   fireGlowStrength: 0.5,
 };
@@ -566,9 +561,6 @@ const AFTERGLOW: Partial<World3DParams> = {
   vignette: 0.22,
   bloomStrength: 0.28,
   bloomThreshold: 1.05,
-  heroSight: 0.05,
-  heroSightGlow: 0.04,
-  heroLight: 6,
   fireIntensity: 230,
   fireGlowStrength: 0.5,
 };
@@ -594,8 +586,6 @@ const BLUE_DUSK: Partial<World3DParams> = {
   waterCloudColor: '#62729e',
   grade: 0.58,
   saturation: 1.0,
-  heroSight: 0.2,
-  heroSightGlow: 0.15,
 };
 
 /**

@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 
 import { groundFrameAt } from '@/game/constants';
+import { terrainHeightAt } from '@/game/world/relief';
 import { tilesetFrameUv } from '@/game/render3d/textures3d';
 import type { World3D } from '@/game/render3d/World3D';
 import type { GameScene } from '@/game/scenes/GameScene';
@@ -19,6 +20,50 @@ export const renderProbe = (s: GameScene) => {
   };
   const meshNamed = (name: string): THREE.Mesh | undefined => w3().tiles.terrainMeshes.find((m) => materialOf(m)?.name === name);
   return {
+    /** Lê a camada de ar nos mesmos pontos do chão, sem avançar o jogo ou mover o herói. */
+    measureAirMotion: (x: number, z: number) => {
+      const world = w3();
+      const { airFire, camSway, wind } = world.params;
+      const target = world.air['target'];
+      const buffer = new Uint16Array(target.width * target.height * 4);
+      const { x: savedX, y: savedY, z: savedZ } = world.camTarget;
+      const points = Array.from({ length: 72 }, (_, i) => ({
+        x: x + (i % 9 - 4) * 0.6, z: z - 4 - Math.floor(i / 9) * 0.65,
+      }));
+      const frames = [];
+      try {
+        Object.assign(world.params, { airFire: 0, camSway: 0, wind: 0 });
+        for (const [dx, dz] of [[0, 0], [0, 0], [0.25, 0], [1, 0], [2, 0], [0, -0.25], [0, -1], [0, -2]]) {
+          world.cam.follow(x + dx, z + dz, false, terrainHeightAt(x + dx, z + dz));
+          world.frame.render(0);
+          world.frame.render(0);
+          world.renderer.readRenderTargetPixels(target, 0, 0, target.width, target.height, buffer);
+          frames.push(points.map((p) => {
+            const v = new THREE.Vector3(p.x, terrainHeightAt(p.x, p.z), p.z).project(world.camera);
+            const u = Math.floor((v.x * 0.5 + 0.5) * target.width);
+            const r = Math.floor((v.y * 0.5 + 0.5) * target.height);
+            if (u < 0 || u >= target.width || r < 0 || r >= target.height) return null;
+            const offset = (r * target.width + u) * 4;
+            return THREE.DataUtils.fromHalfFloat(buffer[offset]) * 0.2126
+              + THREE.DataUtils.fromHalfFloat(buffer[offset + 1]) * 0.7152
+              + THREE.DataUtils.fromHalfFloat(buffer[offset + 2]) * 0.0722;
+          }));
+        }
+      } finally {
+        Object.assign(world.params, { airFire, camSway, wind });
+        world.cam.follow(savedX - world.projection.viewOffsetX, savedZ - world.projection.viewOffsetY, false, savedY);
+      }
+      const base = frames[0];
+      return frames.slice(1).map((frame) => {
+        const common = frame.flatMap((v, i) => v === null || base[i] === null ? [] : [[v, base[i]] as const]);
+        const mean = (values: readonly number[]) => values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
+        return {
+          count: common.length,
+          base: Number(mean(common.map(([, a]) => a)).toFixed(4)),
+          change: Number(mean(common.map(([b, a]) => Math.abs(b - a))).toFixed(4)),
+        };
+      });
+    },
     terrainDepthAudit: () => terrainDepthAudit(w3().scene),
     /** A textura `key` foi carregada? */
     textureLoaded: (key: string): boolean => s.textures.exists(key),

@@ -67,6 +67,15 @@ export const valleyProbe = (s: GameScene) => {
     },
     /** Congela a natureza no quadro atual (as fotos não tremem). */
     freezeNature: (on: boolean): void => { nature().frozen = on; },
+    morningMistBodies: () => nature().mist['puffs'].map(({ bb }) => ({
+      x: bb.mesh.position.x, z: bb.mesh.position.z, alpha: materialOf(bb.mesh).opacity,
+    })),
+    gardenMistOpacity: () => {
+      const mist = s.valley.gardenMist;
+      if (!mist) return [];
+      mist['tick'](0);
+      return mist['puffs'].map(({ bb }) => materialOf(bb.mesh).opacity);
+    },
     forceFishJump: (x: number, y: number): void => nature().fish.force(x, y),
     wakeSquirrel: (): void => nature().squirrel.wake(),
     summonHare: (): void => { const n = nature(); n.hares.summon(n.frame); },

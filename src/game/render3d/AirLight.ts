@@ -26,6 +26,8 @@
 import * as THREE from 'three';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { isReducedMotion } from '@/game/runtime/accessibility';
+import { terrainHeightAt } from '@/game/world/relief';
+import { getWorldBounds } from '@/game/world/WorldData';
 import { skyUniforms } from './atmosphere';
 import { shadowTint } from './CastShadow3D';
 import type { World3D } from './World3D';
@@ -34,6 +36,8 @@ import type { World3D } from './World3D';
 const MASK_TILES_X = 36;
 const MASK_TILES_Z = 40;
 const MASK_RES = 16;
+const COVER_MIP_LEVEL = 5;
+const MASK_WORLD_STEP = 2 ** COVER_MIP_LEVEL / MASK_RES;
 /**
  * O quanto o meio da máscara fica AO NORTE do alvo, em tiles. A câmera HD-2D (2026-11-19, worldParams) olha baixo: o
  * alto do quadro alcança ~11 tiles ao norte do herói (o dobro de antes, e mais no zoom de longe) e o pé só ~5 ao sul.
@@ -48,6 +52,31 @@ const FIRES = 5;
 const FLAME_Y = 0.55;
 /** Quanto o pé de um corpo anda em direção ao sol para ler a sombra que recebe (fora da silhueta dele mesmo). */
 const SHADE_PROBE = 0.42;
+const HEIGHT_SAMPLES_PER_TILE = 2;
+const HEIGHT_UNITS_PER_TILE = 32;
+// Os raios que enxergam a bruma ao fundo são mais rasos que o eixo central da câmera.
+const DISTANT_AIR_SLOPE = 0.82;
+
+const airTerrain = () => {
+  const { minTileX, maxTileX, minTileY, maxTileY } = getWorldBounds();
+  const left = minTileX - MASK_TILES_X / 2 - 0.5;
+  const north = minTileY - MASK_TILES_Z / 2 - 0.5;
+  const width = maxTileX - minTileX + 1 + MASK_TILES_X;
+  const depth = maxTileY - minTileY + 1 + MASK_TILES_Z;
+  const columns = width * HEIGHT_SAMPLES_PER_TILE;
+  const rows = depth * HEIGHT_SAMPLES_PER_TILE;
+  const heights = new Uint8Array(columns * rows);
+  for (let row = 0; row < rows; row++) for (let column = 0; column < columns; column++) {
+    const x = left + (column + 0.5) / HEIGHT_SAMPLES_PER_TILE;
+    const z = north + (row + 0.5) / HEIGHT_SAMPLES_PER_TILE;
+    heights[row * columns + column] = Math.min(255, Math.round(terrainHeightAt(x, z) * HEIGHT_UNITS_PER_TILE));
+  }
+  const texture = new THREE.DataTexture(heights, columns, rows, THREE.RedFormat);
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.needsUpdate = true;
+  return { texture, bounds: new THREE.Vector4(left, north, width, depth) };
+};
 
 const VERTEX = /* glsl */ `
   varying vec2 vUv;
@@ -60,13 +89,15 @@ const VERTEX = /* glsl */ `
 const FRAGMENT = /* glsl */ `
   uniform sampler2D tDepth;
   uniform sampler2D tMask;
+  uniform sampler2D tTerrainHeight;
   uniform sampler2D uSkyNoise;
   uniform mat4 uInvViewProj;
   uniform vec3 uCamPos;
+  uniform vec3 uAirView;
   uniform vec4 uMaskRect;   // x mínimo, z MÁXIMO, largura, altura (a máscara é vista de cima: o v dela cresce para -z)
   uniform vec2 uCastVec;    // onde cai a sombra de um ponto, no chão, por tile de altura
   uniform float uMaskGain;  // 1 / a escuridão de uma silhueta cheia
-  uniform float uGroundY;
+  uniform vec4 uTerrainRect;
   uniform float uAirTop;
   uniform float uOpenAir;
   uniform vec3 uSunAir;
@@ -107,22 +138,25 @@ const FRAGMENT = /* glsl */ `
 
     // ── 1. o sol atravessando a camada de ar ──
     if (uSunAir.r + uSunAir.g + uSunAir.b > 0.0 && D.y < -1e-3) {
-      float tIn = clamp((uGroundY + uAirTop - uCamPos.y) / D.y, 0.0, T);
+      // A camada segue o relevo no ponto visível, mesmo quando o herói sobe de andar.
+      vec2 terrainUv = (P.xz - uTerrainRect.xy) / uTerrainRect.zw;
+      float groundY = texture2D(tTerrainHeight, terrainUv).r * (255.0 / ${HEIGHT_UNITS_PER_TILE.toFixed(1)});
       // No máximo 5 tiles de ar, os mais perto do chão: no alto de uma tela em pé o olhar é raso e o raio atravessaria
       // dez tiles de bruma — o fundo do quadro virava um clarão só.
-      tIn = max(tIn, T - 5.0);
-      float seg = T - tIn;
+      float seg = clamp((groundY + uAirTop - P.y) / -uAirView.y, 0.0, min(T, 5.0));
       if (seg > 0.0) {
         // A bruma mora onde há sombra por perto (a média larga da máscara) e deriva em bancos lentos.
         vec2 guv = zhMaskUv(P.xz);
-        float cover = clamp((1.0 - textureLod(tMask, guv, 5.0).r) * uMaskGain * 2.4, 0.0, 1.0);
+        float cover = clamp((1.0 - textureLod(tMask, guv, ${COVER_MIP_LEVEL.toFixed(1)}).r) * uMaskGain * 2.4, 0.0, 1.0);
         float bank = 0.5 + texture2D(uSkyNoise, P.xz * 0.04 + uHazeDrift).b;
         float body = mix(uOpenAir, 1.0, cover) * bank;
         float jitter = zhAirJitter(P);
         float acc = 0.0;
         for (int i = 0; i < ${STEPS}; i++) {
-          vec3 p = uCamPos + D * (tIn + seg * (float(i) + jitter) / ${STEPS.toFixed(1)});
-          float h = max(p.y - uGroundY, 0.0);
+          // O mesmo ponto do cenário usa a mesma coluna de ar em cada quadro. O raio real da
+          // câmera continua determinando a oclusão e o halo das chamas.
+          vec3 p = P - uAirView * (seg * (float(i) + jitter) / ${STEPS.toFixed(1)});
+          float h = max(p.y - groundY, 0.0);
           vec2 muv = zhMaskUv(p.xz + h * uCastVec);
           // Nível 2 da máscara (quatro texels por leitura): a borda de um facho no ar é penumbra, não recorte — e a
           // ponta em degraus da sombra de quem anda (fadeCastTail) riscaria o corpo dele de listras.
@@ -133,7 +167,7 @@ const FRAGMENT = /* glsl */ `
         }
         // O ar espalha a luz PARA A FRENTE (Henyey-Greenstein, g = 0,55): olhando contra o sol ele acende, de costas
         // para o sol quase some. É o que dá rumo ao clarão — de manhã ele vem do alto da tela, de onde vem o sol.
-        float mu = dot(D, uSunDir);
+        float mu = dot(uAirView, uSunDir);
         float phase = 1.05 / pow(1.3025 - 1.1 * mu, 1.5);
         air += uSunAir * body * phase * acc * seg / ${STEPS.toFixed(1)};
       }
@@ -203,6 +237,7 @@ export class AirLight {
   private readonly smooth: FullScreenQuad;
   private readonly smoothTexel = new THREE.Vector2(1, 1);
   private readonly uniforms: Record<string, THREE.IUniform>;
+  private readonly terrain = airTerrain();
   /** A lista de filhos da passada da máscara: as luzes (todas, pela lei do pool) e as sombras. */
   private readonly kept: THREE.Object3D[] = [];
   private readonly scratch = {
@@ -238,13 +273,15 @@ export class AirLight {
     this.uniforms = {
       tDepth: { value: null },
       tMask: { value: this.mask.texture },
+      tTerrainHeight: { value: this.terrain.texture },
       uSkyNoise: skyUniforms.uSkyNoise,
       uInvViewProj: { value: new THREE.Matrix4() },
       uCamPos: { value: new THREE.Vector3() },
+      uAirView: { value: new THREE.Vector3() },
       uMaskRect: { value: new THREE.Vector4(0, 0, 1, 1) },
       uCastVec: { value: new THREE.Vector2() },
       uMaskGain: { value: 1 },
-      uGroundY: { value: 0 },
+      uTerrainRect: { value: this.terrain.bounds },
       uAirTop: { value: 2.4 },
       uOpenAir: { value: 0.1 },
       uSunAir: { value: new THREE.Color(0, 0, 0) },
@@ -323,9 +360,10 @@ export class AirLight {
       kept.push(c.mesh);
     }
 
-    // Presa à grade de texels da máscara: solta, as sombras lidas nadariam contra o mundo quando a câmera anda.
-    const cx = Math.round(camTarget.x * MASK_RES) / MASK_RES;
-    const cz = Math.round((camTarget.z - MASK_NORTH) * MASK_RES) / MASK_RES;
+    // A origem fica na grade do mip mais largo que o ar lê. Alinhar só o texel de nível zero
+    // fazia cada mipmap reagrupar o mundo a cada passo da câmera.
+    const cx = Math.round(camTarget.x / MASK_WORLD_STEP) * MASK_WORLD_STEP;
+    const cz = Math.round((camTarget.z - MASK_NORTH) / MASK_WORLD_STEP) * MASK_WORLD_STEP;
     this.maskCamera.position.set(cx, 20, cz);
     this.maskCamera.updateMatrixWorld();
     (this.uniforms.uMaskRect.value as THREE.Vector4).set(
@@ -408,7 +446,7 @@ export class AirLight {
    * `hd3d.air` e `hd3d.airFire` em 0 nada é desenhado e `live` fica falso.
    */
   public render(depth: THREE.Texture | null): void {
-    const { params, camera, camTarget } = this.host;
+    const { params, camera } = this.host;
     const u = this.uniforms;
     // A máscara das silhuetas é barata (três ou quatro draws num alvo pequeno) e tem dois leitores: o ar e os corpos
     // que recebem sombra. Ela existe sempre que há sombra de sol/lua para desenhar.
@@ -436,7 +474,9 @@ export class AirLight {
     u.tDepth.value = depth;
     (u.uInvViewProj.value as THREE.Matrix4).multiplyMatrices(camera.matrixWorld, camera.projectionMatrixInverse);
     (u.uCamPos.value as THREE.Vector3).setFromMatrixPosition(camera.matrixWorld);
-    u.uGroundY.value = camTarget.y;
+    (u.uAirView.value as THREE.Vector3).set(
+      0, -Math.max(0.01, params.camHeight - 0.4) * DISTANT_AIR_SLOPE, -params.camBack,
+    ).normalize();
     u.uAirTop.value = Math.max(0.5, params.airHeight);
     u.uOpenAir.value = Math.min(1, Math.max(0, params.airOpen));
     (u.uHazeDrift.value as THREE.Vector2).copy(skyUniforms.uCloudDrift.value).multiplyScalar(0.11);
@@ -469,6 +509,7 @@ export class AirLight {
   }
 
   public dispose(): void {
+    this.terrain.texture.dispose();
     this.mask.dispose();
     this.raw.dispose();
     this.target.dispose();

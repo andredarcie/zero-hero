@@ -16,7 +16,7 @@ import { BIOME_IDS, biomeAt, biomeWeightsAt, type BiomeId } from './biomes';
  *
  * Bicho de água só onde há água: o prado tem um lago de 20 tiles, o musgo um laguinho de 7, a mata quase nada.
  *
- * O bioma de um ponto é o que MANDA nele (`biomeAt`); quem segue o herói (sementes, névoa, arco-íris) usa a parte do
+ * O bioma de um ponto é o que MANDA nele (`biomeAt`); quem segue o herói (sementes, arco-íris) usa a parte do
  * bioma em volta dele (`lifeShareAt`), para sumir aos poucos na fronteira em vez de apagar de uma vez.
  */
 export type LifeKind =

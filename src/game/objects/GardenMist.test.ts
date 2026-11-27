@@ -1,18 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { heroClearing, mistTint, mistVeil } from './GardenMist';
+import { mistTint, mistVeil } from './GardenMist';
 
-describe('o herói abre a névoa, e o véu é ralo', () => {
-  it('em cima do herói sobra um quinto; a 3 tiles, a névoa inteira; no meio, sempre subindo', () => {
-    expect(heroClearing(0)).toBeCloseTo(0.2);
-    expect(heroClearing(3)).toBe(1);
-    expect(heroClearing(9)).toBe(1);
-    let last = 0;
-    for (let d = 0; d <= 3; d += 0.25) {
-      expect(heroClearing(d)).toBeGreaterThanOrEqual(last);
-      last = heroClearing(d);
-    }
-  });
-
+describe('o véu da névoa', () => {
   it('de noite o véu é mais ralo que de dia, e nenhum é parede', () => {
     expect(mistVeil(0)).toBeLessThan(mistVeil(1));
     expect(mistVeil(1)).toBeLessThan(1);

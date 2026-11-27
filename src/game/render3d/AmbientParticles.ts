@@ -10,6 +10,10 @@ const EMBER_COUNT = 26;
 const DUST_COUNT = 140;
 const FIREFLY_COUNT = 44;
 const MIST_COUNT = 48;
+const MIST_PERIOD = 32;
+
+const mistCopyNear = (position: number, focus: number): number =>
+  position + Math.round((focus - position) / MIST_PERIOD) * MIST_PERIOD;
 // A caixa em que o enxame vive, em tiles a partir do alvo da câmera. Um pouco maior que a tela:
 // entrar no quadro voando é a metade do efeito, e um bicho que só existe dentro do enquadramento
 // aparece do nada na borda.
@@ -52,6 +56,7 @@ interface FireflyParticle {
 
 /** O fogo aceso mais perto do quadro (as brasas saem dele; a poeira brilha e a névoa abre em volta). */
 export interface ParticleFire { worldX: number; worldY: number }
+interface ParticleHabitat { greenTiles: readonly number[]; litFires: readonly ParticleFire[] }
 
 /** Os botões do ar (os mesmos do World3DParams): quanto de névoa e de vaga-lume, e quanto é dia. */
 export interface ParticleKnobs { mist: number; fireflies: number; daylight: number }
@@ -67,6 +72,7 @@ export class AmbientParticles {
   private readonly fireflySeed: Float32Array;
   private readonly fireflyState: FireflyParticle[] = [];
   private readonly mist: ParticleField;
+  private readonly mistOrigins = new Float32Array(MIST_COUNT * 2);
   private readonly mistSeed: Float32Array;
   private atmosphereSeeded = false;
 
@@ -74,7 +80,7 @@ export class AmbientParticles {
    * `greenTiles` são os tiles de vegetação da janela assada (x + z empacotados), onde o enxame pousa: o terreno os
    * enche e esvazia, e estas partículas só leem.
    */
-  public constructor(scene: THREE.Scene, dot: THREE.Texture, private readonly greenTiles: readonly number[]) {
+  public constructor(scene: THREE.Scene, dot: THREE.Texture, private readonly habitat: ParticleHabitat) {
     // Os quatro campos ambientes saem num draw só, como quads (ver ParticleBatch).
     this.batch = new ParticleBatch(scene, EMBER_COUNT + DUST_COUNT + FIREFLY_COUNT + MIST_COUNT, dot);
     this.embers = this.batch.field(EMBER_COUNT, 0.12);
@@ -109,7 +115,12 @@ export class AmbientParticles {
     // Mist: many large, dim, cool wisps clinging low to the ground in the dark.
     this.mist = this.batch.field(MIST_COUNT, 1.6);
     this.mistSeed = new Float32Array(MIST_COUNT);
-    for (let i = 0; i < MIST_COUNT; i++) this.mistSeed[i] = Math.random() * Math.PI * 2;
+    for (let i = 0; i < MIST_COUNT; i++) {
+      this.mistOrigins[i * 2] = Math.random() * MIST_PERIOD;
+      this.mistOrigins[i * 2 + 1] = Math.random() * MIST_PERIOD;
+      this.mist.pos[i * 3 + 1] = 0.05 + Math.random() * 0.3;
+      this.mistSeed[i] = Math.random() * Math.PI * 2;
+    }
   }
 
   /**
@@ -130,11 +141,6 @@ export class AmbientParticles {
     if (!this.atmosphereSeeded) {
       for (let i = 0; i < FIREFLY_COUNT; i++) {
         this.fireflies.pos[i * 3 + 1] = -10; // fora do chão até achar mato (ver rehomeFirefly)
-      }
-      for (let i = 0; i < MIST_COUNT; i++) {
-        this.mist.pos[i * 3] = target.x + (Math.random() - 0.5) * 30;
-        this.mist.pos[i * 3 + 1] = 0.05 + Math.random() * 0.3;
-        this.mist.pos[i * 3 + 2] = target.z + (Math.random() - 0.5) * 30;
       }
       this.atmosphereSeeded = true;
     }
@@ -210,13 +216,15 @@ export class AmbientParticles {
     const mistB = 0.6 + (0.34 - 0.6) * dayMix;
     for (let i = 0; i < MIST_COUNT; i++) {
       const s = this.mistSeed[i];
-      let x = this.mist.pos[i * 3] + Math.sin(t * 0.12 + s) * 0.004;
-      let z = this.mist.pos[i * 3 + 2] + Math.cos(t * 0.09 + s * 1.4) * 0.004;
-      if (x < cx - 16) x = cx + 16; else if (x > cx + 16) x = cx - 16;
-      if (z < cz - 16) z = cz + 16; else if (z > cz + 16) z = cz - 16;
+      // O foco só escolhe qual repetição da grade desenhar. Ele não move o banco no mundo.
+      const x = mistCopyNear(this.mistOrigins[i * 2] - 2 * Math.cos(t * 0.12 + s), cx);
+      const z = mistCopyNear(this.mistOrigins[i * 2 + 1] + 2.67 * Math.sin(t * 0.09 + s * 1.4), cz);
       this.mist.pos[i * 3] = x;
       this.mist.pos[i * 3 + 2] = z;
-      const clear = fire ? Math.min(1, planarDist(x, z, fire.worldX, fire.worldY) / 4) : 1;
+      let clear = 1;
+      for (const lit of this.habitat.litFires) {
+        clear = Math.min(clear, planarDist(x, z, lit.worldX, lit.worldY) / 4);
+      }
       const tw = 0.6 + 0.4 * Math.sin(t * 0.5 + s * 3.0);
       const a = mistAmt * 0.045 * clear * tw;
       this.mist.col[i * 3] = mistR * a;
@@ -331,13 +339,14 @@ export class AmbientParticles {
    */
   private rehomeFirefly(index: number, cx: number, cz: number): void {
     const p = this.fireflyState[index];
-    const count = this.greenTiles.length / 2;
+    const { greenTiles } = this.habitat;
+    const count = greenTiles.length / 2;
     p.homed = false;
     if (count === 0) return;
     for (let attempt = 0; attempt < 18; attempt++) {
       const t = Math.floor(Math.random() * count) * 2;
-      const gx = this.greenTiles[t];
-      const gz = this.greenTiles[t + 1];
+      const gx = greenTiles[t];
+      const gz = greenTiles[t + 1];
       if (Math.abs(gx - cx) > FIREFLY_BOX || Math.abs(gz - cz) > FIREFLY_BOX) continue;
       p.hx = gx + (Math.random() - 0.5) * 0.6;
       p.hz = gz + (Math.random() - 0.5) * 0.6;

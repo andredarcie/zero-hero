@@ -10867,3 +10867,15 @@ CORREÇÃO DAS SOBREPOSIÇÕES NO CENÁRIO (2026-11-26)
 - As árvores com copas vizinhas usam planos distintos. As faixas das bordas compartilham somente as arestas e cada tipo de borda tem sua altura. A superfície da rocha fica acima do piso no encontro dos dois, e os topos dos pilares de escadas perpendiculares ficam em alturas distintas.
 - O sombreado do planalto usa a mesma cor nos vértices das malhas próxima e distante. Na borda da lava, a cor queimada começa gradualmente depois da junção com o chão seco.
 - O playtest `chao-sem-risco` agora verifica profundidade além da cor. Encontrou zero sobreposições em 69.982 faces e zero emendas de cor. `montanha`, `jardim-alto`, `praia` e `fonte` passaram, assim como o build, ESLint e os 689 testes unitários. Relatórios locais `run-2026-11-26T19-05-26` (chão, montanha e jardim) e `run-2026-11-26T19-08-02` (praia e fonte).
+
+NEBLINA ANCORADA NO CENÁRIO (2026-11-26)
+- A neblina da manhã nasce em pontos fixos da geada e varia com a hora, o tempo desde a chuva e a deriva local. A bruma ambiente usa posições e animação no mundo. São as fogueiras locais que abrem a bruma. No Jardim Alto, a opacidade deixa de acompanhar o herói e o vento do cume continua dissipando a névoa.
+- Build, ESLint e os 690 testes unitários passaram. O novo cenário `neblina` cobre a caminhada na geada e a posição do herói no jardim. O teste visual ficou pendente porque o Chromium encerrou por falta de memória disponível.
+
+HALO DO HERÓI E ALTURA DA BRUMA (2026-11-26)
+- À noite, a curva de luz local, o disco aditivo e uma luz pontual acompanhavam o herói. Os três controles ficam zerados durante o jogo em todas as horas. O passe de ar iluminado usa uma textura de altura do terreno para cada ponto visível. Na geada, a base das nuvens macias fica acima do chão para a borda não ser cortada.
+- A comparação no navegador repetiu a caminhada na mesma cena noturna com os valores antigos e com os novos. O halo seguiu o herói só com os valores antigos. Ao amanhecer, os bancos de bruma continuaram nos pontos do cenário enquanto ele mudava de lugar.
+
+BRUMA DISTANTE COM A CÂMERA EM MOVIMENTO (2026-11-26)
+- O ar iluminado amostrava as sombras ao longo do raio da câmera, e a grade dos mipmaps dessas sombras mudava de fase com a câmera. O passe agora integra a bruma a partir do ponto visível, numa direção fixa do mundo, e alinha a máscara à grade do mip mais largo. O raio real ainda determina a oclusão dos halos de fogo.
+- No navegador, com hora e tempo congelados, 72 pontos distantes ficaram estáveis com a câmera parada. Na geada ao amanhecer, um tile de deslocamento lateral mudava a luminância média absoluta em 0,0293 sobre 0,0731. Depois, mudou 0,0065 sobre 0,0659. Na mata, a variação lateral caiu de 0,0051 para 0,0007. A checagem foi incorporada ao cenário `neblina`, que passou em `playtest/results/run-2026-11-27T00-33-00/report.md`. Build, lint e 691 testes passaram.

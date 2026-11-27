@@ -179,20 +179,11 @@ export const defaultWorld3DParams = (): World3DParams => ({
     // cortava a preto na primeira fileira. Em 4 aparecem duas ou três fileiras de mata e a névoa
     // fecha antes da borda da tela — vê-se floresta, e vê-se ela ser engolida.
     voidMist: 16,
-    // The hero's neutral self-glow is dim so that near a fire he takes the fire's
-    // warm colour, and his white pixels (horns/eyes) don't glare under a bright glow.
-    heroLight: 28,
-    // A VISTA. 0.30 de força = expoente 0.70 no coração dela: o chão em volta do herói sobe ~50%
-    // nos graves e o longe fica exatamente onde estava. Ela PODE ser forte porque é LOCAL — o que
-    // se enxerga é a diferença entre o pé dele e o escuro em volta, nunca o número. (A v1 ficou em
-    // 0.14 porque a elipse cobria a tela inteira, e força global nenhuma se vê.)
-    heroSight: 0.3,
-    // O disco: 0.24 contra os 0.6 de uma fogueira. Menos da metade, e frio — é para se ver onde ele
-    // pisa, nunca para competir com a poça quente que é a recompensa de acender o mundo.
-    heroSightGlow: 0.24,
-    // 2,6 tiles: ~um quinto da largura da tela, contra os 15 do halo de uma fogueira — a vista
-    // mostra onde ele PISA, a fogueira é que abre a região. Subir isto é o caminho mais curto de
-    // volta ao defeito da v1: uma elipse que passa do quadro não é vista, é `lift`.
+    // A curva local e o disco aditivo parecem uma nuvem seguindo o herói. Deixe os controles
+    // disponíveis no depurador, com o chão iluminado pelo céu e pelas chamas durante o jogo.
+    heroLight: 0,
+    heroSight: 0,
+    heroSightGlow: 0,
     heroSightTiles: 2.6,
     heroSightLean: 0.9,
     // 0,02 ÷ 1,285: a câmera recuou (ver camHeight), e o fog conta da câmera — sem isto o mundo todo enevoava mais.
